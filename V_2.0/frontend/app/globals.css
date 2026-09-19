@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-vazir), system-ui, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-vazir), system-ui, sans-serif;
+}
+
+/* Persian digits everywhere text is rendered, matching the desktop app and
+   the generated PDFs. Opt out with .latn on a specific element (e.g. a
+   document code like PO-01-01, which must stay Latin). */
+body {
+  font-variant-numeric: normal;
+}
+
+.latn {
+  font-feature-settings: normal;
+  direction: ltr;
+  unicode-bidi: embed;
+}

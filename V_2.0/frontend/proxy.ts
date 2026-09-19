@@ -1,0 +1,51 @@
+import { NextRequest, NextResponse } from "next/server";
+
+/**
+ * Route guard for the (app)/* route group.
+ *
+ * Next.js 16 renamed the `middleware` convention to `proxy` (both the file
+ * and the exported function); the edge runtime is not supported here, the
+ * runtime is always nodejs.
+ *
+ * httpOnly cookies are unreadable from client-side document.cookie, but
+ * NextRequest.cookies runs server-side and CAN read them — httpOnly only
+ * blocks JS access in the browser. So presence of access_token/refresh_token
+ * is checked here, redirecting to /login when neither is set.
+ *
+ * /login and /verify/* (the public QR-scan landing page, Phase 5) bypass the
+ * guard entirely.
+ */
+
+const PUBLIC_EXACT_PATHS = new Set(["/login"]);
+
+function isPublicPath(pathname: string): boolean {
+  if (PUBLIC_EXACT_PATHS.has(pathname)) return true;
+  if (pathname.startsWith("/verify/")) return true;
+  return false;
+}
+
+export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  const accessToken = request.cookies.get("access_token")?.value;
+  const refreshToken = request.cookies.get("refresh_token")?.value;
+
+  if (!accessToken && !refreshToken) {
+    const loginUrl = new URL("/login", request.url);
+    if (pathname !== "/") {
+      loginUrl.searchParams.set("next", pathname);
+    }
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  // Run on everything except static assets / Next internals.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+};
