@@ -12,6 +12,8 @@
 # --- Local state -------------------------------------------------------------
 # Uploaded files, built PDFs, logos, signatures (docker volume in dev).
 backend/media/
+# V_1.0 data staged for the importer (real documents, signatures, names).
+import_data/
 # Stray SQLite files from early test runs.
 *.db
 *.sqlite3

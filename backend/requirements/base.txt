@@ -27,3 +27,8 @@ python-bidi==0.6.11
 
 # --- Jalali dates ---
 jdatetime==6.1.0
+
+# --- V_1.0 importer (apps.importer) ---
+# Read-only access to V_1.0's MongoDB, only when `manage.py import_v1 --mongo-uri-env`
+# is used; imported lazily so nothing else depends on it.
+pymongo==4.10.1

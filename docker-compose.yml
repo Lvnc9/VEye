@@ -39,6 +39,9 @@ services:
     volumes:
       - ./backend:/app
       - media:/app/media
+      # V_1.0 data for `manage.py import_v1` (saves/, img/, optional mongoexport
+      # file). Read-only; git-ignored — see docs/10-phase-6.md.
+      - ${V1_IMPORT_DIR:-./import_data}:/import_data:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,6 +57,9 @@ services:
     volumes:
       - ./backend:/app
       - media:/app/media
+      # V_1.0 data for `manage.py import_v1` (saves/, img/, optional mongoexport
+      # file). Read-only; git-ignored — see docs/10-phase-6.md.
+      - ${V1_IMPORT_DIR:-./import_data}:/import_data:ro
     depends_on:
       postgres:
         condition: service_healthy
