@@ -36,6 +36,11 @@ STEP_FOR_STATUS = {
     DocumentStatus.AWAITING_CONFIRMATION: "confirm",
     DocumentStatus.AWAITING_APPROVAL: "approve",
 }
+STEP_LABELS = {
+    "submit": "ارسال برای تایید",
+    "confirm": "تایید",
+    "approve": "تصویب",
+}
 CAPABILITY_FOR_STEP = {
     "submit": Capability.CREATE_DOCUMENT,
     "confirm": Capability.CONFIRM_DOCUMENT,

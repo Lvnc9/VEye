@@ -13,6 +13,8 @@ import {
 } from "@/lib/types";
 import { LoadingBanner, ErrorBanner, EmptyBanner } from "@/components/StatusBanner";
 import { useCurrentUser } from "@/lib/current-user";
+import { AwaitingCard } from "@/components/dashboard/AwaitingCard";
+import { RecentActivityCard } from "@/components/dashboard/RecentActivityCard";
 
 export default function DashboardPage() {
   const { can } = useCurrentUser();
@@ -50,6 +52,8 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-slate-900">داشبورد مدیریت</h1>
         <p className="mt-1 text-sm text-slate-500">سامانه کنترل مستندات</p>
       </header>
+
+      <AwaitingCard />
 
       {loading && <LoadingBanner />}
       {error && <ErrorBanner message={error} />}
@@ -96,6 +100,8 @@ export default function DashboardPage() {
           )}
         </section>
       )}
+
+      <RecentActivityCard />
 
       {metrics && (
         <section className="rounded-lg border border-slate-200 bg-white p-6">

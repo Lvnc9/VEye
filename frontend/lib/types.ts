@@ -503,8 +503,25 @@ export interface DashboardSystemInfo {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// History (Phase 6)
+// History & dashboard cards (Phase 6)
 // ---------------------------------------------------------------------------
+
+/** GET /dashboard/awaiting/ — documents waiting for the signed-in user's step. */
+export interface AwaitingResponse {
+  /** All documents awaiting this user (the list below is capped). */
+  count: number;
+  by_step: Record<WorkflowStep, number>;
+  items: {
+    id: number;
+    full_code: string;
+    title: string;
+    status: DocumentStatus;
+    status_label: string;
+    step: WorkflowStep;
+    step_label: string;
+    waiting_since: string;
+  }[];
+}
 
 /** One row of GET /history/revisions/ — a single revision of a document. */
 export interface RevisionRow {

@@ -5,6 +5,7 @@
   **every revision counts**; cached 60 s in Redis; `signals.py` invalidates on Document/User save/delete.
   (V_1.0's dashboard was hard-coded mock data, incl. `کاربر: مدیر عامل`.)
 - `GET /dashboard/system-info/` — small info payload.
+- `GET /dashboard/awaiting/` — Phase 6: documents awaiting the signed-in user's step (same verdict as the register's buttons); the dashboard also shows the last 10 events from `/history/activity/`. See [10-phase-6.md](10-phase-6.md).
 - Phase 6 may add more widgets; keep them query-based.
 
 ## Frontend stack

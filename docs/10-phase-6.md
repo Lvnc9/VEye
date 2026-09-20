@@ -23,3 +23,16 @@ Interactions: clicking a code (either tab) narrows the revisions tab to that fam
 Verified: 18 backend tests (filters, ordering, N+1 guards, pagination, a real workflow feeding the feed; **7 mutations each caught**), 6 frontend unit tests; in the browser with data made by the real workflow — revisions tab, family filter,
 activity feed, kind filter. **Not verified:** the «باز کردن» PDF link from the revisions tab (same route as the register's چاپ, which was verified in Phase 4), the actor/`q`/days filters and pagination in the browser (API-tested), a very narrow (phone) layout.
 Known limits: `actor` search normalises the term but event names are stored as typed, so a name entered with Arabic letters may not match a Persian-letter search; the activity feed has no Jalali date-range picker (a «last N days» select instead).
+
+## Dashboard extras ✅
+The counts table and system info already existed (Phase 2/3). Added two cards on `/dashboard`:
+- **«منتظر اقدام شما»** — `GET /dashboard/awaiting/`: documents waiting for the *signed-in user's* step (the closest thing to V_1.0's dead کارتابل button).
+  Uses **the workflow's own verdict** (`workflow.next_step_for(...).can_act`), so it can never disagree with the register's buttons: a step the user's roll can't take, or that they are barred
+  from as an earlier signer, is not listed. **Drafts count only when the user created them** (otherwise every author would see everyone's unsent drafts) and only once a body is saved.
+  Returns `{count, by_step: {submit, confirm, approve}, items[≤20, longest-waiting first]}`; `count` covers everything, the list is capped; scans at most 500 candidates. Not cached (per user; 2 queries).
+  Each item links to the document (its header has the sign-off buttons); `waiting_since` is the document's `updated_at`, i.e. when its status last changed hands.
+- **«فعالیت‌های اخیر»** — the last 10 events, read from `GET /history/activity/?page_size=10` (no new endpoint), with a link to the History screen.
+Frontend: `components/dashboard/{AwaitingCard,RecentActivityCard}.tsx`, `lib/use-api-query.ts`; each card fetches on its own so one failing card doesn't blank the dashboard.
+Verified: 9 backend tests (`apps/dashboard/tests.py`; the card agrees with the register's `workflow.can_act`; 2-query guard; **6 mutations: 5 caught, 1 equivalent** — the capability `Q` only narrows the scan, `next_step_for` re-checks capabilities anyway);
+browser: as the approver the card listed the one document awaiting approval and the activity card showed the newest events; API-checked for the confirmer (0) and author (their 2 drafts).
+Not verified: the empty state in the browser, the «N مورد دیگر» overflow line (test-covered via the cap), phone layout.
