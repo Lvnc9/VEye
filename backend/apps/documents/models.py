@@ -9,6 +9,7 @@ from apps.core.constants import (
     GROUP_CODE_PREFIX,
     REGISTER_COLUMN_ROLE,
     DocumentCategory,
+    DocumentEventKind,
     DocumentGroup,
     DocumentStatus,
     FileKind,
@@ -43,6 +44,12 @@ def document_file_upload_to(instance, filename):
     # `original_name`. Nothing user-controlled ends up in a filesystem path.
     extension = os.path.splitext(filename)[1].lower()
     return f"document_files/{instance.document_id}/{uuid.uuid4().hex}{extension}"
+
+
+def signature_upload_to(instance, filename):
+    # Always .png: a signature is normalized to an opaque PNG on the way in (see
+    # apps/documents/files.py), because the PDF renderer draws it unmasked.
+    return f"signatures/{instance.document_id}/{uuid.uuid4().hex}.png"
 
 
 class DocumentSequence(models.Model):
@@ -265,16 +272,25 @@ class SignOff(TimeStampedModel):
     while the JSON file kept all three. This is the union, with the JSON as the
     source of truth.
 
-    Only the model exists in Phase 2 (the register's تدوین/تائید/تصویب columns
-    read from it); the sign-off workflow that writes it is Phase 5.
+    Written by the sign-off workflow (apps/documents/workflow.py, Phase 5): the
+    name and post come from the signed-in user's session — V_1.0 let anyone type any
+    name into a dialog — and the signature is drawn on a web canvas. A return
+    (مرجوع) deletes the rows; the audit trail (`DocumentEvent`) is what keeps who
+    signed and when.
     """
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="signoffs")
     role = models.CharField(max_length=16, choices=SignOffRole.choices)
     name = models.CharField(max_length=255, blank=True)
     position = models.CharField(max_length=255, blank=True)
-    signature = models.ImageField(upload_to="signatures/", blank=True)
+    signature = models.ImageField(upload_to=signature_upload_to, blank=True)
     signed_date = models.DateField(null=True, blank=True)
+    # Who signed, so the workflow can refuse the same person a second step of one
+    # document. SET_NULL: the printed name/post above are the record; a deleted
+    # account must not take the signature with it.
+    signed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
 
     class Meta:
         constraints = [
@@ -283,6 +299,34 @@ class SignOff(TimeStampedModel):
 
     def __str__(self):
         return f"{self.document.full_code} {self.role}: {self.name}"
+
+
+class DocumentEvent(TimeStampedModel):
+    """One step in a document's workflow: submitted, confirmed, approved,
+    returned (with a reason), or superseded by a newer revision.
+
+    Actor name and post are snapshotted as text — a return clears the sign-offs,
+    and personnel can change post or be deactivated, but the trail must keep
+    reading as it did at the time.
+    """
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="events")
+    kind = models.CharField(max_length=16, choices=DocumentEventKind.choices)
+    from_status = models.CharField(max_length=24, choices=DocumentStatus.choices)
+    to_status = models.CharField(max_length=24, choices=DocumentStatus.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    actor_name = models.CharField(max_length=255)
+    actor_title = models.CharField(max_length=255, blank=True)
+    reason = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [Index(fields=["document", "created_at"])]
+
+    def __str__(self):
+        return f"{self.document.full_code} {self.kind} by {self.actor_name}"
 
 
 class DocumentFile(TimeStampedModel):

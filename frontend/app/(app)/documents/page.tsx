@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { apiGet, apiPost, ApiError } from "@/lib/api-client";
+import { PdfBuildError, buildPdf, followPdf, openPdfInTab, readPdfState } from "@/lib/pdf";
 import {
   DOCUMENT_ACTION_LABELS,
   DOCUMENT_CATEGORY_LABELS,
   DOCUMENT_GROUP_LABELS,
   DOCUMENT_STATUS_LABELS,
-  type DocumentAction,
   type DocumentCategory,
   type DocumentCreatePayload,
   type DocumentFilters,
@@ -16,12 +16,16 @@ import {
   type DocumentRow,
   type DocumentStatus,
   type Paginated,
+  type PdfStatus,
   type ResponsibilityPair,
   type SignOffSummary,
 } from "@/lib/types";
 import { useCurrentUser } from "@/lib/current-user";
 import { EmptyBanner, ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { Code } from "@/components/Code";
+import { PdfActions } from "@/components/PdfActions";
+import { WorkflowActions } from "@/components/WorkflowActions";
+import { formatJalali } from "@/lib/jalali";
 import { StatusBadge } from "@/components/StatusBadge";
 
 const PAGE_SIZE = 25;
@@ -44,12 +48,12 @@ const COLUMNS = [
   "وضعیت",
 ];
 
-/** Row actions whose screens arrive in a later phase render disabled instead of
- *  linking to a 404. (تکمیل / ویرایش / مشاهده open the designer and are live.) */
-const ACTION_AVAILABLE_IN: Partial<Record<DocumentAction, string>> = {
-  finish: "امضا و تصویب در فاز ۵",
-  print: "خروجی PDF در فاز ۴",
-};
+function messageOf(err: unknown, fallback: string): string {
+  return err instanceof ApiError || err instanceof PdfBuildError ? err.message : fallback;
+}
+
+// A stable empty list: `rows` feeds an effect, so a fresh [] each render would re-run it.
+const NO_ROWS: DocumentRow[] = [];
 
 const EMPTY_FILTERS: Required<DocumentFilters> = {
   search: "",
@@ -59,7 +63,13 @@ const EMPTY_FILTERS: Required<DocumentFilters> = {
 };
 
 function SignOffCell({ signoff }: { signoff: SignOffSummary | null }) {
-  return <>{signoff?.name ? signoff.name : <span className="text-slate-300">—</span>}</>;
+  if (!signoff?.name) return <span className="text-slate-300">—</span>;
+  return (
+    <span title={signoff.position}>
+      {signoff.name}
+      {signoff.signed_date && <span className="block text-xs text-slate-400">{formatJalali(signoff.signed_date)}</span>}
+    </span>
+  );
 }
 
 function ResponsibilityCell({ pair }: { pair: ResponsibilityPair | null }) {
@@ -74,6 +84,7 @@ function ResponsibilityCell({ pair }: { pair: ResponsibilityPair | null }) {
 export default function DocumentRegisterPage() {
   const { can } = useCurrentUser();
   const canCreate = can("create_document");
+  const canPrint = can("print_document");
 
   // "last" is DRF's own page alias; it lets a fresh document be shown without
   // first having to ask how many pages there are.
@@ -95,6 +106,12 @@ export default function DocumentRegisterPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [existingTitle, setExistingTitle] = useState<string | null>(null);
   const [revisingId, setRevisingId] = useState<number | null>(null);
+
+  // The official PDF's state as this page last saw it, per row. A build started
+  // (or followed) here is newer than what the list loaded with.
+  const [pdfStatus, setPdfStatus] = useState<Record<number, PdfStatus>>({});
+  const [previewingId, setPreviewingId] = useState<number | null>(null);
+  const following = useRef(new Set<number>());
 
   // Debounce the search box so typing doesn't fire a request per keystroke.
   // Only acts when the input differs from the applied filter — otherwise a
@@ -121,7 +138,7 @@ export default function DocumentRegisterPage() {
     error: string | null;
   } | null>(null);
   const loading = loaded?.key !== requestKey;
-  const rows = loaded?.rows ?? [];
+  const rows = loaded?.rows ?? NO_ROWS;
   const count = loaded?.count ?? 0;
   const error = loaded?.error ?? null;
 
@@ -206,6 +223,61 @@ export default function DocumentRegisterPage() {
     } finally {
       setRevisingId(null);
     }
+  }
+
+  const setStatus = (id: number, status: PdfStatus) => setPdfStatus((current) => ({ ...current, [id]: status }));
+
+  // A row that loads as "building" (someone started it, or the page was
+  // reloaded mid-build) is followed until it settles.
+  useEffect(() => {
+    for (const row of rows) {
+      if (row.pdf_status !== "building" || following.current.has(row.id)) continue;
+      following.current.add(row.id);
+      followPdf(row.id, "official")
+        .then((state) => setStatus(row.id, state.status))
+        .catch(() => undefined) // the next reload shows the truth
+        .finally(() => following.current.delete(row.id));
+    }
+  }, [rows]);
+
+  async function runOfficialBuild(row: DocumentRow) {
+    setActionError(null);
+    setNotice(null);
+    following.current.add(row.id);
+    setStatus(row.id, "building");
+    try {
+      await buildPdf(row.id, "official");
+      setStatus(row.id, "ready");
+      setNotice(`PDF مستند ${row.full_code} آماده شد.`);
+    } catch (err) {
+      setStatus(row.id, err instanceof PdfBuildError ? "failed" : row.pdf_status);
+      setActionError(messageOf(err, "ساخت PDF ممکن نشد."));
+    } finally {
+      following.current.delete(row.id);
+    }
+  }
+
+  function handlePrint(row: DocumentRow) {
+    const status = pdfStatus[row.id] ?? row.pdf_status;
+    if (status === "building") return;
+    if (status !== "ready") {
+      void runOfficialBuild(row);
+      return;
+    }
+    setActionError(null);
+    // Reading the state first also refreshes an expired session before the new
+    // tab makes its own cookie-only request for the file.
+    openPdfInTab(() => readPdfState(row.id, "official")).catch((err) =>
+      setActionError(messageOf(err, "باز کردن PDF ممکن نشد.")),
+    );
+  }
+
+  function handlePreview(row: DocumentRow) {
+    setActionError(null);
+    setPreviewingId(row.id);
+    openPdfInTab(() => buildPdf(row.id, "preview"))
+      .catch((err) => setActionError(messageOf(err, "ساخت پیش‌نمایش ممکن نشد.")))
+      .finally(() => setPreviewingId(null));
   }
 
   const filtersActive = Boolean(filters.search || filters.group || filters.category || filters.status);
@@ -427,16 +499,23 @@ export default function DocumentRegisterPage() {
                             : "ویرایش"
                           : "مشاهده"}
                       </Link>
-                      {row.action !== "complete" && (
-                        <button
-                          type="button"
-                          disabled
-                          title={ACTION_AVAILABLE_IN[row.action]}
-                          className="cursor-not-allowed rounded bg-slate-200 px-3 py-1 text-xs font-medium text-slate-500"
-                        >
-                          {DOCUMENT_ACTION_LABELS[row.action]}
-                        </button>
-                      )}
+                      <WorkflowActions
+                        row={row}
+                        onDone={(message) => {
+                          setActionError(null);
+                          setNotice(message);
+                          setReloadToken((n) => n + 1);
+                        }}
+                      />
+                      <PdfActions
+                        row={row}
+                        status={pdfStatus[row.id] ?? row.pdf_status}
+                        canPrint={canPrint}
+                        previewing={previewingId === row.id}
+                        onPrint={() => handlePrint(row)}
+                        onRebuild={() => void runOfficialBuild(row)}
+                        onPreview={() => handlePreview(row)}
+                      />
                       {canCreate && row.can_revise && (
                         <button
                           type="button"

@@ -99,3 +99,57 @@ def normalize_logo(upload) -> ContentFile:
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", optimize=True)
     return ContentFile(buffer.getvalue())
+
+
+#: A drawn signature is a few kilobytes; the pad exports at most ~1000 px wide.
+SIGNATURE_MAX_BYTES = 2 * 1024 * 1024
+SIGNATURE_MAX_EDGE = 1000
+SIGNATURE_MAX_PIXELS = 4_000_000
+#: A pad that was only touched, or never touched, produces (almost) no ink.
+SIGNATURE_MIN_INK_PIXELS = 30
+_SIGNATURE_FORMATS = {"PNG", "JPEG", "WEBP"}
+
+
+def normalize_signature(upload) -> ContentFile:
+    """Validate a signature from the web pad and re-encode it as an opaque RGB PNG.
+
+    Opaque, because the PDF renderer draws signatures without a mask (V_1.0's
+    archived ones were opaque): a transparent PNG would print as a black box.
+    Re-encoding also proves the bytes are an image and strips metadata. A blank
+    pad is refused — an empty rectangle is not a signature.
+    """
+    bad_image = ValidationError({"signature": ["امضا معتبر نیست. دوباره امضا کنید."]})
+    if upload is None:
+        raise ValidationError({"signature": ["امضا ارسال نشده است."]})
+    if upload.size > SIGNATURE_MAX_BYTES:
+        raise ValidationError({"signature": ["حجم امضا بیش از حد مجاز است."]})
+
+    try:
+        probe = Image.open(upload)
+        probe.verify()
+        upload.seek(0)
+        image = Image.open(upload)
+        if image.format not in _SIGNATURE_FORMATS:
+            raise bad_image
+        if image.width * image.height > SIGNATURE_MAX_PIXELS:
+            raise ValidationError({"signature": ["ابعاد امضا بیش از حد بزرگ است."]})
+        image.load()
+    except ValidationError:
+        raise
+    except (UnidentifiedImageError, OSError, SyntaxError, Image.DecompressionBombError):
+        raise bad_image
+
+    rgba = image.convert("RGBA")
+    flat = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+    flat.alpha_composite(rgba)
+    flat = flat.convert("RGB")
+    flat.thumbnail((SIGNATURE_MAX_EDGE, SIGNATURE_MAX_EDGE))
+
+    # Count "ink": pixels clearly darker than the paper.
+    ink = sum(1 for value in flat.convert("L").getdata() if value < 200)
+    if ink < SIGNATURE_MIN_INK_PIXELS:
+        raise ValidationError({"signature": ["امضا خالی است. لطفاً امضا کنید."]})
+
+    buffer = io.BytesIO()
+    flat.save(buffer, format="PNG", optimize=True)
+    return ContentFile(buffer.getvalue())

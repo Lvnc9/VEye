@@ -54,20 +54,26 @@ class CapabilityTests(TestCase):
 
     def test_guild_can_only_create(self):
         user = User(access_roll=AccessRoll.GUILD, access_level=AccessLevel.LEVEL_2)
-        self.assertEqual(user.capabilities, frozenset({Capability.CREATE_DOCUMENT}))
+        self.assertEqual(
+            user.capabilities, frozenset({Capability.CREATE_DOCUMENT, Capability.PRINT_DOCUMENT})
+        )
 
     def test_headquarters_can_create_and_confirm(self):
         user = User(access_roll=AccessRoll.HEADQUARTERS, access_level=AccessLevel.LEVEL_2)
         self.assertEqual(
             user.capabilities,
-            frozenset({Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT}),
+            frozenset(
+                {Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT, Capability.PRINT_DOCUMENT}
+            ),
         )
 
     def test_employer_approves_and_manages_personnel_but_does_not_author(self):
         user = User(access_roll=AccessRoll.EMPLOYER, access_level=AccessLevel.LEVEL_1)
         self.assertEqual(
             user.capabilities,
-            frozenset({Capability.APPROVE_DOCUMENT, Capability.MANAGE_PERSONNEL}),
+            frozenset(
+                {Capability.APPROVE_DOCUMENT, Capability.MANAGE_PERSONNEL, Capability.PRINT_DOCUMENT}
+            ),
         )
         # Separation of duties: the approver must not be able to author.
         self.assertFalse(user.has_capability(Capability.CREATE_DOCUMENT))
@@ -137,7 +143,9 @@ class AuthFlowTests(TestCase):
         response = self.client.get(reverse("auth-me"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["title"], "کارشناس")
-        self.assertEqual(response.data["capabilities"], [Capability.CREATE_DOCUMENT])
+        self.assertEqual(
+            response.data["capabilities"], [Capability.CREATE_DOCUMENT, Capability.PRINT_DOCUMENT]
+        )
 
     def test_me_requires_authentication(self):
         self.assertEqual(self.client.get(reverse("auth-me")).status_code, 401)

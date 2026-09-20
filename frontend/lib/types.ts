@@ -58,13 +58,15 @@ export type Capability =
   | "create_document"
   | "confirm_document"
   | "approve_document"
-  | "manage_personnel";
+  | "manage_personnel"
+  | "print_document";
 
 export const CAPABILITY_LABELS: Record<Capability, string> = {
   create_document: "تدوین مستند",
   confirm_document: "تایید مستند",
   approve_document: "تصویب مستند",
   manage_personnel: "مدیریت پرسنل",
+  print_document: "ساخت و نمایش PDF مستند",
 };
 
 export interface User {
@@ -212,8 +214,94 @@ export interface DocumentRow {
     responder: ResponsibilityPair | null;
   };
   signoffs: Record<SignOffRole, SignOffSummary | null>;
+  /** State of the issued (official) PDF — "none" until the first build. */
+  pdf_status: PdfStatus;
+  pdf_built_at: string | null;
+  /** What the signed-in user can do with this document right now (Phase 5). */
+  workflow: WorkflowState;
+  /** Why a DRAFT came back (مرجوع). Only on single-document payloads, not register rows. */
+  return_note?: ReturnNote | null;
   content_saved_at: string | null;
   created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Workflow (Phase 5): تدوین → تایید → تصویب, مرجوع, and the public verify page
+// ---------------------------------------------------------------------------
+
+export type WorkflowStep = "submit" | "confirm" | "approve";
+
+export interface WorkflowState {
+  /** What the status awaits; null when there is nothing to do (or nothing to submit yet). */
+  step: WorkflowStep | null;
+  can_act: boolean;
+  can_return: boolean;
+  /** Persian reason when the user holds the capability but signed an earlier step. */
+  blocked: string | null;
+}
+
+export interface ReturnNote {
+  reason: string;
+  by: string;
+  by_title: string;
+  at: string;
+}
+
+export type DocumentEventKind = "submitted" | "confirmed" | "approved" | "returned" | "superseded";
+
+export interface DocumentEvent {
+  id: number;
+  kind: DocumentEventKind;
+  kind_label: string;
+  from_status: DocumentStatus;
+  from_status_label: string;
+  to_status: DocumentStatus;
+  to_status_label: string;
+  actor_name: string;
+  actor_title: string;
+  reason: string;
+  created_at: string;
+}
+
+export type VerifyState = "valid" | "obsolete" | "pending";
+
+/** GET /verify/{code}/ — public; a pending document discloses only the first six fields. */
+export interface VerifyResult {
+  found: true;
+  full_code: string;
+  revision_display: string;
+  state: VerifyState;
+  state_label: string;
+  message: string;
+  title?: string;
+  group_label?: string;
+  signers?: { role_label: string; name: string; position: string; signed_date: string | null }[];
+  current_revision?: { full_code: string; revision_display: string } | null;
+}
+
+// ---------------------------------------------------------------------------
+// PDF engine (Phase 4)
+// ---------------------------------------------------------------------------
+
+/** "official" is the issued PDF of a finalized revision; "preview" is a
+ *  watermarked «پیش‌نمایش» of any revision, drafts included. */
+export type PdfKind = "official" | "preview";
+
+export type PdfStatus = "none" | "building" | "ready" | "failed";
+
+export interface PdfState {
+  kind: PdfKind;
+  status: PdfStatus;
+  status_label: string;
+  requested_at: string | null;
+  built_at: string | null;
+  size: number | null;
+  /** Persian reason for a failed build; empty otherwise. */
+  error: string;
+  /** A "building" row past the worker's time limit — it can be rebuilt. */
+  stale: boolean;
+  /** Present while a file exists — even during a rebuild or after a failed one. */
+  download_url: string | null;
 }
 
 export interface DocumentCreatePayload {

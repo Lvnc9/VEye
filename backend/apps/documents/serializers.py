@@ -1,9 +1,16 @@
 from rest_framework import serializers
 
-from apps.core.constants import DocumentCategory, DocumentGroup, SignOffRole
+from apps.core.constants import (
+    DocumentCategory,
+    DocumentEventKind,
+    DocumentGroup,
+    DocumentStatus,
+    SignOffRole,
+)
 from apps.core.text import normalize_title
 
-from .models import Document
+from . import workflow
+from .models import Document, DocumentEvent
 
 
 class DocumentSerializer(serializers.ModelSerializer):
@@ -23,6 +30,9 @@ class DocumentSerializer(serializers.ModelSerializer):
     can_edit = serializers.BooleanField(source="is_editable", read_only=True)
     responsibilities = serializers.SerializerMethodField()
     signoffs = serializers.SerializerMethodField()
+    pdf_status = serializers.SerializerMethodField()
+    pdf_built_at = serializers.SerializerMethodField()
+    workflow = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
@@ -45,10 +55,41 @@ class DocumentSerializer(serializers.ModelSerializer):
             "can_edit",
             "responsibilities",
             "signoffs",
+            "pdf_status",
+            "pdf_built_at",
+            "workflow",
             "content_saved_at",
             "created_at",
         ]
         read_only_fields = fields
+
+    def _official_pdf(self, obj: Document):
+        # The list view annotates both values (no query per row, and no PDF is
+        # ever opened). Elsewhere — create/revise responses, the designer's
+        # embedded document — fall back to one lookup.
+        if hasattr(obj, "pdf_status_value"):
+            return obj.pdf_status_value, obj.pdf_built_at_value
+        from apps.pdfgen.models import PdfKind
+
+        build = obj.pdf_builds.filter(kind=PdfKind.OFFICIAL).first()
+        return (build.status, build.built_at) if build else (None, None)
+
+    def get_pdf_status(self, obj: Document) -> str:
+        """"none" | "building" | "ready" | "failed" — the issued PDF's state."""
+        return self._official_pdf(obj)[0] or "none"
+
+    def get_pdf_built_at(self, obj: Document):
+        return self._official_pdf(obj)[1]
+
+    def get_workflow(self, obj: Document) -> dict:
+        """What the signed-in user can do with this document *now* (Phase 5):
+        `step` is what its status awaits (submit / confirm / approve / null),
+        `can_act` / `can_return` say whether this user may, and `blocked` is a
+        Persian reason when they hold the capability but signed an earlier step
+        of the same document. Computed from the prefetched sign-offs — no query
+        per row."""
+        request = self.context.get("request")
+        return workflow.next_step_for(obj, getattr(request, "user", None))
 
     def get_can_revise(self, obj: Document) -> bool:
         # The list view annotates has_next_revision to avoid a query per row.
@@ -117,3 +158,51 @@ class DocumentCreateSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("عنوان را وارد کنید.")
         return value
+
+
+class DocumentDetailSerializer(DocumentSerializer):
+    """One document (retrieve, and the designer's embedded copy). Adds the note a
+    returned author needs; that costs a query, so it is not on the register rows."""
+
+    return_note = serializers.SerializerMethodField()
+
+    class Meta(DocumentSerializer.Meta):
+        fields = DocumentSerializer.Meta.fields + ["return_note"]
+        read_only_fields = fields
+
+    def get_return_note(self, obj: Document):
+        """Why a DRAFT came back (مرجوع) — only while its latest event is that return."""
+        if obj.status != DocumentStatus.DRAFT:
+            return None
+        event = obj.events.order_by("-created_at", "-id").first()
+        if event is None or event.kind != DocumentEventKind.RETURNED:
+            return None
+        return {
+            "reason": event.reason,
+            "by": event.actor_name,
+            "by_title": event.actor_title,
+            "at": event.created_at,
+        }
+
+
+class DocumentEventSerializer(serializers.ModelSerializer):
+    kind_label = serializers.CharField(source="get_kind_display", read_only=True)
+    from_status_label = serializers.CharField(source="get_from_status_display", read_only=True)
+    to_status_label = serializers.CharField(source="get_to_status_display", read_only=True)
+
+    class Meta:
+        model = DocumentEvent
+        fields = [
+            "id",
+            "kind",
+            "kind_label",
+            "from_status",
+            "from_status_label",
+            "to_status",
+            "to_status_label",
+            "actor_name",
+            "actor_title",
+            "reason",
+            "created_at",
+        ]
+        read_only_fields = fields

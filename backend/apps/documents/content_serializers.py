@@ -13,7 +13,7 @@ from apps.core.constants import (
     SectionType,
 )
 
-from .serializers import DocumentSerializer
+from .serializers import DocumentDetailSerializer
 
 MAX_SECTIONS = 100
 
@@ -286,7 +286,7 @@ def content_payload(document, request) -> dict:
         )
 
     return {
-        "document": DocumentSerializer(document, context={"request": request}).data,
+        "document": DocumentDetailSerializer(document, context={"request": request}).data,
         "version": document.content_version,
         "editable": document.is_editable,
         "logo_url": logo_url,

@@ -8,6 +8,7 @@ urlpatterns = [
     path("api/v1/", include("apps.accounts.urls")),
     path("api/v1/", include("apps.documents.urls")),
     path("api/v1/", include("apps.dashboard.urls")),
+    path("api/v1/", include("apps.pdfgen.urls")),
 ]
 
 if settings.DEBUG:

@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.documents",
     "apps.dashboard",
+    "apps.pdfgen",
 ]
 
 MIDDLEWARE = [
@@ -226,6 +227,9 @@ CSRF_COOKIE_HTTPONLY = False  # must be readable by frontend JS to echo back in 
 RATELIMIT_USE_CACHE = "default"
 RATELIMIT_ENABLE = True
 LOGIN_RATELIMIT_RATE = env("LOGIN_RATELIMIT_RATE", default="10/m")
+# The public /verify/ lookup (what a scanned QR code opens). Unauthenticated, so
+# it is limited per IP; a person scanning a stack of printed documents stays far below this.
+VERIFY_RATELIMIT_RATE = env("VERIFY_RATELIMIT_RATE", default="60/m")
 
 # ---------------------------------------------------------------------------
 # Celery

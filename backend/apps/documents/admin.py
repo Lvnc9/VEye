@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Document, DocumentSequence, SignOff
+from .models import Document, DocumentEvent, DocumentSequence, SignOff
 
 
 class SignOffInline(admin.TabularInline):
@@ -23,3 +23,21 @@ class DocumentAdmin(admin.ModelAdmin):
 @admin.register(DocumentSequence)
 class DocumentSequenceAdmin(admin.ModelAdmin):
     list_display = ["group", "last_number"]
+
+
+@admin.register(DocumentEvent)
+class DocumentEventAdmin(admin.ModelAdmin):
+    list_display = ["document", "kind", "from_status", "to_status", "actor_name", "created_at"]
+    list_filter = ["kind"]
+    search_fields = ["document__title", "actor_name"]
+    # An audit trail is only worth anything if nobody edits it.
+    readonly_fields = [f.name for f in DocumentEvent._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

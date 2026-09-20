@@ -80,6 +80,17 @@ class SignOffRole(models.TextChoices):
     APPROVER = "approver", "تصویب کننده"
 
 
+class DocumentEventKind(models.TextChoices):
+    """The audit trail of a document's workflow (Phase 5). V_1.0 recorded none of
+    this: its مرجوع button was a no-op and nothing captured who signed when."""
+
+    SUBMITTED = "submitted", "ارسال برای تایید"
+    CONFIRMED = "confirmed", "تایید شد"
+    APPROVED = "approved", "تصویب شد"
+    RETURNED = "returned", "مرجوع شد"
+    SUPERSEDED = "superseded", "منسوخ شد (جایگزین شد)"
+
+
 class ValidationMark(models.TextChoices):
     """Printed onto the PDF's control table (V_1.0 other_folder/to_make_pdf.py:997)."""
 

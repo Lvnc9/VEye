@@ -24,6 +24,10 @@ import {
 import { useCurrentUser } from "@/lib/current-user";
 import { Code } from "@/components/Code";
 import { StatusBadge } from "@/components/StatusBadge";
+import { WorkflowActions } from "@/components/WorkflowActions";
+import { WorkflowTimeline } from "@/components/WorkflowTimeline";
+import { formatJalali } from "@/lib/jalali";
+import { PdfBuildError, buildPdf, openPdfInTab } from "@/lib/pdf";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { BlockFrame } from "@/components/designer/BlockFrame";
 import { ShortBlock } from "@/components/designer/ShortBlock";
@@ -106,6 +110,22 @@ export default function DocumentDesignerPage() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
+
+  const [previewing, setPreviewing] = useState(false);
+
+  // نمایش: a watermarked preview of what was last *saved* (the server renders the
+  // stored document), so it is held while there are unsaved edits.
+  function preview() {
+    setSaveErrors([]);
+    setPreviewing(true);
+    openPdfInTab(() => buildPdf(Number(id), "preview"))
+      .catch((err) =>
+        setSaveErrors([
+          err instanceof ApiError || err instanceof PdfBuildError ? err.message : "ساخت پیش‌نمایش ممکن نشد.",
+        ]),
+      )
+      .finally(() => setPreviewing(false));
+  }
 
   const canEdit = Boolean(content?.editable) && can("create_document");
   const locked = !canEdit || saving;
@@ -215,7 +235,31 @@ export default function DocumentDesignerPage() {
             <StatusBadge status={document.status} label={document.status_label} />
           </div>
         </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2 empty:hidden">
+          <WorkflowActions
+            row={document}
+            hold={dirty ? "ابتدا تغییرات را ذخیره کنید؛ امضا روی آخرین نسخهٔ ذخیره‌شده ثبت می‌شود." : undefined}
+            onDone={(message) => {
+              setNotice(message);
+              void reload();
+            }}
+          />
+        </div>
       </header>
+
+      {document.return_note && (
+        <div role="status" className="space-y-1 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <p className="font-semibold">
+            این مستند مرجوع شده است — {document.return_note.by}
+            {document.return_note.by_title ? ` (${document.return_note.by_title})` : ""} ·{" "}
+            {formatJalali(document.return_note.at)}
+          </p>
+          <p className="whitespace-pre-wrap">{document.return_note.reason}</p>
+          <p className="text-red-700">پس از اصلاح، مستند را دوباره برای تایید ارسال کنید.</p>
+        </div>
+      )}
+
+      <WorkflowTimeline documentId={document.id} version={document.status} />
 
       {!canEdit && (
         <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -417,11 +461,19 @@ export default function DocumentDesignerPage() {
           )}
           <button
             type="button"
-            disabled
-            title="خروجی PDF در فاز ۴ افزوده می‌شود"
-            className="cursor-not-allowed rounded border border-slate-300 bg-slate-100 px-6 py-2 text-sm text-slate-400"
+            onClick={preview}
+            disabled={!can("print_document") || dirty || saving || previewing}
+            aria-busy={previewing}
+            title={
+              !can("print_document")
+                ? "دسترسی لازم برای ساخت PDF را ندارید."
+                : dirty
+                  ? "ابتدا تغییرات را ذخیره کنید؛ پیش‌نمایش آخرین نسخهٔ ذخیره‌شده را نشان می‌دهد."
+                  : "پیش‌نمایش PDF با واترمارک"
+            }
+            className="rounded border border-slate-300 bg-white px-6 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
           >
-            نمایش
+            {previewing ? "در حال ساخت…" : "نمایش"}
           </button>
 
           {dirty && canEdit && <span className="text-sm text-amber-700">تغییرات ذخیره‌نشده</span>}

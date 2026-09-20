@@ -1,4 +1,4 @@
-from django.db.models import Case, CharField, Exists, OuterRef, Prefetch, Q, Value, When
+from django.db.models import Case, CharField, Exists, OuterRef, Prefetch, Q, Subquery, Value, When
 from django.db.models.functions import Cast, Concat
 from django.http import FileResponse, Http404
 from rest_framework import mixins, status, viewsets
@@ -17,14 +17,23 @@ from apps.core.constants import (
     SectionType,
 )
 from apps.core.pagination import DefaultPagination
-from apps.core.permissions import HasCapability
+from apps.core.permissions import HasCapability, capability_required
 from apps.core.text import normalize_letters, normalize_search_term
 
 from . import content as content_service
-from . import services
+from . import services, workflow
 from .content_serializers import ContentInputSerializer, content_payload, file_payload
+from apps.pdfgen.models import PdfBuild, PdfKind
+
 from .models import Document, DocumentFile, Section
-from .serializers import DocumentCreateSerializer, DocumentSerializer
+from .serializers import (
+    DocumentCreateSerializer,
+    DocumentDetailSerializer,
+    DocumentEventSerializer,
+    DocumentSerializer,
+)
+
+_official_build = PdfBuild.objects.filter(document=OuterRef("pk"), kind=PdfKind.OFFICIAL)
 
 
 def _zero_pad_2(field: str):
@@ -93,7 +102,13 @@ class DocumentViewSet(
                 .prefetch_related("responsibility_rows"),
                 to_attr="responsibility_sections",
             ),
-        ).annotate(has_next_revision=Exists(Document.objects.filter(previous_revision=OuterRef("pk"))))
+        ).annotate(
+            has_next_revision=Exists(Document.objects.filter(previous_revision=OuterRef("pk"))),
+            # State of the issued PDF, for the register's چاپ button. A subquery
+            # on the build table — no PDF is opened or rendered to answer this.
+            pdf_status_value=Subquery(_official_build.values("status")[:1]),
+            pdf_built_at_value=Subquery(_official_build.values("built_at")[:1]),
+        )
 
         # Exact-match filters. An unknown value simply matches nothing rather
         # than erroring — it can only come from a stale link or a hand-edited URL.
@@ -118,7 +133,9 @@ class DocumentViewSet(
         return qs
 
     def get_serializer_class(self):
-        return DocumentCreateSerializer if self.action == "create" else DocumentSerializer
+        if self.action == "create":
+            return DocumentCreateSerializer
+        return DocumentDetailSerializer if self.action == "retrieve" else DocumentSerializer
 
     def create(self, request, *args, **kwargs):
         serializer = DocumentCreateSerializer(data=request.data)
@@ -131,6 +148,66 @@ class DocumentViewSet(
         self.get_object()  # 404 for an unknown id before doing any work
         document = services.create_revision(user=request.user, document_id=pk)
         return Response(DocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+    # -- the sign-off workflow (Phase 5) -------------------------------------
+    #
+    # Each step needs its own capability (the viewset's class-level one is the
+    # authoring one), so they carry their own permission classes. Signing is a
+    # multipart POST: `signature` is the PNG exported from the web pad. Name, post
+    # and date come from the session.
+
+    def _workflow_response(self, document, request):
+        # Re-read through the register queryset so the response carries the same
+        # annotations and prefetches as a list row.
+        fresh = self.get_queryset().get(pk=document.pk)
+        return Response(DocumentDetailSerializer(fresh, context={"request": request}).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        parser_classes=[MultiPartParser],
+        permission_classes=[IsAuthenticated, capability_required(Capability.CREATE_DOCUMENT)],
+    )
+    def submit(self, request, pk=None):
+        document = workflow.submit(user=request.user, document_id=pk, signature=request.FILES.get("signature"))
+        return self._workflow_response(document, request)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        parser_classes=[MultiPartParser],
+        permission_classes=[IsAuthenticated, capability_required(Capability.CONFIRM_DOCUMENT)],
+    )
+    def confirm(self, request, pk=None):
+        document = workflow.confirm(user=request.user, document_id=pk, signature=request.FILES.get("signature"))
+        return self._workflow_response(document, request)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        parser_classes=[MultiPartParser],
+        permission_classes=[IsAuthenticated, capability_required(Capability.APPROVE_DOCUMENT)],
+    )
+    def approve(self, request, pk=None):
+        document = workflow.approve(user=request.user, document_id=pk, signature=request.FILES.get("signature"))
+        return self._workflow_response(document, request)
+
+    @action(detail=True, methods=["post"], url_path="return", permission_classes=[IsAuthenticated])
+    def return_to_draft(self, request, pk=None):
+        """مرجوع. The needed capability depends on the state (the confirmer returns
+        while awaiting confirmation, the approver while awaiting approval), so the
+        service checks it."""
+        document = workflow.return_document(
+            user=request.user, document_id=pk, reason=request.data.get("reason", "")
+        )
+        return self._workflow_response(document, request)
+
+    @action(detail=True, methods=["get"])
+    def history(self, request, pk=None):
+        """The audit trail: who submitted, confirmed, approved, returned (and why)."""
+        document = self.get_object()
+        events = document.events.all()
+        return Response(DocumentEventSerializer(events, many=True).data)
 
     # -- the designer -------------------------------------------------------
 

@@ -1,6 +1,24 @@
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 
+def capability_required(capability):
+    """A permission class demanding one specific capability, for a view that
+    holds actions needing different ones (the workflow's submit / confirm /
+    approve all live on the document viewset, whose class-level capability is
+    the authoring one)."""
+
+    class _CapabilityRequired(BasePermission):
+        message = "شما دسترسی لازم برای این عملیات را ندارید."
+
+        def has_permission(self, request, view):
+            return bool(
+                request.user and request.user.is_authenticated and request.user.has_capability(capability)
+            )
+
+    _CapabilityRequired.__name__ = f"CapabilityRequired_{capability}"
+    return _CapabilityRequired
+
+
 class HasCapability(BasePermission):
     """Checks a domain capability (apps.accounts.models.Capability) granted by
     the user's access roll.

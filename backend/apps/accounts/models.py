@@ -30,15 +30,20 @@ class Capability(models.TextChoices):
     CONFIRM_DOCUMENT = "confirm_document", "تایید مستند"
     APPROVE_DOCUMENT = "approve_document", "تصویب مستند"
     MANAGE_PERSONNEL = "manage_personnel", "مدیریت پرسنل"
+    PRINT_DOCUMENT = "print_document", "ساخت و نمایش PDF مستند"
 
 
 #: Access roll -> capabilities. See User.capabilities for the rationale.
 #: MANAGE_PERSONNEL sits with کارفرمایی because V_1.0 surfaced the personnel
 #: buttons on the dashboard of the مدیر عامل (Dashboard.py:241-246).
 ROLL_CAPABILITIES = {
-    AccessRoll.GUILD: frozenset({Capability.CREATE_DOCUMENT}),
-    AccessRoll.HEADQUARTERS: frozenset({Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT}),
-    AccessRoll.EMPLOYER: frozenset({Capability.APPROVE_DOCUMENT, Capability.MANAGE_PERSONNEL}),
+    AccessRoll.GUILD: frozenset({Capability.CREATE_DOCUMENT, Capability.PRINT_DOCUMENT}),
+    AccessRoll.HEADQUARTERS: frozenset(
+        {Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT, Capability.PRINT_DOCUMENT}
+    ),
+    AccessRoll.EMPLOYER: frozenset(
+        {Capability.APPROVE_DOCUMENT, Capability.MANAGE_PERSONNEL, Capability.PRINT_DOCUMENT}
+    ),
 }
 
 

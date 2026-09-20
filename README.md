@@ -18,6 +18,8 @@ VEye is an ISO-style **controlled-document management system** with a Persian (R
 - Personnel registration and account management
 - Document registry: create, revise and search documents with automatic numbering
 - Document designer: ordered content blocks, file attachments, logo and revision copies
+- Sign-off workflow with signatures and returns, plus a public verification page
+- Persian PDF generation with QR codes (Celery)
 - Dashboard with live counts, cached in Redis
 - Persian RTL UI with Jalali dates
 
@@ -28,14 +30,14 @@ VEye is an ISO-style **controlled-document management system** with a Persian (R
 | Identity and permissions | Done |
 | Document registry | Done |
 | Document designer | Done |
-| PDF generation with QR code (Celery) | In progress |
-| Sign-off workflow and public verification page | Planned |
+| PDF generation with QR code (Celery) | Done |
+| Sign-off workflow and public verification page | Done |
 | History, bulk print, data import | Planned |
 
 ## Project structure
 
 ```
-backend/     Django project (config/, apps/accounts, core, dashboard, documents)
+backend/     Django project (config/, apps/accounts, core, dashboard, documents, pdfgen)
 frontend/    Next.js app (app/, components/, lib/)
 docker-compose.yml
 .env.example
