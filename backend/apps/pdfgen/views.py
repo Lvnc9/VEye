@@ -1,4 +1,5 @@
 from django.http import FileResponse, Http404
+from django.utils import timezone
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.exceptions import NotFound
@@ -7,10 +8,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import Capability
+from apps.core.exceptions import ConflictError
 from apps.core.permissions import HasCapability
 from apps.documents.models import Document
 
-from . import services, storage
+from . import bulk, services, storage
 from .models import PdfBuild, PdfKind, PdfStatus
 
 
@@ -102,4 +104,57 @@ class PdfDownloadView(APIView):
         )
         response["Cache-Control"] = "private, no-cache"
         response["X-Content-Type-Options"] = "nosniff"
+        return response
+
+
+class BulkPrintPreflightView(APIView):
+    """GET /documents/bulk-print/preflight/ — what a bulk print would contain.
+
+    Selection: `?ids=1,2,3`, or the register's filters (`search`, `group`,
+    `category`, `status`; none = everything). Says how many PDFs are ready and which
+    documents are not, with the reason. Reads only — nothing is built or zipped."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        plan = bulk.make_plan(bulk.selection(request.query_params))
+        return Response(
+            {
+                "total": plan.total,
+                "cap": plan.cap,
+                "truncated": plan.truncated,
+                "ready": len(plan.ready),
+                "missing": plan.missing,
+            }
+        )
+
+
+class BulkPrintView(APIView):
+    """GET /documents/bulk-print/ — the ZIP of the ready, already-built official PDFs.
+
+    Same selection as the preflight. Never renders. Capped at
+    BULK_PRINT_MAX_FILES (the first N by printed code). 409 `nothing_to_print` when
+    the selection has no built PDF. A GET so the browser can simply navigate to it
+    with its cookie; the response is `Cache-Control: private, no-store`."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        plan = bulk.make_plan(bulk.selection(request.query_params))
+        if not plan.ready:
+            raise ConflictError(
+                "هیچ PDF ساخته‌شده‌ای در این انتخاب نیست. ابتدا PDF مستندات را بسازید.",
+                code="nothing_to_print",
+                missing=len(plan.missing),
+            )
+        response = FileResponse(
+            bulk.build_zip(plan),
+            as_attachment=True,
+            filename=f"documents-{timezone.localdate().isoformat()}.zip",
+            content_type="application/zip",
+        )
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        response["X-Bulk-Print-Count"] = str(len(plan.ready))
+        response["X-Bulk-Print-Missing"] = str(len(plan.missing))
         return response

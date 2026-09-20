@@ -506,6 +506,15 @@ export interface DashboardSystemInfo {
 // History & dashboard cards (Phase 6)
 // ---------------------------------------------------------------------------
 
+/** GET /documents/bulk-print/preflight/ — what a bulk print would contain. */
+export interface BulkPrintPreflight {
+  total: number;
+  cap: number;
+  truncated: boolean;
+  ready: number;
+  missing: { id: number; full_code: string; title: string; reason: string; reason_label: string }[];
+}
+
 /** GET /dashboard/awaiting/ — documents waiting for the signed-in user's step. */
 export interface AwaitingResponse {
   /** All documents awaiting this user (the list below is capped). */

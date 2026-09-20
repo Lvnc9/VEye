@@ -260,3 +260,7 @@ PDF_FONT_DIR = BASE_DIR / "assets" / "fonts"
 PDF_FONT_REGULAR = PDF_FONT_DIR / "Vazir.ttf"
 PDF_FONT_BOLD = PDF_FONT_DIR / "Vazir-Bold.ttf"
 PDF_FONT_NAME = "Vazir"
+
+# چاپ لیست (bulk print): the most PDFs one ZIP download may hold. Bulk print only
+# packs files that already exist, so this bounds response size, not render time.
+BULK_PRINT_MAX_FILES = env.int("BULK_PRINT_MAX_FILES", default=200)

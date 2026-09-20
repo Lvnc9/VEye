@@ -124,5 +124,5 @@ V_1.0's tree here is `V_1.0/VEye-GUI-customtkinter/` (the docs elsewhere abbrevi
   (the archived `تایید کننده` does it too), and a document **with no logo prints the black placeholder square**.
 
 ## For Phase 6
-- Phase 6 «چاپ لیست» should only download `pdfs/<id>/<code>.pdf` files that exist (`PdfBuild.status == READY`); never render.
+- Phase 6 «چاپ لیست» is built (`pdfgen/bulk.py`): it only zips `pdfs/<id>/<code>.pdf` files that exist and never renders — see [10-phase-6.md](10-phase-6.md).
 - Nothing prunes `media/pdf_previews/` (one file per document, replaced in place, so it is bounded).

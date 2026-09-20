@@ -38,6 +38,7 @@ Draft shows revision `01`, not `00` (V_1.0's sentinel). Revision >99 is refused 
 | `POST /documents/` | `{category,title,group}`. Existing title → **409 `title_exists`** (payload carries `existing_id`; message says finish the draft or create a revision) |
 | `GET /documents/{id}/` | |
 | `POST /documents/{id}/submit/ · confirm/ · approve/ · return/`, `GET .../history/`, `GET /verify/{code}/` | Phase 5 — see [09-workflow.md](09-workflow.md) |
+| `GET /documents/bulk-print/preflight/`, `GET /documents/bulk-print/` | Phase 6 — چاپ لیست: ZIP of already-built PDFs for selected ids or the current filter — see [10-phase-6.md](10-phase-6.md) |
 | `POST /documents/{id}/revise/` | previous revision must be finished (409 `previous_not_finished`); latest only; ≤99 (409 `revision_limit`). **The new revision is a copy** (see designer doc) |
 | `GET/PUT /documents/{id}/content/` | designer body — see [04-designer.md](04-designer.md) |
 | `POST /documents/{id}/files/`, `GET .../files/{fid}/download/`, `POST/DELETE .../logo/` | see designer doc |

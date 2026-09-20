@@ -25,6 +25,8 @@ import { EmptyBanner, ErrorBanner, LoadingBanner } from "@/components/StatusBann
 import { Code } from "@/components/Code";
 import { PdfActions } from "@/components/PdfActions";
 import { WorkflowActions } from "@/components/WorkflowActions";
+import { BulkPrintDialog } from "@/components/BulkPrintDialog";
+import { selectionLabel, type BulkSelection } from "@/lib/bulk-print";
 import { formatJalali } from "@/lib/jalali";
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -112,6 +114,13 @@ export default function DocumentRegisterPage() {
   const [pdfStatus, setPdfStatus] = useState<Record<number, PdfStatus>>({});
   const [previewingId, setPreviewingId] = useState<number | null>(null);
   const following = useRef(new Set<number>());
+
+  // چاپ لیست: the rows ticked for bulk print. Tied to the filters they were ticked
+  // under — change the filters and the selection reads as empty (derived, no effect).
+  const filterSig = JSON.stringify(filters);
+  const [selection, setSelection] = useState<{ sig: string; ids: number[] }>({ sig: "", ids: [] });
+  const selectedIds = selection.sig === filterSig ? selection.ids : [];
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // Debounce the search box so typing doesn't fire a request per keystroke.
   // Only acts when the input differs from the applied filter — otherwise a
@@ -281,6 +290,24 @@ export default function DocumentRegisterPage() {
   }
 
   const filtersActive = Boolean(filters.search || filters.group || filters.category || filters.status);
+
+  function toggleSelected(id: number) {
+    setSelection({
+      sig: filterSig,
+      ids: selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id],
+    });
+  }
+  const pageIds = rows.map((row) => row.id);
+  const pageAllSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+  function togglePage() {
+    setSelection({
+      sig: filterSig,
+      ids: pageAllSelected
+        ? selectedIds.filter((id) => !pageIds.includes(id))
+        : Array.from(new Set([...selectedIds, ...pageIds])),
+    });
+  }
+  const bulkSelection: BulkSelection = selectedIds.length > 0 ? { ids: selectedIds } : { filters };
   const selectClass = "rounded border border-slate-300 bg-white px-3 py-2 text-sm";
 
   return (
@@ -427,7 +454,24 @@ export default function DocumentRegisterPage() {
             پاک کردن فیلترها
           </button>
         )}
-        <span className="ms-auto text-sm text-slate-500">{count} مستند</span>
+        <span className="ms-auto flex items-center gap-3 text-sm text-slate-500">
+          {selectedIds.length > 0 && (
+            <button type="button" onClick={() => setSelection({ sig: filterSig, ids: [] })} className="underline">
+              لغو انتخاب
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setBulkOpen(true)}
+            disabled={count === 0}
+            title="دانلود PDFهای ساخته‌شده به‌صورت فایل ZIP"
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+          >
+            چاپ لیست
+            <span className="ms-2 text-xs font-normal text-slate-400">({selectionLabel(selectedIds.length, filtersActive)})</span>
+          </button>
+          <span>{count} مستند</span>
+        </span>
       </section>
 
       {error && <ErrorBanner message={error} />}
@@ -442,6 +486,14 @@ export default function DocumentRegisterPage() {
           <table className="w-full min-w-[1150px] text-right text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
+                <th className="w-8 px-3 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="انتخاب همهٔ مستندات این صفحه"
+                    checked={pageAllSelected}
+                    onChange={togglePage}
+                  />
+                </th>
                 {COLUMNS.map((column) => (
                   <th key={column} className="whitespace-nowrap px-3 py-3 font-medium">
                     {column}
@@ -452,6 +504,14 @@ export default function DocumentRegisterPage() {
             <tbody>
               {rows.map((row, index) => (
                 <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`انتخاب ${row.full_code}`}
+                      checked={selectedIds.includes(row.id)}
+                      onChange={() => toggleSelected(row.id)}
+                    />
+                  </td>
                   <td className="px-3 py-3 text-slate-500">{(currentPage - 1) * PAGE_SIZE + index + 1}</td>
                   <td className="whitespace-nowrap px-3 py-3">{row.category_label}</td>
                   <td className="max-w-[260px] truncate px-3 py-3 font-medium text-slate-900" title={row.title}>
@@ -533,6 +593,14 @@ export default function DocumentRegisterPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {bulkOpen && (
+        <BulkPrintDialog
+          selection={bulkSelection}
+          label={selectionLabel(selectedIds.length, filtersActive)}
+          onClose={() => setBulkOpen(false)}
+        />
       )}
 
       {totalPages > 1 && (
