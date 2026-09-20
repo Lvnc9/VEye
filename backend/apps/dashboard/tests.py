@@ -28,7 +28,7 @@ class AwaitingCardTests(TestCase):
         self.author = user("8400000001", AccessRoll.GUILD)
         self.other_author = user("8400000002", AccessRoll.GUILD)
         self.confirmer = user("8400000003", AccessRoll.HEADQUARTERS)
-        self.approver = user("8400000004", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
+        self.approver = user("8400000004", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)  # رئیس هیئت مدیره: approver-only (the مدیر عامل, لول ۱, can do everything)
         self.n = 0
 
     def doc(self, status, by=None, saved=True, signers=()):

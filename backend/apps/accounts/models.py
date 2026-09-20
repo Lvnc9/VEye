@@ -47,6 +47,13 @@ ROLL_CAPABILITIES = {
 }
 
 
+#: Positions that hold **every** capability, whatever their roll would grant. Today: the
+#: مدیر عامل (کارفرمایی, لول ۱). Built from `Capability.values`, so a capability added later is
+#: theirs automatically. The same-person rule still applies to them — they cannot sign two
+#: steps of one document (docs/09-workflow.md) — and nobody below this position gains anything.
+FULL_ACCESS_POSITIONS = frozenset({(AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)})
+
+
 class UserManager(BaseUserManager):
     """Custom manager, required since User is not Django's default
     username/email-based model (USERNAME_FIELD = national_code)."""
@@ -138,9 +145,13 @@ class User(AbstractBaseUser, PermissionsMixin):
             تصویب (approve) -> کارفرمایی
 
         Separation of duties is deliberate: کارفرمایی approves but does not
-        author, so no single roll can take a document end to end.
+        author, so no single roll can take a document end to end — with one
+        exception, requested by the product owner: the **مدیر عامل** (کارفرمایی
+        لول ۱, see FULL_ACCESS_POSITIONS) holds every capability. The workflow's
+        "one person per step" rule still stops him from signing two steps of the
+        same document.
         """
-        if self.is_superuser:
+        if self.is_superuser or (self.access_roll, self.access_level) in FULL_ACCESS_POSITIONS:
             return frozenset(Capability.values)
         return ROLL_CAPABILITIES.get(self.access_roll, frozenset())
 

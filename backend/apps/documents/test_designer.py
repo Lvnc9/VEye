@@ -114,7 +114,7 @@ class DesignerTestCase(TestCase):
         cache.clear()
         self.client = APIClient(enforce_csrf_checks=False)
         self.author = make_user("6000000001", AccessRoll.GUILD, AccessLevel.LEVEL_3)
-        self.employer = make_user("6000000002", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
+        self.employer = make_user("6000000002", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)  # رئیس هیئت مدیره: approver-only (the مدیر عامل, لول ۱, can do everything)
         self.doc = new_doc(self.author, "سند طراحی", DocumentGroup.PROCEDURE)
         self.client.force_authenticate(self.author)
 

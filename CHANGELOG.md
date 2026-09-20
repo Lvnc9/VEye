@@ -8,6 +8,7 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 
 ## [Unreleased]
 - Designer: after a successful «ذخیره» the app returns to «ساخت مستند» with a «ذخیره شد» message (as V_1.0 did).
+- **مدیر عامل** (کارفرمایی لول ۱) now holds every capability (was approve + personnel + PDF only); the one-person-per-step rule still applies to him.
 
 ## Phase 6 — history, bulk print, dashboard extras, importer ✅ (docs: `10-phase-6.md`)
 - **History screen** (`/documents/history`): revisions tab (filter, family chains, signers, PDF link) + activity tab (audit feed, filters). New `GET /history/revisions/` and `/history/activity/`; register search helpers extracted to `queries.py`. Docs: `10-phase-6.md`.

@@ -68,7 +68,11 @@ class CapabilityTests(TestCase):
         )
 
     def test_employer_approves_and_manages_personnel_but_does_not_author(self):
-        user = User(access_roll=AccessRoll.EMPLOYER, access_level=AccessLevel.LEVEL_1)
+        # Every کارفرمایی position below the مدیر عامل keeps the original policy.
+        for level in (AccessLevel.LEVEL_2, AccessLevel.LEVEL_3):
+            self.assert_approver_only(User(access_roll=AccessRoll.EMPLOYER, access_level=level))
+
+    def assert_approver_only(self, user):
         self.assertEqual(
             user.capabilities,
             frozenset(
@@ -79,15 +83,30 @@ class CapabilityTests(TestCase):
         self.assertFalse(user.has_capability(Capability.CREATE_DOCUMENT))
         self.assertFalse(user.has_capability(Capability.CONFIRM_DOCUMENT))
 
-    def test_no_single_roll_can_take_a_document_end_to_end(self):
+    def test_the_managing_director_holds_every_capability(self):
+        # Requested by the product owner: مدیر عامل = کارفرمایی لول ۱ can do everything in the app.
+        ceo = User(access_roll=AccessRoll.EMPLOYER, access_level=AccessLevel.LEVEL_1)
+        self.assertEqual(ceo.title, "مدیر عامل")
+        self.assertEqual(ceo.capabilities, frozenset(Capability.values))
+        for capability in Capability.values:
+            self.assertTrue(ceo.has_capability(capability), capability)
+
+    def test_only_the_managing_director_gains_anything(self):
+        # The exception is one position, not the whole roll or the whole level.
         for roll in AccessRoll.values:
-            user = User(access_roll=roll, access_level=AccessLevel.LEVEL_1)
-            full_chain = {
-                Capability.CREATE_DOCUMENT,
-                Capability.CONFIRM_DOCUMENT,
-                Capability.APPROVE_DOCUMENT,
-            }
-            self.assertFalse(full_chain.issubset(user.capabilities), roll)
+            for level in AccessLevel.values:
+                user = User(access_roll=roll, access_level=level)
+                is_ceo = (roll, level) == (AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
+                self.assertEqual(user.capabilities == frozenset(Capability.values), is_ceo, (roll, level))
+
+    def test_no_single_roll_can_take_a_document_end_to_end_except_the_managing_director(self):
+        full_chain = {Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT, Capability.APPROVE_DOCUMENT}
+        for roll in AccessRoll.values:
+            for level in AccessLevel.values:
+                if (roll, level) == (AccessRoll.EMPLOYER, AccessLevel.LEVEL_1):
+                    continue
+                user = User(access_roll=roll, access_level=level)
+                self.assertFalse(full_chain.issubset(user.capabilities), (roll, level))
 
     def test_superuser_has_everything(self):
         user = User(access_roll=AccessRoll.GUILD, access_level=AccessLevel.LEVEL_3, is_superuser=True)

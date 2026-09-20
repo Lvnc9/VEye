@@ -17,6 +17,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.test import APIClient
 
 from apps.accounts.models import AccessLevel, AccessRoll, User
+from apps.accounts.models import Capability
 from apps.core.constants import (
     DocumentCategory,
     DocumentEventKind,
@@ -79,7 +80,7 @@ class WorkflowBase(TestCase):
         self.author = make_user("8000000001", AccessRoll.GUILD)
         self.confirmer = make_user("8000000002", AccessRoll.HEADQUARTERS)
         self.confirmer2 = make_user("8000000003", AccessRoll.HEADQUARTERS, AccessLevel.LEVEL_1)
-        self.approver = make_user("8000000004", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
+        self.approver = make_user("8000000004", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)  # رئیس هیئت مدیره: approver-only (the مدیر عامل, لول ۱, can do everything)
         self.doc = make_doc(self.author)
 
     def as_user(self, user):
@@ -638,3 +639,74 @@ class VerifyTests(TestCase):
         doc = self.make_under_control()
         codes = [self.get(doc.full_code).status_code for _ in range(5)]
         self.assertEqual(codes, [200, 200, 200, 403, 403])
+
+
+class ManagingDirectorTests(WorkflowBase):
+    """The مدیر عامل (کارفرمایی لول ۱) can do everything — but is still one person per document step."""
+
+    def setUp(self):
+        super().setUp()
+        self.ceo = make_user("8000000010", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
+
+    def test_can_take_every_step_on_documents_where_he_took_no_earlier_step(self):
+        mine = make_doc(self.ceo, title="سند مدیر عامل")
+        approved = make_doc(self.author, title="برای تصویب او")
+        confirmed = make_doc(self.author, title="برای تایید او")
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"), self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.act(self.ceo, "submit", mine).status_code, 200)         # author
+            self.assertEqual(self.act(self.author, "submit", approved).status_code, 200)
+            self.assertEqual(self.act(self.confirmer, "confirm", approved).status_code, 200)
+            self.assertEqual(self.act(self.ceo, "approve", approved).status_code, 200)    # approve
+            self.assertEqual(self.act(self.author, "submit", confirmed).status_code, 200)
+            self.assertEqual(self.act(self.ceo, "confirm", confirmed).status_code, 200)   # confirm someone else's
+        self.assertEqual(Document.objects.get(pk=approved.pk).status, DocumentStatus.UNDER_CONTROL)
+        self.assertEqual(Document.objects.get(pk=confirmed.pk).status, DocumentStatus.AWAITING_APPROVAL)
+        # …but not to approve what he authored: one person per step still holds.
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.act(self.confirmer, "confirm", mine)
+            response = self.act(self.ceo, "approve", mine)
+        self.assertEqual((response.status_code, response.data["code"]), (409, "same_person"))
+
+    def test_a_document_he_authored_cannot_also_be_approved_by_him_if_he_confirmed_it(self):
+        doc = make_doc(self.ceo, title="یک نفر، یک مرحله")
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.assertEqual(self.act(self.ceo, "submit", doc).status_code, 200)
+            response = self.act(self.ceo, "confirm", doc)                    # same person, second step
+        self.assertEqual((response.status_code, response.data["code"]), (409, "same_person"))
+        self.assertEqual(self.act(self.ceo, "return", doc, reason="x").data["code"], "same_person")
+
+    def test_can_return_a_document_at_either_review_step(self):
+        doc = make_doc(self.author, title="برای مرجوع")
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.act(self.author, "submit", doc)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.act(self.ceo, "return", doc, reason="اصلاح شود").status_code, 200)  # as confirmer
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.act(self.author, "submit", doc)
+            self.act(self.confirmer, "confirm", doc)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.act(self.ceo, "return", doc, reason="دوباره").status_code, 200)     # as approver
+
+    def test_the_register_offers_him_the_right_buttons(self):
+        draft = make_doc(self.ceo, title="پیش‌نویس او")
+        rows = {r["id"]: r["workflow"] for r in self.as_user(self.ceo).get(reverse("document-list")).data["results"]}
+        self.assertEqual(rows[draft.pk], {"step": "submit", "can_act": True, "can_return": False, "blocked": None})
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.act(self.author, "submit", self.doc)
+        rows = {r["id"]: r["workflow"] for r in self.as_user(self.ceo).get(reverse("document-list")).data["results"]}
+        self.assertEqual(rows[self.doc.pk], {"step": "confirm", "can_act": True, "can_return": True, "blocked": None})
+
+    def test_can_manage_personnel_print_and_edit_a_body(self):
+        client = self.as_user(self.ceo)
+        self.assertEqual(client.get(reverse("personnel-list")).status_code, 200)
+        self.assertEqual(client.post(reverse("document-list"), {
+            "category": DocumentCategory.INSIDE, "title": "ساختهٔ مدیر عامل", "group": DocumentGroup.FORM}, format="json").status_code, 201)
+        self.assertIn("print_document", client.get(reverse("auth-me")).data["capabilities"])
+        self.assertEqual(set(client.get(reverse("auth-me")).data["capabilities"]), set(Capability.values))
+
+    def test_a_lower_employer_position_is_unchanged(self):
+        # رئیس هیئت مدیره stays approver-only: no authoring, no confirming.
+        chair = make_user("8000000011", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)
+        self.assertEqual(self.act(chair, "submit").status_code, 403)
+        self.assertEqual(self.as_user(chair).post(reverse("document-list"), {
+            "category": DocumentCategory.INSIDE, "title": "نباید", "group": DocumentGroup.FORM}, format="json").status_code, 403)

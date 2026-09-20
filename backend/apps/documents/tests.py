@@ -240,7 +240,7 @@ class RegisterApiTests(TestCase):
     def setUp(self):
         self.client = APIClient(enforce_csrf_checks=False)
         self.author = make_user("2000000001", AccessRoll.GUILD, AccessLevel.LEVEL_3)
-        self.employer = make_user("2000000002", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
+        self.employer = make_user("2000000002", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)  # رئیس هیئت مدیره: approver-only (the مدیر عامل, لول ۱, can do everything)
         self.list_url = reverse("document-list")
 
     def payload(self, **over):
