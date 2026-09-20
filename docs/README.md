@@ -24,16 +24,16 @@ Next.js 16 frontend, **all storage local** (no Mongo, no S3).
 | 3 | Document designer — 5 block types, files, logo, revision copy | ✅ Done |
 | 4 | PDF engine — port `to_make_pdf.py`, build via Celery | ✅ Done |
 | 5 | Workflow: sign-off, signatures, 5-state machine, مرجوع, `/verify/` page | ✅ Done |
-| 6 | Dashboard extras, History screen, چاپ لیست, Mongo→Postgres importer | ❌ Not started |
+| 6 | History screen, چاپ لیست, dashboard extras, V_1.0 importer | ✅ Done |
 
-Roughly **6 of 7 phases (~85 % of the work)** — the whole document lifecycle now works end to end: register → design → sign
-(تدوین/تایید/تصویب, مرجوع) → PDF → public verify. What does not exist yet: the Document History screen, چاپ لیست
-(bulk print), the dashboard extras, and the Mongo → Postgres importer. **Next: Phase 6.**
+**All 7 phases of the original plan are done** — the whole document lifecycle works end to end (register → design → sign → PDF → public verify) and
+V_1.0's data can be imported (`manage.py import_v1`). What remains is polish and the open items in [07-known-gaps.md](07-known-gaps.md): the preserved PDF quirks awaiting the user's decision,
+the importer's first run against the user's *live* Mongo (only tested against fakes and local files), a merged single-PDF bulk print (not chosen), an audit of who holds `print_document`, and production hardening (proxy IPs, real `SECRET_KEY`, etc.).
 
 **Live user-facing screens:** `/login`, `/dashboard` (real counts), `/documents` (register),
 `/documents/[id]/edit` (designer, read-only when not draft), `/personnel/register`, `/account`,
 `/settings` (stub), and the **public** `/verify/[code]` (no login — what a QR code opens). Register row buttons: **ارسال برای تایید / تایید / تصویب / مرجوع**
-(server-decided per user, signature pad dialog), **چاپ** and **نمایش** (PDF). Still disabled with a tooltip: سوابق مستندات (Phase 6).
+(server-decided per user, signature pad dialog), **چاپ** and **نمایش** (PDF). **سوابق مستندات** (`/documents/history`: revisions + activity tabs) is live; the register has a **چاپ لیست** button (ZIP of built PDFs); the dashboard has «منتظر اقدام شما» and recent activity.
 Documents now leave DRAFT through the workflow — see [09](09-workflow.md); you need three different people (صفی/ستادی → ستادی → کارفرمایی).
 
 ## Docs index
@@ -47,7 +47,7 @@ Documents now leave DRAFT through the workflow — see [09](09-workflow.md); you
 | [06-v1-reference.md](06-v1-reference.md) | need to consult V_1.0 (live vs dead files, quirks, secrets) |
 | [07-known-gaps.md](07-known-gaps.md) | want open bugs, unverified items, decisions still pending |
 | [08-pdf-engine.md](08-pdf-engine.md) | touch PDFs: the renderer port, build task/API, quirks, golden-file oracle |
-| [10-phase-6.md](10-phase-6.md) | touch history, the dashboard extras, bulk print or the importer (Phase 6, in progress) |
+| [10-phase-6.md](10-phase-6.md) | touch history, the dashboard extras, bulk print or the importer (Phase 6) — includes **how to run the import** |
 | [09-workflow.md](09-workflow.md) | touch sign-off, status transitions, مرجوع, the audit trail, signatures, the public verify page |
 | [00-git-and-tracking.md](00-git-and-tracking.md) | commit, branch, changelog and docs conventions — **read before your first commit** |
 | [new-chat-prompt.md](new-chat-prompt.md) | the ready-to-paste prompt for opening a fresh chat on this project |

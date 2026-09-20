@@ -6,11 +6,14 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 > Phases 0–5 were pushed to GitHub as one squashed snapshot (`504f945` … `a8de53a`), so their entries below are the record;
 > git history is per-slice from Phase 6 on.
 
-## [Unreleased] — Phase 6: history, bulk print, dashboard extras, importer
+## [Unreleased]
+- _(add a line here with every behaviour-changing commit)_
+
+## Phase 6 — history, bulk print, dashboard extras, importer ✅ (docs: `10-phase-6.md`)
 - **History screen** (`/documents/history`): revisions tab (filter, family chains, signers, PDF link) + activity tab (audit feed, filters). New `GET /history/revisions/` and `/history/activity/`; register search helpers extracted to `queries.py`. Docs: `10-phase-6.md`.
 - **Dashboard extras**: «منتظر اقدام شما» card (`GET /dashboard/awaiting/`, same verdict as the register's buttons) and a recent-activity card.
 - **چاپ لیست (bulk print)**: ZIP of already-built official PDFs for ticked rows or the current filter, with a preflight (ready / missing + reason), capped at `BULK_PRINT_MAX_FILES`; never renders. `GET /documents/bulk-print/[preflight/]`.
-- _(further entries are added per commit below)_
+- **V_1.0 importer** (`manage.py import_v1`): Mongo (env-supplied URI) or a mongoexport file + local `saves/` and `img/` → Postgres, as a Celery job with a stored report; dry-run by default, skip-and-report on collisions, all-or-nothing writes with per-document savepoints, no network downloads; new `IMPORTED` audit event; `pymongo` dependency and a read-only `/import_data` mount.
 
 ## Phase 5 — Workflow, signatures, status, public verify ✅ (docs: `09-workflow.md`)
 - State machine DRAFT → AWAITING_CONFIRMATION → AWAITING_APPROVAL → UNDER_CONTROL with مرجوع back to DRAFT (reason required, sign-offs cleared),

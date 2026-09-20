@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "apps.documents",
     "apps.dashboard",
     "apps.pdfgen",
+    "apps.importer",
 ]
 
 MIDDLEWARE = [

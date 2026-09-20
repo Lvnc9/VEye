@@ -28,7 +28,7 @@ local** (no Mongo, no S3), with Celery for background work.
 | Decision | Choice |
 |---|---|
 | UI language | Persian RTL throughout — `dir="rtl"`, Vazir webfont, Jalali dates |
-| Existing data | Migrated into Postgres (Phase 6) |
+| Existing data | Migrated into Postgres (Phase 6) ✅ `manage.py import_v1` |
 | PDF rendering | The V_1.0 algorithm is **ported, not rewritten** |
 | List performance | ساخت مستند loads from Postgres queries only — never by touching PDFs. PDFs build on explicit ساخت action; چاپ لیست just downloads what exists. |
 | Sequencing | Phased vertical slices, each independently runnable |
@@ -378,7 +378,7 @@ Postgres — including concurrency tests with real threads. The register reads
 | Persian validation messages | Done | V_1.0's «Pleas finish X field» warnings |
 | Row actions: تکمیل / اتمام / چاپ | all live: تکمیل (Phase 3), چاپ (Phase 4), the sign-off buttons replacing «اتمام» (Phase 5) | |
 | Attachment "Select" mode of the register | Done in Phase 3 | as a picker modal inside the designer |
-| چاپ لیست (bulk download of built PDFs) | Not Started | Phase 6 |
+| چاپ لیست (bulk download of built PDFs) | Done in Phase 6 | ZIP of built PDFs; see Phase 6 |
 | حسابکش / پاسخ خواه / پاسخگو columns | Done in Phase 3 | derived from the Responsibilities block; follow the row labels |
 | تدوین / تائید / تصویب columns | Done | name + Jalali date, filled by the sign-off workflow (Phase 5) |
 
@@ -608,10 +608,22 @@ worker, and in the browser. Detail: [`docs/09-workflow.md`](docs/09-workflow.md)
 **Not verified:** the approver's *browser* session (driven through the API), the pad on a touch device, the «پاک کردن» button, rate limiting behind a reverse proxy.
 **Also fixed on the way:** Phase 4's stray dev user (helper bug) and the designer's dead «نمایش» button.
 
-### Phase 6 — Dashboard, history, export, migration — **Not Started**
-Real aggregate counts (V_1.0's are mock) · Document History as a genuine new
-feature · چاپ لیست bulk download · Mongo + `saves/*.json` + `img/` signatures →
-Postgres importer as a Celery job.
+### Phase 6 — History, bulk print, dashboard extras, importer ✅ **Done**
+Verified by 133 new backend tests (392 total; mutation-checked: history 7/7, dashboard 5/6 + 1 equivalent, bulk print 8/9 + 1 equivalent, importer 26/26 — plus one extra case added for a survivor), 11 new frontend tests (68 total), in the browser, and — for the importer — against the real V_1.0 files
+(the imported «نمونه» renders as V_1.0's own archived PDF). Detail and **how to run the import**: [`docs/10-phase-6.md`](docs/10-phase-6.md). Each slice is its own commit (`git log --oneline`).
+
+| Item | Status | Notes |
+|---|---|---|
+| Document History screen `/documents/history` | Done | revisions tab (every revision, filters, family drill-down, signers, PDF link) + activity tab (audit feed); `GET /history/revisions/`, `/history/activity/` |
+| Dashboard: «منتظر اقدام شما» + recent activity | Done | `GET /dashboard/awaiting/` reuses the workflow's verdict, so it can't disagree with the register's buttons |
+| چاپ لیست (bulk print) | Done | ZIP of already-built official PDFs for ticked rows or the current filter; preflight lists what's missing and why; capped; never renders |
+| V_1.0 importer `manage.py import_v1` | Done | Mongo (env URI) or mongoexport + local `saves/`/`img/`; dry-run default; skip-and-report; one outer transaction with per-document savepoints; Celery job + stored `ImportRun` report; `IMPORTED` audit event; no network downloads |
+| Shared query helpers (`queries.py`) | Done | register search + filters reused by history and bulk print (two refactor commits) |
+
+**Decisions (user):** History = two tabs; bulk print = ZIP of built PDFs; dashboard = awaiting-you card + recent activity; importer = Mongo via env or mongoexport + local files, skip-and-report, dry-run by default, never download, Celery-run command.
+**Not built on purpose:** a merged single-PDF bulk print, downloading from the Liara URLs, an import web screen.
+**Not verified:** the importer against a **live MongoDB** and the user's real index rows (fake driver + rows synthesised from `saves/`), the ZIP landing in the browser's Downloads folder, phone layouts.
+**Also fixed on the way:** a real-run bug in the importer (the sequence bump outside a transaction, leaving a half-finished import) — found by running it for real, fixed structurally.
 
 ---
 

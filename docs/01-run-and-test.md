@@ -19,24 +19,25 @@ Docker Desktop must be running first (`open -a Docker`). The backend container r
 | "No migrations to apply" but columns are wrong | stale tables from deleted Phase-0 apps; drop them + their `django_migrations` rows |
 | Browser pane screenshots/clicks time out | pane hidden — reopen with `mcp__Claude_Browser__preview_start`; `read_page`/DOM still work |
 | `.next` permission error | clear the directory's *contents* only (it is a volume mount) |
+| `import_v1` can't see the data | put it in `V_2.0/import_data/` (git-ignored) — it is mounted read-only at `/import_data` in `backend` and `celery`; after changing `docker-compose.yml` volumes run `docker compose up -d` (recreate), after changing requirements `docker compose up -d --build backend celery` |
 | `tsc`: "Cannot find module 'vitest'" (every `*.test.ts`) | the frontend container's `node_modules` volume predates vitest — `docker compose exec -T frontend npm install` (this also brought `package-lock.json` in line with `package.json`) |
 | Moving/deleting files under `backend/media` kills requests for a few seconds | runserver's autoreloader watches `/app`; wait for it to come back |
 | Browser-pane clicks land in the wrong place after `resize_window` to a custom size | the click frame is the pane's, not the emulated viewport's — `resize_window preset=desktop` first |
 
 ## Tests
 ```bash
-docker compose exec -T backend python manage.py test --noinput        # all: 259
+docker compose exec -T backend python manage.py test --noinput        # all: 392
 docker compose exec -T backend python manage.py test apps.documents   # one app
-docker compose exec -T frontend npx vitest run                        # 57
+docker compose exec -T frontend npx vitest run                        # 68
 docker compose exec -T frontend npx tsc --noEmit
 docker compose exec -T frontend npm run lint
 docker compose exec -T frontend npm run build
 docker compose exec -T backend python manage.py check
 docker compose exec -T backend python manage.py makemigrations --check --dry-run
 ```
-Backend tests: accounts 21, `documents/tests.py` 58, `documents/test_designer.py` 67, `documents/test_workflow.py` 50, `pdfgen` 63
-(golden 4, renderer 14, adapter 19, API/task 26 — **259** total, incl. real-thread concurrency tests that are skipped on SQLite — run on Postgres).
-Tests use a LocMem cache so they need no Redis. Frontend: designer 22, rich-text 16, pdf 7, workflow 7, verify 5.
+Backend tests: accounts 21, `documents/tests.py` 58, `test_designer.py` 67, `test_workflow.py` 50, `test_history.py` 18, `dashboard` 9, `pdfgen` 85 (golden 4, renderer 14, adapter 19, API/task 26, bulk 22),
+`importer` 84 (mapping 27, import/task/command 40, sources & files 17) — **392** total, incl. real-thread concurrency tests that are skipped on SQLite — run on Postgres).
+Tests use a LocMem cache so they need no Redis. Frontend: designer 22, rich-text 16, pdf 8, workflow 7, verify 5, history 5, bulk-print 5 (**68**).
 Golden-PDF oracle and how to regenerate it: [08-pdf-engine.md](08-pdf-engine.md). No backend linter is configured (`manage.py check` + `makemigrations --check` only).
 
 ## Configuration (`V_2.0/.env`, template `.env.example`)

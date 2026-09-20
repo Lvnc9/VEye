@@ -6,7 +6,7 @@
   (V_1.0's dashboard was hard-coded mock data, incl. `کاربر: مدیر عامل`.)
 - `GET /dashboard/system-info/` — small info payload.
 - `GET /dashboard/awaiting/` — Phase 6: documents awaiting the signed-in user's step (same verdict as the register's buttons); the dashboard also shows the last 10 events from `/history/activity/`. See [10-phase-6.md](10-phase-6.md).
-- Phase 6 may add more widgets; keep them query-based.
+- Widgets stay query-based (no PDF is ever opened for a dashboard).
 
 ## Frontend stack
 Next.js 16.3.5 (App Router, Turbopack, **`proxy.ts` not `middleware.ts`**), React 19, Tailwind 4, vitest 3.
@@ -15,7 +15,7 @@ Next.js 16.3.5 (App Router, Turbopack, **`proxy.ts` not `middleware.ts`**), Reac
 ## Layout
 `app/(app)/layout.tsx`: window-height shell, dark sidebar, `CurrentUserProvider`. Nav items carry an optional
 `capability` (hidden if the user lacks it) and `ready:false` (rendered disabled «به‌زودی»). To add a screen, flip
-`ready` and add the route; the history entry `/documents/history` is `ready:false` until Phase 6.
+`ready` and add the route; `/documents/history` went live in Phase 6 (the active item is the most specific match).
 
 ## lib/
 | File | Role |

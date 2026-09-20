@@ -62,7 +62,7 @@ Personnel routes: see [02-auth-and-rbac.md](02-auth-and-rbac.md). Dashboard: `/d
 - Revision search matches the displayed `01`, not the stored `"0-1"`.
 - Documents can't be edited/deleted through the API.
 
-## For the Phase 6 importer
+## For the Phase 6 importer (now built: `apps/importer`, see [10-phase-6.md](10-phase-6.md))
 - `number` from the stored `code` ("PO-01" → 1); **never trust `simple_code`**.
 - `review "0-0"` → revision 1 + DRAFT; otherwise `revision = 10·one + two`.
 - After import set `DocumentSequence.last_number` to max per group.

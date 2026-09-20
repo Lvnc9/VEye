@@ -19,10 +19,15 @@
 | 11 | PDF: two-word names/posts wrap with lines in reverse order in the narrow control-table cells; a document without a logo prints a black square | V_1.0 behaviour, preserved (the archived PDFs do it too) — the user's call |
 | 12 | The PDF's free «متن آزاد» under «وضعیت کنترل:» (V_1.0 `extra_header`) has no UI | not built (all V_1.0 samples have it empty); add a field on approval if wanted |
 | 13 | The verify endpoint's rate limit keys on `REMOTE_ADDR` | behind a reverse proxy, configure the real client IP or all scanners share one bucket |
-| 14 | No inbox/کارتابل and no way for an author to withdraw a submitted document | by design for now: reviewers filter the register on «در انتظار …»; only a reviewer can return |
+| 14 | ~~No inbox/کارتابل~~ | **Done in Phase 6** (dashboard «منتظر اقدام شما»). Still no way for an author to *withdraw* a submitted document — only a reviewer can return it |
+| 15 | Bulk print has no merged single-PDF option (the ZIP was chosen) and no «build the missing PDFs» shortcut | add if wanted; would need a PDF-merge dependency + a job |
+| 16 | The importer keeps signer names exactly as stored (Arabic yeh/kaf), while titles are normalised | deliberate (they print on PDFs as V_1.0 printed them); normalise if you prefer consistent search |
+| 17 | Importer: an imported document has no PDF and `content_saved_at` is empty when its content file is missing (the PDF then prints today's date) | rebuild PDFs after import; a document without content is reported `content_missing` |
 | 10 | `package-lock.json` was out of sync with `package.json` (vitest missing from the container's `node_modules`); `npm install` in the container fixed it and changed the lockfile | review the lockfile diff when committing |
 
 ## Unverified by hand (covered by unit/backend tests or by reasoning only)
+- **Phase 6 importer:** never run against a **live MongoDB** (only a fake driver; I have no database and must not use V_1.0's credentials) — do a dry run first. Never run on the user's *real* index rows (I synthesised rows from `saves/*.json` to exercise it). Long-block file links and content that exists only in the Liara bucket are reported, not migrated (the user chose local files only).
+- **Phase 6 UI:** the saved ZIP in the browser's Downloads folder, the truncated-list message, the History PDF link, phone layouts; see [10-phase-6.md](10-phase-6.md).
 - **Phase 5:** the approver's *browser* session (approval was driven through the API), the pad on a touch device, the «پاک کردن» button; see [09](09-workflow.md).
 - **Phase 4:** the PDF rendering *inside a browser tab* — the browser pane did not surface the popup opened by چاپ/نمایش, so I confirmed the
   requests (POST 202 → polled → `…/download/` 200, 56–61 KB) and rendered the same files with `pdftoppm`, but did not watch the tab. The
@@ -37,7 +42,7 @@
 ## Decisions still pending (ask the user; don't assume)
 Phase 4 — **all decided** with the user (build trigger, storage, preview, extra boxes, empty signatures); see [08-pdf-engine.md](08-pdf-engine.md).
 Phase 5 — **all decided** with the user (مرجوع rules, one person per step, auto-obsolete + auto-build, drawn signature); see [09-workflow.md](09-workflow.md). Still open: whether `print_document` should stop being granted to every roll.
-Phase 6: dedup/collision policy for importing documents; whether Long-block `links` (Liara URLs) should be fetched or recorded as unmigrated.
+Phase 6 — **all decided** with the user (History = revisions + activity tabs; bulk print = ZIP of built PDFs; dashboard = awaiting-you + recent activity; importer = Mongo via env or mongoexport + local files, skip-and-report, dry-run default, never download, Celery-run command); see [10-phase-6.md](10-phase-6.md).
 
 ## Things that look like bugs but are deliberate
 Crossed group prefixes (پوستر→PO etc.); the `creater` misspelling; page-1 no watermark and final-page watermark/footnote drawn twice

@@ -36,7 +36,7 @@ in the V_1.0 root (e.g. `نمونه-PR-01-01.pdf`, `روش اجرايي کنتر
 Committed in V_1.0 and its git history: Mongo URI + password (`other_folder/utils.py:90`, `clearing_the_database.py:21`, `test02/03.py`),
 Liara S3 access key/secret (`utils.py:26-27,1629-1630`, `create_confirm…py:18-19`, `utils_01.py:1444-1445`), app login dict
 (`main.py:19-21`). **The user still needs to rotate these.** Nothing in V_2.0 uses them; do not read them into any file, log or prompt.
-The Phase 6 importer must take Mongo access through env config supplied by the user at run time.
+The Phase 6 importer (`manage.py import_v1`) takes Mongo access only through an environment variable supplied at run time (or a mongoexport file) — see [10-phase-6.md](10-phase-6.md). V_1.0's Mongo database/collection defaults are `my_database` / `my_collection` (`utils.py` `MongoDBClient`).
 
 ## Real V_1.0 bugs (so you don't reproduce them)
 - Login checked username and password against key/value sets independently; login itself was bypassed (`main.py:1059`).
