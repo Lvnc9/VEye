@@ -8,7 +8,7 @@ normalised.
 from django.db.models import Case, CharField, OuterRef, Q, Subquery, Value, When
 from django.db.models.functions import Cast, Concat
 
-from apps.core.constants import GROUP_CODE_PREFIX, DocumentCategory, DocumentGroup
+from apps.core.constants import GROUP_CODE_PREFIX, DocumentCategory, DocumentGroup, DocumentStatus
 from apps.core.text import normalize_letters, normalize_search_term
 
 
@@ -82,3 +82,23 @@ def with_official_pdf(queryset):
         pdf_status_value=Subquery(build.values("status")[:1]),
         pdf_built_at_value=Subquery(build.values("built_at")[:1]),
     )
+
+
+def apply_filters(queryset, params):
+    """The register's filters — `group`, `category`, `status` and free-text `search`
+    — from a query-string mapping. Shared by the register, the history screen and
+    bulk print so "the current filter" means the same thing on all three.
+
+    An unknown enum value matches nothing rather than erroring: it can only come
+    from a stale link or a hand-edited URL, and silently ignoring it would show (or
+    print) *everything*.
+    """
+    for param, allowed in (
+        ("group", DocumentGroup.values),
+        ("category", DocumentCategory.values),
+        ("status", DocumentStatus.values),
+    ):
+        value = params.get(param)
+        if value:
+            queryset = queryset.filter(**{param: value}) if value in allowed else queryset.none()
+    return search(queryset, params.get("search", ""))

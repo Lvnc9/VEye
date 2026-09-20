@@ -22,10 +22,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.core.constants import (
     GROUP_CODE_PREFIX,
-    DocumentCategory,
     DocumentEventKind,
-    DocumentGroup,
-    DocumentStatus,
     SignOffRole,
 )
 from apps.core.pagination import DefaultPagination
@@ -105,14 +102,7 @@ class RevisionHistoryView(ListAPIView):
         )
         qs = queries.with_official_pdf(qs)
 
-        for param, allowed in (
-            ("group", DocumentGroup.values),
-            ("category", DocumentCategory.values),
-            ("status", DocumentStatus.values),
-        ):
-            value = params.get(param)
-            if value:
-                qs = qs.filter(**{param: value}) if value in allowed else qs.none()
+        qs = queries.apply_filters(qs, params)
 
         family = params.get("family", "").strip().upper()
         if family:
@@ -120,7 +110,6 @@ class RevisionHistoryView(ListAPIView):
             group = PREFIX_TO_GROUP.get(match.group(1)) if match else None
             qs = qs.filter(group=group, number=int(match.group(2))) if group else qs.none()
 
-        qs = queries.search(qs, params.get("search", ""))
         return qs.annotate(family_prefix=queries.prefix_expression()).order_by("family_prefix", "number", "-revision")
 
 

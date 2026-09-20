@@ -8,12 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import Capability
-from apps.core.constants import (
-    DocumentCategory,
-    DocumentGroup,
-    DocumentStatus,
-    SectionType,
-)
+from apps.core.constants import SectionType
 from apps.core.pagination import DefaultPagination
 from apps.core.permissions import HasCapability, capability_required
 
@@ -64,20 +59,7 @@ class DocumentViewSet(
         # State of the issued PDF, for the register's چاپ button (subqueries only).
         qs = queries.with_official_pdf(qs)
 
-        # Exact-match filters. An unknown value simply matches nothing rather
-        # than erroring — it can only come from a stale link or a hand-edited URL.
-        for param, allowed in (
-            ("group", DocumentGroup.values),
-            ("category", DocumentCategory.values),
-            ("status", DocumentStatus.values),
-        ):
-            value = params.get(param)
-            if value:
-                qs = qs.filter(**{param: value}) if value in allowed else qs.none()
-
-        qs = queries.search(qs, params.get("search", ""))
-
-        return qs
+        return queries.apply_filters(qs, params)
 
     def get_serializer_class(self):
         if self.action == "create":
