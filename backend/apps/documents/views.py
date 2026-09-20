@@ -1,5 +1,4 @@
-from django.db.models import Case, CharField, Exists, OuterRef, Prefetch, Q, Subquery, Value, When
-from django.db.models.functions import Cast, Concat
+from django.db.models import Exists, OuterRef, Prefetch, Subquery
 from django.http import FileResponse, Http404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -10,7 +9,6 @@ from rest_framework.response import Response
 
 from apps.accounts.models import Capability
 from apps.core.constants import (
-    GROUP_CODE_PREFIX,
     DocumentCategory,
     DocumentGroup,
     DocumentStatus,
@@ -18,10 +16,9 @@ from apps.core.constants import (
 )
 from apps.core.pagination import DefaultPagination
 from apps.core.permissions import HasCapability, capability_required
-from apps.core.text import normalize_letters, normalize_search_term
 
 from . import content as content_service
-from . import services, workflow
+from . import queries, services, workflow
 from .content_serializers import ContentInputSerializer, content_payload, file_payload
 from apps.pdfgen.models import PdfBuild, PdfKind
 
@@ -34,41 +31,6 @@ from .serializers import (
 )
 
 _official_build = PdfBuild.objects.filter(document=OuterRef("pk"), kind=PdfKind.OFFICIAL)
-
-
-def _zero_pad_2(field: str):
-    """SQL for f"{value:02d}". Not LPad: LPad *truncates* to the target length
-    (Postgres lpad('100', 2, '0') is '10'), which would mangle numbers >= 100
-    that the Python-side `code` property renders in full."""
-    as_text = Cast(field, CharField())
-    return Case(
-        When(**{f"{field}__lt": 10}, then=Concat(Value("0"), as_text)),
-        default=as_text,
-        output_field=CharField(),
-    )
-
-
-def _full_code_expression():
-    """SQL equivalent of Document.full_code, so search can match the printed
-    identifier ("PO-01-01") — including its revision part, which V_1.0's search
-    could not: it matched the raw stored "0-1" rather than the displayed "01"
-    (documents_01.py:872)."""
-    prefix = Case(
-        *[When(group=group, then=Value(prefix)) for group, prefix in GROUP_CODE_PREFIX.items()],
-        output_field=CharField(),
-    )
-    return Concat(
-        prefix,
-        Value("-"),
-        _zero_pad_2("number"),
-        Value("-"),
-        _zero_pad_2("revision"),
-        output_field=CharField(),
-    )
-
-
-def _labels_containing(choices, term: str) -> list[str]:
-    return [value for value, label in choices if term in normalize_letters(str(label)).casefold()]
 
 
 class DocumentViewSet(
@@ -121,14 +83,7 @@ class DocumentViewSet(
             if value:
                 qs = qs.filter(**{param: value}) if value in allowed else qs.none()
 
-        term = normalize_search_term(params.get("search", ""))
-        if term:
-            qs = qs.annotate(full_code_text=_full_code_expression()).filter(
-                Q(title__icontains=term)
-                | Q(full_code_text__icontains=term)
-                | Q(category__in=_labels_containing(DocumentCategory.choices, term))
-                | Q(group__in=_labels_containing(DocumentGroup.choices, term))
-            )
+        qs = queries.search(qs, params.get("search", ""))
 
         return qs
 
