@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ApiError, apiDelete, apiGet, apiPut, apiUpload } from "@/lib/api-client";
 import {
   canAddSection,
@@ -28,6 +28,7 @@ import { WorkflowActions } from "@/components/WorkflowActions";
 import { WorkflowTimeline } from "@/components/WorkflowTimeline";
 import { formatJalali } from "@/lib/jalali";
 import { PdfBuildError, buildPdf, openPdfInTab } from "@/lib/pdf";
+import { setFlash } from "@/lib/flash";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { BlockFrame } from "@/components/designer/BlockFrame";
 import { ShortBlock } from "@/components/designer/ShortBlock";
@@ -40,6 +41,7 @@ import { FieldLabel, inputClass } from "@/components/designer/ui";
 /** طراحی مستند — V_1.0's Poster screen (poster_01.py). */
 export default function DocumentDesignerPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { can } = useCurrentUser();
 
   const [content, setContent] = useState<ContentResponse | null>(null);
@@ -167,7 +169,10 @@ export default function DocumentDesignerPage() {
       setContent(response);
       setState(next);
       setSavedSnapshot(snapshot(next));
-      setNotice("مستند ذخیره شد.");
+      // Like V_1.0 (poster_01.py show_pdf → change_to_documents1): once the document is
+      // saved, go back to «ساخت مستند», where the register says it was saved.
+      setFlash(`مستند ${response.document.full_code} ذخیره شد.`);
+      router.push("/documents");
     } catch (err) {
       const code = err instanceof ApiError ? (err.data as { code?: string } | undefined)?.code : undefined;
       if (code === "version_conflict") setConflict(true);

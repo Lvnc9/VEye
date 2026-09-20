@@ -7,7 +7,7 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 > git history is per-slice from Phase 6 on.
 
 ## [Unreleased]
-- _(add a line here with every behaviour-changing commit)_
+- Designer: after a successful «ذخیره» the app returns to «ساخت مستند» with a «ذخیره شد» message (as V_1.0 did).
 
 ## Phase 6 — history, bulk print, dashboard extras, importer ✅ (docs: `10-phase-6.md`)
 - **History screen** (`/documents/history`): revisions tab (filter, family chains, signers, PDF link) + activity tab (audit feed, filters). New `GET /history/revisions/` and `/history/activity/`; register search helpers extracted to `queries.py`. Docs: `10-phase-6.md`.

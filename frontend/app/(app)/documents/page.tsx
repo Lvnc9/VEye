@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { PdfBuildError, buildPdf, followPdf, openPdfInTab, readPdfState } from "@/lib/pdf";
+import { takeFlash } from "@/lib/flash";
 import {
   DOCUMENT_ACTION_LABELS,
   DOCUMENT_CATEGORY_LABELS,
@@ -97,6 +98,16 @@ export default function DocumentRegisterPage() {
 
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // A message left by the designer («مستند … ذخیره شد») — read once, after mount.
+  // Deferred to a microtask: this project's lint config forbids a synchronous
+  // setState in an effect (and reading storage during render would mismatch SSR).
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      const message = takeFlash();
+      if (message) setNotice(message);
+    });
+  }, []);
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<{ category: DocumentCategory | ""; title: string; group: DocumentGroup | "" }>({
