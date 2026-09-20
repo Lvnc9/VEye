@@ -502,6 +502,47 @@ export interface DashboardSystemInfo {
 // Generic
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// History (Phase 6)
+// ---------------------------------------------------------------------------
+
+/** One row of GET /history/revisions/ — a single revision of a document. */
+export interface RevisionRow {
+  id: number;
+  code: string;
+  revision: number;
+  revision_display: string;
+  full_code: string;
+  title: string;
+  group: DocumentGroup;
+  group_label: string;
+  category: DocumentCategory;
+  category_label: string;
+  status: DocumentStatus;
+  status_label: string;
+  signoffs: Record<SignOffRole, SignOffSummary | null>;
+  pdf_status: PdfStatus;
+  pdf_built_at: string | null;
+  content_saved_at: string | null;
+  created_at: string;
+}
+
+/** One row of GET /history/activity/ — a workflow event on any document. */
+export interface ActivityEvent {
+  id: number;
+  document: { id: number; full_code: string; title: string };
+  kind: DocumentEventKind;
+  kind_label: string;
+  from_status: DocumentStatus;
+  from_status_label: string;
+  to_status: DocumentStatus;
+  to_status_label: string;
+  actor_name: string;
+  actor_title: string;
+  reason: string;
+  created_at: string;
+}
+
 export interface Paginated<T> {
   count: number;
   next: string | null;

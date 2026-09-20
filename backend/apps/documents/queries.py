@@ -5,7 +5,7 @@ by the *printed* code (including its revision part, which V_1.0's search could n
 match), and by category / group label — with Arabic/Persian letters and digits
 normalised.
 """
-from django.db.models import Case, CharField, Q, Value, When
+from django.db.models import Case, CharField, OuterRef, Q, Subquery, Value, When
 from django.db.models.functions import Cast, Concat
 
 from apps.core.constants import GROUP_CODE_PREFIX, DocumentCategory, DocumentGroup
@@ -20,6 +20,15 @@ def zero_pad_2(field: str):
     return Case(
         When(**{f"{field}__lt": 10}, then=Concat(Value("0"), as_text)),
         default=as_text,
+        output_field=CharField(),
+    )
+
+
+def prefix_expression():
+    """SQL for the code prefix (PO / PR / WI / FR) — group *names* sort differently
+    from the codes people read, so ordering by group would look shuffled."""
+    return Case(
+        *[When(group=group, then=Value(prefix)) for group, prefix in GROUP_CODE_PREFIX.items()],
         output_field=CharField(),
     )
 
@@ -59,4 +68,17 @@ def search(queryset, raw_term: str):
         | Q(full_code_text__icontains=term)
         | Q(category__in=labels_containing(DocumentCategory.choices, term))
         | Q(group__in=labels_containing(DocumentGroup.choices, term))
+    )
+
+
+def with_official_pdf(queryset):
+    """Annotate `pdf_status_value` / `pdf_built_at_value` (the issued PDF's state)
+    with subqueries on the build table — no PDF is opened to answer this, and no
+    query per row is added. Shared by the register and the history screen."""
+    from apps.pdfgen.models import PdfBuild, PdfKind
+
+    build = PdfBuild.objects.filter(document=OuterRef("pk"), kind=PdfKind.OFFICIAL)
+    return queryset.annotate(
+        pdf_status_value=Subquery(build.values("status")[:1]),
+        pdf_built_at_value=Subquery(build.values("built_at")[:1]),
     )

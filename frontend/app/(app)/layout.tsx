@@ -20,7 +20,7 @@ const NAV_ITEMS: {
 }[] = [
   { href: "/dashboard", label: "داشبورد", ready: true },
   { href: "/documents", label: "ساخت مستند", ready: true },
-  { href: "/documents/history", label: "سوابق مستندات", ready: false },
+  { href: "/documents/history", label: "سوابق مستندات", ready: true },
   {
     href: "/personnel/register",
     label: "ثبت پرسنل",
@@ -35,6 +35,14 @@ function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, can } = useCurrentUser();
+
+  // The most specific matching item is the active one, so /documents/history
+  // doesn't also light up «ساخت مستند» (whose href is a prefix of it).
+  const activeHref = NAV_ITEMS.filter(
+    (item) =>
+      item.ready &&
+      (pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"))),
+  ).sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   async function handleLogout() {
     try {
@@ -72,9 +80,7 @@ function Sidebar() {
               </span>
             );
           }
-          const active =
-            pathname === item.href ||
-            (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          const active = item.href === activeHref;
           return (
             <Link
               key={item.href}

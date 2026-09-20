@@ -77,3 +77,11 @@ describe("PdfBuildError", () => {
     expect(new PdfBuildError("x")).not.toBeInstanceOf(ApiError);
   });
 });
+
+describe("pdfDownloadUrl", () => {
+  it("points at the authenticated download route", async () => {
+    const { pdfDownloadUrl } = await import("./pdf");
+    expect(pdfDownloadUrl(7)).toMatch(/\/documents\/7\/pdf\/official\/download\/$/);
+    expect(pdfDownloadUrl(7, "preview", true)).toMatch(/\/documents\/7\/pdf\/preview\/download\/\?download=1$/);
+  });
+});

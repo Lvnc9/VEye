@@ -7,7 +7,8 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 > git history is per-slice from Phase 6 on.
 
 ## [Unreleased] — Phase 6: history, bulk print, dashboard extras, importer
-- _(entries are added per commit below)_
+- **History screen** (`/documents/history`): revisions tab (filter, family chains, signers, PDF link) + activity tab (audit feed, filters). New `GET /history/revisions/` and `/history/activity/`; register search helpers extracted to `queries.py`. Docs: `10-phase-6.md`.
+- _(further entries are added per commit below)_
 
 ## Phase 5 — Workflow, signatures, status, public verify ✅ (docs: `09-workflow.md`)
 - State machine DRAFT → AWAITING_CONFIRMATION → AWAITING_APPROVAL → UNDER_CONTROL with مرجوع back to DRAFT (reason required, sign-offs cleared),

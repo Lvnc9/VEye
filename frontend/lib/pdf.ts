@@ -5,7 +5,7 @@
  * then the state is polled until it leaves "building". The register list never
  * renders anything — it only reads `pdf_status` from the row.
  */
-import { ApiError, apiGet, apiPost } from "./api-client";
+import { API_BASE_URL, ApiError, apiGet, apiPost } from "./api-client";
 import type { PdfKind, PdfState, PdfStatus } from "./types";
 
 export const PDF_POLL_INTERVAL_MS = 1000;
@@ -25,6 +25,11 @@ export class PdfBuildError extends Error {
     super(message);
     this.name = "PdfBuildError";
   }
+}
+
+/** Where a built PDF is served (authenticated; inline unless `download`). */
+export function pdfDownloadUrl(documentId: number, kind: PdfKind = "official", download = false): string {
+  return `${API_BASE_URL}/documents/${documentId}/pdf/${kind}/download/${download ? "?download=1" : ""}`;
 }
 
 const statePath = (documentId: number, kind: PdfKind) => `/documents/${documentId}/pdf/${kind}/`;

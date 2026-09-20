@@ -45,6 +45,15 @@ export function formatJalali(value: string | Date | null | undefined): string {
   return JALALI_NUMERIC.format(date);
 }
 
+const TIME_ONLY = new Intl.DateTimeFormat("fa-IR", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+/** "۱۴۰۵/۰۶/۲۹ ۱۶:۳۰" — a timestamp (the audit feed). */
+export function formatJalaliDateTime(value: string | Date | null | undefined): string {
+  const date = toDate(value);
+  if (!date) return "";
+  return `${JALALI_NUMERIC.format(date)} ${TIME_ONLY.format(date)}`;
+}
+
 /** "۱۹ فروردین ۱۴۰۴" — for prose contexts. */
 export function formatJalaliLong(value: string | Date | null | undefined): string {
   const date = toDate(value);

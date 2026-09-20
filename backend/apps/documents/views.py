@@ -1,4 +1,4 @@
-from django.db.models import Exists, OuterRef, Prefetch, Subquery
+from django.db.models import Exists, OuterRef, Prefetch
 from django.http import FileResponse, Http404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -20,8 +20,6 @@ from apps.core.permissions import HasCapability, capability_required
 from . import content as content_service
 from . import queries, services, workflow
 from .content_serializers import ContentInputSerializer, content_payload, file_payload
-from apps.pdfgen.models import PdfBuild, PdfKind
-
 from .models import Document, DocumentFile, Section
 from .serializers import (
     DocumentCreateSerializer,
@@ -29,8 +27,6 @@ from .serializers import (
     DocumentEventSerializer,
     DocumentSerializer,
 )
-
-_official_build = PdfBuild.objects.filter(document=OuterRef("pk"), kind=PdfKind.OFFICIAL)
 
 
 class DocumentViewSet(
@@ -64,13 +60,9 @@ class DocumentViewSet(
                 .prefetch_related("responsibility_rows"),
                 to_attr="responsibility_sections",
             ),
-        ).annotate(
-            has_next_revision=Exists(Document.objects.filter(previous_revision=OuterRef("pk"))),
-            # State of the issued PDF, for the register's چاپ button. A subquery
-            # on the build table — no PDF is opened or rendered to answer this.
-            pdf_status_value=Subquery(_official_build.values("status")[:1]),
-            pdf_built_at_value=Subquery(_official_build.values("built_at")[:1]),
-        )
+        ).annotate(has_next_revision=Exists(Document.objects.filter(previous_revision=OuterRef("pk"))))
+        # State of the issued PDF, for the register's چاپ button (subqueries only).
+        qs = queries.with_official_pdf(qs)
 
         # Exact-match filters. An unknown value simply matches nothing rather
         # than erroring — it can only come from a stale link or a hand-edited URL.

@@ -47,6 +47,7 @@ Documents now leave DRAFT through the workflow — see [09](09-workflow.md); you
 | [06-v1-reference.md](06-v1-reference.md) | need to consult V_1.0 (live vs dead files, quirks, secrets) |
 | [07-known-gaps.md](07-known-gaps.md) | want open bugs, unverified items, decisions still pending |
 | [08-pdf-engine.md](08-pdf-engine.md) | touch PDFs: the renderer port, build task/API, quirks, golden-file oracle |
+| [10-phase-6.md](10-phase-6.md) | touch history, the dashboard extras, bulk print or the importer (Phase 6, in progress) |
 | [09-workflow.md](09-workflow.md) | touch sign-off, status transitions, مرجوع, the audit trail, signatures, the public verify page |
 | [00-git-and-tracking.md](00-git-and-tracking.md) | commit, branch, changelog and docs conventions — **read before your first commit** |
 | [new-chat-prompt.md](new-chat-prompt.md) | the ready-to-paste prompt for opening a fresh chat on this project |
