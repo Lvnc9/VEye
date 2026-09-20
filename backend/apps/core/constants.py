@@ -89,6 +89,8 @@ class DocumentEventKind(models.TextChoices):
     APPROVED = "approved", "تصویب شد"
     RETURNED = "returned", "مرجوع شد"
     SUPERSEDED = "superseded", "منسوخ شد (جایگزین شد)"
+    #: A document brought over from V_1.0 by `manage.py import_v1` (Phase 6).
+    IMPORTED = "imported", "وارد شده از نسخهٔ ۱"
 
 
 class ValidationMark(models.TextChoices):

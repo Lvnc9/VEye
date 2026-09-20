@@ -11,6 +11,7 @@ const TONE: Record<string, string> = {
   approved: "bg-green-600",
   returned: "bg-red-500",
   superseded: "bg-slate-400",
+  imported: "bg-violet-400",
 };
 
 /** The audit trail of one document: who submitted, confirmed, approved or

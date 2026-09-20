@@ -247,7 +247,7 @@ export interface ReturnNote {
   at: string;
 }
 
-export type DocumentEventKind = "submitted" | "confirmed" | "approved" | "returned" | "superseded";
+export type DocumentEventKind = "submitted" | "confirmed" | "approved" | "returned" | "superseded" | "imported";
 
 export interface DocumentEvent {
   id: number;

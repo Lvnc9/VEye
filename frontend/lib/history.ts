@@ -31,6 +31,7 @@ export const EVENT_KIND_LABELS: Record<DocumentEventKind, string> = {
   approved: "تصویب شد",
   returned: "مرجوع شد",
   superseded: "منسوخ شد (جایگزین شد)",
+  imported: "وارد شده از نسخهٔ ۱",
 };
 
 /** Tailwind classes per event kind (a dot in the feed). */
@@ -40,6 +41,7 @@ export const EVENT_KIND_TONE: Record<DocumentEventKind, string> = {
   approved: "bg-green-600",
   returned: "bg-red-500",
   superseded: "bg-slate-400",
+  imported: "bg-violet-400",
 };
 
 export const ACTIVITY_WINDOWS: { value: string; label: string }[] = [
