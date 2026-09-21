@@ -46,7 +46,7 @@ def _cookie_kwargs(max_age: int) -> dict:
     )
 
 
-def _set_jwt_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+def set_jwt_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     access_lifetime = int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds())
     refresh_lifetime = int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
     response.set_cookie(settings.JWT_ACCESS_COOKIE_NAME, access_token, **_cookie_kwargs(access_lifetime))
@@ -82,7 +82,7 @@ class LoginView(APIView):
         access = refresh.access_token
 
         response = Response(UserSerializer(user).data, status=status.HTTP_200_OK)
-        _set_jwt_cookies(response, str(access), str(refresh))
+        set_jwt_cookies(response, str(access), str(refresh))
         # Forces CsrfViewMiddleware to emit a fresh, readable csrftoken cookie
         # on this response (skeleton.md §4).
         get_token(request)
@@ -126,7 +126,7 @@ class RefreshView(APIView):
         blacklist_jti(old_jti, ttl)
 
         response = Response({"detail": "Refreshed."}, status=status.HTTP_200_OK)
-        _set_jwt_cookies(response, str(new_access), str(new_refresh))
+        set_jwt_cookies(response, str(new_access), str(new_refresh))
         return response
 
 

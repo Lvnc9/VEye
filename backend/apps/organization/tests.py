@@ -613,7 +613,7 @@ class CompanyEndpointTests(ApiTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["name"], "شرکت نمونه")
         self.assertEqual(response.data["root"], self.root.pk)
-        self.assertEqual(response.data["setup_step"], SetupStep.DOMAINS)
+        self.assertEqual(response.data["setup_step"], SetupStep.SECTIONS)  # the last thing build() wrote was a بخش
         self.assertIsNone(response.data["logo_url"])
         self.assertEqual(set(response.data), {
             "id", "root", "name", "legal_name", "national_id", "logo_url",

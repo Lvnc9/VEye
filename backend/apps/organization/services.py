@@ -5,7 +5,8 @@ from apps.core.text import normalize_title, to_latin_digits
 from apps.documents.files import normalize_logo
 
 from . import tree
-from .models import Company
+from .models import Company, SetupStep
+from .setup_state import advance_step
 
 
 def _delete_storage_on_commit(field_file) -> None:
@@ -34,6 +35,7 @@ def update_company(
         # Persian digits become ASCII, and any whitespace typed into the number is dropped.
         company.national_id = "".join(to_latin_digits(national_id).split())
     company.save(update_fields=["legal_name", "national_id", "updated_at"])
+    advance_step(SetupStep.COMPANY)
     return _locked(company.pk)
 
 
@@ -44,6 +46,7 @@ def set_logo(company: Company, *, upload) -> Company:
     _delete_storage_on_commit(company.logo)
     company.logo.save("logo.png", png, save=False)
     company.save(update_fields=["logo", "updated_at"])
+    advance_step(SetupStep.COMPANY)
     return company
 
 
@@ -53,4 +56,5 @@ def remove_logo(company: Company) -> Company:
     _delete_storage_on_commit(company.logo)
     company.logo = ""
     company.save(update_fields=["logo", "updated_at"])
+    advance_step(SetupStep.COMPANY)
     return company

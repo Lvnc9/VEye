@@ -25,6 +25,7 @@ from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_search_term, normalize_title
 
 from .models import ALLOWED_PARENT_KINDS, NODE_NAME_CONSTRAINT, OrgNode, OrgNodeKind
+from .setup_state import STEP_FOR_NODE_KIND, advance_step
 
 PATH_SEGMENT_WIDTH = 10
 
@@ -141,7 +142,9 @@ def create_node(*, kind: str, name: str, parent: OrgNode, created_by=None) -> Or
     _require_active(parent)
     name, key = _clean_name(name)
     _check_name_free(parent.pk, key)
-    return _insert(kind=kind, parent=parent, name=name, key=key, created_by=created_by)
+    node = _insert(kind=kind, parent=parent, name=name, key=key, created_by=created_by)
+    advance_step(STEP_FOR_NODE_KIND[kind])
+    return node
 
 
 @transaction.atomic

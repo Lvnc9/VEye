@@ -28,7 +28,8 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_title
 
-from .models import Membership
+from .models import Membership, SetupStep
+from .setup_state import advance_step
 from .tree import lock_node
 
 User = get_user_model()
@@ -68,9 +69,11 @@ def add_membership(
     position_label: str = "",
     added_by=None,
     may_touch=None,
+    advance_setup: bool = True,
 ) -> Membership:
     """Put a person into a node. `is_primary=None` means "not specified"; a person's first
-    membership is primary whatever is asked."""
+    membership is primary whatever is asked. `advance_setup=False` is for bootstrap, whose own
+    membership must not move the wizard's bookmark."""
     user = _lock_user(user.pk)
     node = lock_node(node.pk)
     if not user.is_active:
@@ -95,7 +98,7 @@ def add_membership(
         _require_may_demote(user.pk, may_touch)
         Membership.objects.filter(user=user, is_primary=True).update(is_primary=False)
 
-    return Membership.objects.create(
+    membership = Membership.objects.create(
         user=user,
         node=node,
         is_primary=primary,
@@ -103,6 +106,9 @@ def add_membership(
         position_label=normalize_title(position_label),
         added_by=added_by,
     )
+    if advance_setup:
+        advance_step(SetupStep.PEOPLE)
+    return membership
 
 
 @transaction.atomic
