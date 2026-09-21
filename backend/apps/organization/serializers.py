@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import serializers
 
+from .access import access_for
 from .models import Company, Membership, OrgNode, OrgNodeKind
 
 User = get_user_model()
@@ -9,14 +10,36 @@ User = get_user_model()
 
 class OrgNodeSerializer(serializers.ModelSerializer):
     """A node as the chart needs it. `path` stays internal, and nothing here identifies a
-    person — the chart is readable by anyone signed in."""
+    person — the chart is readable by anyone signed in.
+
+    The three `can_*` flags answer "what may *I* do here?" with the very functions the write
+    endpoints enforce (access.py), so an edit button and its 403 can never disagree. They need
+    the request in the serializer context, and cost one query per request, not per node."""
 
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
+    can_edit = serializers.SerializerMethodField()
+    can_add_child = serializers.SerializerMethodField()
+    can_manage_members = serializers.SerializerMethodField()
 
     class Meta:
         model = OrgNode
-        fields = ["id", "parent", "kind", "kind_label", "name", "depth", "is_active"]
+        fields = [
+            "id", "parent", "kind", "kind_label", "name", "depth", "is_active",
+            "can_edit", "can_add_child", "can_manage_members",
+        ]
         read_only_fields = fields
+
+    def _access(self):
+        return access_for(self.context["request"])
+
+    def get_can_edit(self, node) -> bool:
+        return self._access().can_edit_node(node)
+
+    def get_can_add_child(self, node) -> bool:
+        return self._access().can_add_child(node)
+
+    def get_can_manage_members(self, node) -> bool:
+        return self._access().can_manage_members(node)
 
 
 class OrgNodeCreateSerializer(serializers.Serializer):

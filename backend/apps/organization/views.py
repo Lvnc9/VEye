@@ -4,7 +4,7 @@ from django.db.models import Exists, OuterRef, Prefetch
 from django.http import FileResponse, Http404
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -15,6 +15,7 @@ from apps.core.pagination import DefaultPagination
 from apps.core.permissions import HasCapability
 
 from . import memberships, queries, services, tree
+from .access import CanEditNode, CanManageMembership, access_for
 from .models import Company, Membership, OrgNode
 from .serializers import (
     CompanyUpdateSerializer,
@@ -49,15 +50,15 @@ class OrgNodeViewSet(viewsets.ModelViewSet):
 
     Anyone signed in can read the chart (the personnel directory is already open to them,
     and hiding the chart from people who can already see everyone would be theatre).
-    Writing needs `manage_organization`. Every write goes through `tree.py`, which owns the
-    path/depth/parent-kind rules; the serializers only check the shape of the input.
+    Writing needs `manage_organization` **or** leading the node (or an ancestor of it) —
+    access.py. Every write goes through `tree.py`, which owns the path/depth/parent-kind rules;
+    the serializers only check the shape of the input.
     """
 
     queryset = OrgNode.objects.all()
     serializer_class = OrgNodeSerializer
     pagination_class = DefaultPagination
-    permission_classes = [IsAuthenticated, HasCapability]
-    write_capability = Capability.MANAGE_ORGANIZATION
+    permission_classes = [IsAuthenticated, CanEditNode]
     # No PUT: a node is renamed or moved with PATCH, and `kind` never changes.
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
@@ -76,18 +77,26 @@ class OrgNodeViewSet(viewsets.ModelViewSet):
         serializer = OrgNodeCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        if not access_for(request).can_add_child(data["parent"]):
+            raise PermissionDenied("شما مسئول این گره یا گره‌های بالادستی آن نیستید و نمی‌توانید زیر آن گره بسازید.")
         node = tree.create_node(
             kind=data["kind"], name=data["name"], parent=data["parent"], created_by=request.user
         )
-        return Response(OrgNodeSerializer(node).data, status=status.HTTP_201_CREATED)
+        return Response(self.get_serializer(node).data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, *args, **kwargs):
         node = self.get_object()
         serializer = OrgNodeUpdateSerializer(node, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        node = tree.update_node(node, name=data.get("name"), parent=data.get("parent"))
-        return Response(OrgNodeSerializer(node).data)
+        new_parent = data.get("parent")
+        # A move needs authority at both ends: leading the node is not enough to hand it to a
+        # branch you do not run.
+        if new_parent is not None and new_parent.pk != node.parent_id:
+            if not access_for(request).can_add_child(new_parent):
+                raise PermissionDenied("برای جابه‌جایی باید مسئول گرهٔ مقصد (یا گره‌های بالادستی آن) هم باشید.")
+        node = tree.update_node(node, name=data.get("name"), parent=new_parent)
+        return Response(self.get_serializer(node).data)
 
     def destroy(self, request, *args, **kwargs):
         tree.delete_node(self.get_object())
@@ -104,11 +113,11 @@ class OrgNodeViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def archive(self, request, pk=None):
-        return Response(OrgNodeSerializer(tree.archive_node(self.get_object())).data)
+        return Response(self.get_serializer(tree.archive_node(self.get_object())).data)
 
     @action(detail=True, methods=["post"])
     def unarchive(self, request, pk=None):
-        return Response(OrgNodeSerializer(tree.unarchive_node(self.get_object())).data)
+        return Response(self.get_serializer(tree.unarchive_node(self.get_object())).data)
 
 
 class OrgTreeView(APIView):
@@ -122,6 +131,9 @@ class OrgTreeView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    def _nodes(self, nodes):
+        return OrgNodeSerializer(nodes, many=True, context={"request": self.request}).data
+
     def get(self, request):
         if (parent := request.query_params.get("parent")) is not None:
             if not parent.isdigit():
@@ -129,14 +141,14 @@ class OrgTreeView(APIView):
             if not OrgNode.objects.filter(pk=parent).exists():
                 raise NotFound("گره یافت نشد.")
             nodes = OrgNode.objects.filter(parent_id=parent).order_by("path")
-            return Response({"truncated": False, "nodes": OrgNodeSerializer(nodes, many=True).data})
+            return Response({"truncated": False, "nodes": self._nodes(nodes)})
 
         limit = settings.ORG_TREE_MAX_NODES
         nodes = list(OrgNode.objects.order_by("path")[: limit + 1])
         truncated = len(nodes) > limit
         if truncated:
             nodes = list(OrgNode.objects.filter(depth__lte=1).order_by("path"))
-        return Response({"truncated": truncated, "nodes": OrgNodeSerializer(nodes, many=True).data})
+        return Response({"truncated": truncated, "nodes": self._nodes(nodes)})
 
 
 def _get_company() -> Company:
@@ -195,7 +207,8 @@ class CompanyLogoView(APIView):
 
 class MembershipViewSet(viewsets.ModelViewSet):
     """`/org/memberships/` — who sits where. Readable by anyone signed in; writing needs
-    `manage_membership`. Filters: `?node=`, `?user=`, `?is_lead=1`, `?include_inactive=1`.
+    `manage_membership` **or** leading the membership's node (or an ancestor) — access.py.
+    Filters: `?node=`, `?user=`, `?is_lead=1`, `?include_inactive=1`.
 
     A membership's person and node never change; PATCH edits `is_lead`, `is_primary` and
     `position_label`. See memberships.py for the "exactly one primary" rule."""
@@ -203,8 +216,7 @@ class MembershipViewSet(viewsets.ModelViewSet):
     queryset = Membership.objects.all()
     serializer_class = MembershipSerializer
     pagination_class = DefaultPagination
-    permission_classes = [IsAuthenticated, HasCapability]
-    write_capability = Capability.MANAGE_MEMBERSHIP
+    permission_classes = [IsAuthenticated, CanManageMembership]
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
@@ -223,6 +235,9 @@ class MembershipViewSet(viewsets.ModelViewSet):
         serializer = MembershipCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        access = access_for(request)
+        if not access.can_manage_members(data["node"]):
+            raise PermissionDenied("شما مسئول این گره یا گره‌های بالادستی آن نیستید و نمی‌توانید عضو اضافه کنید.")
         membership = memberships.add_membership(
             user=data["user"],
             node=data["node"],
@@ -230,6 +245,7 @@ class MembershipViewSet(viewsets.ModelViewSet):
             is_primary=data["is_primary"],
             position_label=data["position_label"],
             added_by=request.user,
+            may_touch=access.can_manage_members,
         )
         return Response(self._payload(membership), status=status.HTTP_201_CREATED)
 
@@ -243,6 +259,7 @@ class MembershipViewSet(viewsets.ModelViewSet):
             is_lead=data.get("is_lead"),
             is_primary=data.get("is_primary"),
             position_label=data.get("position_label"),
+            may_touch=access_for(request).can_manage_members,
         )
         return Response(self._payload(membership))
 

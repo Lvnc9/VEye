@@ -13,12 +13,17 @@ Every write first takes `SELECT … FOR UPDATE` on the *user* row, so two reques
 same person's memberships queue instead of both deciding "I am their first" (which the index
 would then reject as a 500). A person's memberships are always locked user-first, node-second.
 
-Access control is not decided here (slice 7.3 composes `manage_membership` with "lead of an
-ancestor" in access.py); these functions assume the caller is allowed.
+Who may write is decided in access.py and checked by the views. One rule cannot be checked
+there, because it needs the locks taken here: making a membership primary **demotes the
+person's primary elsewhere**, and a lead must never be able to alter a membership in a part of
+the chart they do not run. Callers pass `may_touch(node) -> bool`; when the change would demote
+a primary at a node it rejects, PermissionDenied is raised. (Removing a primary promotes the
+next membership too, but that is bookkeeping to keep the invariant, not a choice the caller
+makes, so it is not checked — otherwise a lead could not remove their own people.)
 """
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 
 from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_title
@@ -36,6 +41,16 @@ def _lock_user(pk: int):
         raise NotFound("شخص یافت نشد.")
 
 
+def _require_may_demote(user_id: int, may_touch) -> None:
+    """Under the user lock: about to demote this person's current primary — may the caller
+    touch the node it is in?"""
+    current = Membership.objects.filter(user_id=user_id, is_primary=True).select_related("node").first()
+    if current is not None and may_touch is not None and not may_touch(current.node):
+        raise PermissionDenied(
+            "برای تغییر گرهٔ اصلی این شخص باید مسئول گرهٔ اصلی فعلی او نیز باشید."
+        )
+
+
 def _lock_membership(pk: int) -> Membership:
     try:
         return Membership.objects.select_for_update().select_related("user", "node").get(pk=pk)
@@ -45,7 +60,14 @@ def _lock_membership(pk: int) -> Membership:
 
 @transaction.atomic
 def add_membership(
-    *, user, node, is_lead: bool = False, is_primary: bool | None = None, position_label: str = "", added_by=None
+    *,
+    user,
+    node,
+    is_lead: bool = False,
+    is_primary: bool | None = None,
+    position_label: str = "",
+    added_by=None,
+    may_touch=None,
 ) -> Membership:
     """Put a person into a node. `is_primary=None` means "not specified"; a person's first
     membership is primary whatever is asked."""
@@ -70,6 +92,7 @@ def add_membership(
     has_any = Membership.objects.filter(user=user).exists()
     primary = True if not has_any else bool(is_primary)
     if primary and has_any:
+        _require_may_demote(user.pk, may_touch)
         Membership.objects.filter(user=user, is_primary=True).update(is_primary=False)
 
     return Membership.objects.create(
@@ -89,6 +112,7 @@ def update_membership(
     is_lead: bool | None = None,
     is_primary: bool | None = None,
     position_label: str | None = None,
+    may_touch=None,
 ) -> Membership:
     """Change what a membership says. Which person and which node are fixed — to move someone,
     remove the membership and add a new one, so there is never an ambiguous "before"."""
@@ -101,6 +125,7 @@ def update_membership(
             code="primary_required",
         )
     if is_primary and not membership.is_primary:
+        _require_may_demote(membership.user_id, may_touch)
         Membership.objects.filter(user_id=membership.user_id, is_primary=True).update(is_primary=False)
         membership.is_primary = True
     if is_lead is not None:

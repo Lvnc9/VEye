@@ -1,8 +1,12 @@
+import inspect
 import io
 import os
+import pathlib
 import shutil
 import tempfile
 import threading
+from types import SimpleNamespace
+from unittest import mock
 
 from django.db import IntegrityError, connection, transaction
 from django.db.models import ProtectedError
@@ -12,12 +16,13 @@ from PIL import Image
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 
-from apps.accounts.models import AccessLevel, AccessRoll, Capability, User
+from apps.accounts.models import FULL_ACCESS_POSITIONS, ROLL_CAPABILITIES, AccessLevel, AccessRoll, Capability, User
 from apps.accounts.tests import LOCMEM_CACHE, make_user
 from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_search_term
 
 from . import memberships, queries, tree
+from .access import OrgAccess, access_for
 from .models import ALLOWED_PARENT_KINDS, Company, Membership, OrgNode, OrgNodeKind, SetupStep
 
 COMPANY, DOMAIN, UNIT, SECTION = (
@@ -365,10 +370,10 @@ class TreeEndpointTests(ApiTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, {"truncated": False, "nodes": []})
 
-    def test_any_signed_in_user_gets_the_whole_tree_in_depth_first_order_in_one_query(self):
+    def test_any_signed_in_user_gets_the_whole_tree_in_depth_first_order(self):
         self.build()
         self.as_(self.guild)
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(2):  # the nodes, and the viewer's lead memberships for the can_* flags
             response = self.client.get(reverse("org-tree"))
         names = [node["name"] for node in response.data["nodes"]]
         self.assertEqual(
@@ -378,11 +383,19 @@ class TreeEndpointTests(ApiTestCase):
         self.assertEqual([n["depth"] for n in response.data["nodes"]], [0, 1, 2, 3, 2, 1, 2, 1])
         self.assertFalse(response.data["truncated"])
 
+    def test_a_capability_holder_needs_no_membership_query_at_all(self):
+        self.build()
+        self.as_(self.ceo)
+        with self.assertNumQueries(1):  # just the nodes: the capability answers every flag
+            self.client.get(reverse("org-tree"))
+
     def test_a_node_exposes_only_what_the_chart_needs(self):
         self.build()
         node = self.as_(self.guild).get(reverse("org-tree")).data["nodes"][1]
         self.assertEqual(
-            set(node), {"id", "parent", "kind", "kind_label", "name", "depth", "is_active"}
+            set(node),
+            {"id", "parent", "kind", "kind_label", "name", "depth", "is_active",
+             "can_edit", "can_add_child", "can_manage_members"},
         )
         self.assertEqual(node["kind_label"], "حوزه")
 
@@ -1245,3 +1258,459 @@ class MembershipConcurrencyTests(Threaded, MembershipAssertions, SampleTree, Tra
         results = self.run_concurrently(lambda i: memberships.remove_membership(rows[i]), 2)
         self.assertEqual([r for r in results if r[0] == "err"], [])
         self.assert_one_primary(self.ali)
+
+
+# ---------------------------------------------------------------------------
+# Access: capability OR lead-of-an-ancestor (slice 7.3)
+# ---------------------------------------------------------------------------
+
+
+class OrgAccessTests(SampleTree, TestCase):
+    """The pure rules, with no HTTP in the way."""
+
+    def setUp(self):
+        self.build()
+        self.lead = person("9300000001")
+
+    def lead_of(self, node, user=None):
+        user = user or self.lead
+        join(user, node, is_lead=True)
+        return OrgAccess(user)
+
+    def test_a_lead_leads_their_node_and_everything_below_and_nothing_else(self):
+        access = self.lead_of(self.d1)
+        for node in (self.d1, self.u1, self.u2, self.s1):
+            self.assertTrue(access.leads(node), node.name)
+        for node in (self.root, self.d2, self.u3, self.u4):
+            self.assertFalse(access.leads(node), node.name)
+
+    def test_leading_a_child_gives_nothing_over_its_parent(self):
+        access = self.lead_of(self.s1)
+        self.assertTrue(access.leads(self.s1))
+        self.assertFalse(access.leads(self.u1))
+
+    def test_being_a_plain_member_gives_nothing(self):
+        join(self.lead, self.d1)  # member, not lead
+        access = OrgAccess(self.lead)
+        self.assertFalse(access.leads(self.d1) or access.leads(self.s1))
+
+    def test_a_lead_of_the_company_leads_everything(self):
+        access = self.lead_of(self.root)
+        self.assertTrue(all(access.leads(node) for node in OrgNode.objects.all()))
+
+    def test_several_led_branches_add_up(self):
+        join(self.lead, self.u2, is_lead=True)
+        access = self.lead_of(self.u3)
+        self.assertTrue(access.leads(self.u2) and access.leads(self.u3))
+        self.assertFalse(access.leads(self.u1) or access.leads(self.u4))
+
+    def test_only_active_nodes_confer_authority(self):
+        access_before = self.lead_of(self.u2)
+        self.assertTrue(access_before.leads(self.u2))
+        tree.archive_node(self.u2)
+        self.assertFalse(OrgAccess(self.lead).leads(self.u2))
+
+    def test_the_questions_the_surfaces_ask(self):
+        access = self.lead_of(self.u1)
+        self.assertTrue(access.can_add_child(self.u1) and access.can_add_child(self.s1))
+        self.assertTrue(access.can_edit_node(self.u1) and access.can_edit_node(self.s1))
+        self.assertTrue(access.can_manage_members(self.u1) and access.can_manage_members(self.s1))
+        for node in (self.d1, self.root, self.u2, self.u3):
+            self.assertFalse(access.can_add_child(node) or access.can_edit_node(node), node.name)
+            self.assertFalse(access.can_manage_members(node), node.name)
+
+    def test_the_capabilities_grant_everywhere_without_being_a_lead(self):
+        employer = person("9300000002", roll=AccessRoll.EMPLOYER, level=AccessLevel.LEVEL_2)
+        access = OrgAccess(employer)
+        for node in OrgNode.objects.all():
+            self.assertTrue(access.can_add_child(node) and access.can_manage_members(node))
+        self.assertTrue(access.can_edit_node(self.u1))
+
+    def test_the_two_capabilities_are_independent(self):
+        """Today the same roles hold both, so nothing else can tell them apart: grant each one
+        alone (to صفی, who holds neither) and see that it opens only its own surface."""
+        guild = ROLL_CAPABILITIES[AccessRoll.GUILD]
+        for granted, manages_nodes, manages_members in (
+            (Capability.MANAGE_ORGANIZATION, True, False),
+            (Capability.MANAGE_MEMBERSHIP, False, True),
+        ):
+            with mock.patch.dict(ROLL_CAPABILITIES, {AccessRoll.GUILD: guild | {granted}}):
+                access = OrgAccess(person(f"93100000{len(granted)}"))
+                self.assertEqual(access.can_manage_node(self.s1), manages_nodes, granted)
+                self.assertEqual(access.can_manage_members(self.s1), manages_members, granted)
+
+    def test_the_company_node_is_edited_by_capability_only(self):
+        access = self.lead_of(self.root)
+        self.assertTrue(access.can_add_child(self.root))  # a company-wide lead may add a حوزه...
+        self.assertFalse(access.can_edit_node(self.root))  # ...but the company's name is its profile
+
+    def test_a_person_who_leads_nothing_is_nowhere(self):
+        access = OrgAccess(person("9300000003"))
+        self.assertFalse(any(access.leads(node) for node in OrgNode.objects.all()))
+
+    def test_one_query_however_many_questions(self):
+        join(self.lead, self.u1, is_lead=True)
+        join(self.lead, self.u3, is_lead=True)
+        access = OrgAccess(self.lead)
+        nodes = list(OrgNode.objects.all())
+        with self.assertNumQueries(1):
+            for node in nodes * 5:
+                access.leads(node)
+                access.can_manage_node(node)
+                access.can_manage_members(node)
+            access.led_subtree_q()
+
+    def test_a_capability_holder_costs_no_query(self):
+        access = OrgAccess(person("9300000004", roll=AccessRoll.EMPLOYER, level=AccessLevel.LEVEL_3))
+        with self.assertNumQueries(0):
+            access.can_manage_node(self.s1)
+            access.can_manage_members(self.s1)
+
+    def test_the_request_gets_one_access_object(self):
+        request = SimpleNamespace(user=self.lead)
+        self.assertIs(access_for(request), access_for(request))
+
+    def test_a_different_user_never_inherits_a_cached_access(self):
+        request = SimpleNamespace(user=self.lead)
+        first = access_for(request)
+        request.user = person("9300000005")
+        self.assertIsNot(access_for(request), first)
+
+    def test_led_subtree_q_selects_exactly_the_led_subtrees(self):
+        join(self.lead, self.u1, is_lead=True)
+        join(self.lead, self.u3, is_lead=True)
+        ids = set(OrgNode.objects.filter(OrgAccess(self.lead).led_subtree_q()).values_list("pk", flat=True))
+        self.assertEqual(ids, {self.u1.pk, self.s1.pk, self.u3.pk})
+
+    def test_led_subtree_q_matches_nothing_for_someone_who_leads_nothing(self):
+        access = OrgAccess(person("9300000006"))
+        self.assertFalse(OrgNode.objects.filter(access.led_subtree_q()).exists())
+
+    def test_led_subtree_q_works_over_another_models_path(self):
+        join(self.lead, self.d1, is_lead=True)
+        inside = join(person("9300000007"), self.s1)
+        outside = join(person("9300000008"), self.u3)
+        rows = Membership.objects.filter(OrgAccess(self.lead).led_subtree_q("node__path"))
+        found = set(rows.values_list("pk", flat=True))
+        self.assertIn(inside.pk, found)
+        self.assertNotIn(outside.pk, found)
+
+
+class LeadApiTests(MembershipAssertions, ApiTestCase):
+    """The lead axis end to end: people who hold no capability but were marked مسئول."""
+
+    def setUp(self):
+        super().setUp()
+        self.build()
+        self.lead_u1 = person("9400000001", "مسئول واحد فروش")
+        self.lead_d1 = person("9400000002", "مسئول حوزه یک", roll=AccessRoll.HEADQUARTERS, level=AccessLevel.LEVEL_3)
+        self.lead_root = person("9400000003", "مسئول شرکت", roll=AccessRoll.HEADQUARTERS, level=AccessLevel.LEVEL_2)
+        self.lead_s1 = person("9400000004", "مسئول بخش")
+        self.member = person("9400000005", "عضو ساده")
+        join(self.lead_u1, self.u1, is_lead=True)
+        join(self.lead_d1, self.d1, is_lead=True)
+        join(self.lead_root, self.root, is_lead=True)
+        join(self.lead_s1, self.s1, is_lead=True)
+        join(self.member, self.s1)  # a plain member of S1 — not a lead
+
+    def node_url(self, node):
+        return reverse("org-node-detail", args=[node.pk])
+
+    def add_node(self, kind, name, parent):
+        return self.client.post(reverse("org-node-list"), {"kind": kind, "name": name, "parent": parent.pk}, format="json")
+
+    def rename(self, node, name="نام تازه"):
+        return self.client.patch(self.node_url(node), {"name": name}, format="json")
+
+    # -- structure ----------------------------------------------------------
+
+    def test_a_unit_lead_builds_below_their_unit_and_nowhere_else(self):
+        self.as_(self.lead_u1)
+        self.assertEqual(self.add_node(SECTION, "بخش دو", self.u1).status_code, 201)
+        denied = self.add_node(SECTION, "بخش سه", self.u2)
+        self.assertEqual(denied.status_code, 403)
+        self.assertIn("نمی‌توانید زیر آن گره بسازید", denied.data["detail"])
+        self.assertEqual(self.add_node(UNIT, "واحد تازه", self.d1).status_code, 403)
+        self.assertEqual(self.add_node(DOMAIN, "حوزه تازه", self.root).status_code, 403)
+        self.assert_tree_consistent()
+
+    def test_a_unit_lead_edits_their_node_and_below_but_not_beside_or_above(self):
+        self.as_(self.lead_u1)
+        self.assertEqual(self.rename(self.u1, "واحد فروش داخلی").status_code, 200)
+        self.assertEqual(self.rename(self.s1, "بخش ویژه").status_code, 200)
+        for node in (self.u2, self.d1, self.u3, self.u4):
+            with self.subTest(node=node.name):
+                self.assertEqual(self.rename(node).status_code, 403)
+        self.assertEqual(self.client.delete(self.node_url(self.u2)).status_code, 403)
+        self.assertEqual(self.client.post(reverse("org-node-archive", args=[self.u2.pk])).status_code, 403)
+
+    def test_a_lead_can_delete_archive_and_unarchive_within_their_branch(self):
+        self.as_(self.lead_u1)
+        extra = self.add_node(SECTION, "بخش موقت", self.u1).data["id"]
+        self.assertEqual(self.client.delete(reverse("org-node-detail", args=[extra])).status_code, 204)
+        self.assertEqual(self.client.post(reverse("org-node-archive", args=[self.s1.pk])).status_code, 200)
+        self.assertEqual(self.client.post(reverse("org-node-unarchive", args=[self.s1.pk])).status_code, 200)
+        self.assertEqual(self.client.post(reverse("org-node-archive", args=[self.s1.pk])).status_code, 200)
+        self.assertEqual(self.client.post(reverse("org-node-archive", args=[self.u1.pk])).status_code, 200)  # bottom-up
+
+    def test_once_their_node_is_archived_only_someone_above_can_bring_it_back(self):
+        tree.archive_node(self.s1)
+        tree.archive_node(self.u1)
+        self.as_(self.lead_u1)  # their own node is retired, so it confers nothing
+        self.assertEqual(self.client.post(reverse("org-node-unarchive", args=[self.u1.pk])).status_code, 403)
+        self.as_(self.lead_d1)  # the lead of the حوزه above is still active
+        self.assertEqual(self.client.post(reverse("org-node-unarchive", args=[self.u1.pk])).status_code, 200)
+
+    def test_a_plain_member_may_not_touch_the_structure(self):
+        self.as_(self.member)
+        self.assertEqual(self.add_node(SECTION, "بخش دو", self.s1.parent).status_code, 403)
+        self.assertEqual(self.rename(self.s1).status_code, 403)
+
+    def test_a_domain_lead_runs_the_whole_domain(self):
+        self.as_(self.lead_d1)
+        self.assertEqual(self.add_node(UNIT, "واحد تازه", self.d1).status_code, 201)
+        self.assertEqual(self.add_node(SECTION, "بخش دو", self.u1).status_code, 201)
+        self.assertEqual(self.rename(self.d1, "حوزه یک ویژه").status_code, 200)  # the node they lead
+        self.assertEqual(self.add_node(UNIT, "واحد دیگر", self.d2).status_code, 403)
+        self.assertEqual(self.add_node(UNIT, "واحد دیگر", self.root).status_code, 403)
+        self.assertEqual(self.rename(self.u3).status_code, 403)
+
+    def test_a_company_lead_runs_everything_but_the_company_itself(self):
+        self.as_(self.lead_root)
+        self.assertEqual(self.add_node(DOMAIN, "حوزه سه", self.root).status_code, 201)
+        self.assertEqual(self.rename(self.u3, "واحد سه").status_code, 200)
+        self.assertEqual(self.rename(self.root, "نام تازه شرکت").status_code, 403)  # the company profile
+        self.assertEqual(self.client.patch(reverse("org-company"), {"name": "نام تازه"}, format="json").status_code, 403)
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.name, "شرکت نمونه")
+
+    def test_a_lead_loses_authority_when_their_node_is_archived(self):
+        lead_u2 = person("9400000006")
+        join(lead_u2, self.u2, is_lead=True)
+        self.as_(lead_u2)
+        self.assertEqual(self.rename(self.u2, "واحد مالی ۲").status_code, 200)
+        tree.archive_node(self.u2)
+        self.assertEqual(self.rename(self.u2, "واحد مالی ۳").status_code, 403)
+
+    # -- moves need authority at both ends ----------------------------------
+
+    def test_a_move_needs_authority_over_the_destination_too(self):
+        self.as_(self.lead_u1)
+        url = self.node_url(self.s1)
+        denied = self.client.patch(url, {"parent": self.u2.pk}, format="json")  # U2 is not theirs
+        self.assertEqual(denied.status_code, 403)
+        self.assertIn("گرهٔ مقصد", denied.data["detail"])
+        self.assertEqual(self.client.patch(self.node_url(self.u1), {"parent": self.root.pk}, format="json").status_code, 403)
+        self.s1.refresh_from_db()
+        self.assertEqual(self.s1.parent_id, self.u1.pk)
+
+    def test_moves_inside_a_led_branch_work_and_out_of_it_do_not(self):
+        self.as_(self.lead_d1)
+        self.assertEqual(self.client.patch(self.node_url(self.s1), {"parent": self.u2.pk}, format="json").status_code, 200)
+        self.assertEqual(self.client.patch(self.node_url(self.u1), {"parent": self.d2.pk}, format="json").status_code, 403)
+        self.assert_tree_consistent()
+        self.as_(self.lead_root)
+        self.assertEqual(self.client.patch(self.node_url(self.u2), {"parent": self.d2.pk}, format="json").status_code, 200)
+        self.assert_tree_consistent()
+
+    # -- memberships ----------------------------------------------------------
+
+    def post_member(self, user, node, **extra):
+        return self.client.post(reverse("org-membership-list"), {"user": user.pk, "node": node.pk, **extra}, format="json")
+
+    def test_a_lead_manages_the_people_of_their_branch_only(self):
+        newcomer = person("9400000010")
+        self.as_(self.lead_s1)
+        created = self.post_member(newcomer, self.s1, position_label="کارشناس")
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(Membership.objects.get(pk=created.data["id"]).added_by, self.lead_s1)
+        denied = self.post_member(newcomer, self.u1)  # S1's lead does not lead the واحد above
+        self.assertEqual(denied.status_code, 403)
+        self.assertIn("نمی‌توانید عضو اضافه کنید", denied.data["detail"])
+        url = reverse("org-membership-detail", args=[created.data["id"]])
+        self.assertEqual(self.client.patch(url, {"position_label": "ارشد"}, format="json").status_code, 200)
+        self.assertEqual(self.client.delete(url).status_code, 204)
+
+    def test_a_lead_cannot_edit_or_remove_memberships_outside_their_branch(self):
+        elsewhere = join(person("9400000011"), self.u2)
+        self.as_(self.lead_s1)
+        url = reverse("org-membership-detail", args=[elsewhere.pk])
+        self.assertEqual(self.client.patch(url, {"is_lead": True}, format="json").status_code, 403)
+        self.assertEqual(self.client.delete(url).status_code, 403)
+        elsewhere.refresh_from_db()
+        self.assertFalse(elsewhere.is_lead)
+
+    def test_a_lead_can_name_further_leads_inside_their_branch(self):
+        newcomer = person("9400000012")
+        self.as_(self.lead_u1)
+        self.assertEqual(self.post_member(newcomer, self.u1, is_lead=True).status_code, 201)
+        # ...and that new lead has exactly the same reach, no more.
+        self.as_(newcomer)
+        self.assertEqual(self.add_node(SECTION, "بخش دو", self.u1).status_code, 201)
+        self.assertEqual(self.add_node(SECTION, "بخش سه", self.u2).status_code, 403)
+
+    def test_a_lead_cannot_rehome_someone_whose_home_is_outside_their_branch(self):
+        away = person("9400000013")
+        join(away, self.u3)  # primary lives under D2
+        self.as_(self.lead_s1)
+        denied = self.post_member(away, self.s1, is_primary=True)
+        self.assertEqual(denied.status_code, 403)
+        self.assertIn("گرهٔ اصلی", denied.data["detail"])
+        self.assertFalse(Membership.objects.filter(user=away, node=self.s1).exists())  # nothing was half-done
+        self.assertTrue(Membership.objects.get(user=away, node=self.u3).is_primary)
+
+        placed = self.post_member(away, self.s1)  # as a non-primary place: fine
+        self.assertEqual(placed.status_code, 201)
+        promote = self.client.patch(reverse("org-membership-detail", args=[placed.data["id"]]), {"is_primary": True}, format="json")
+        self.assertEqual(promote.status_code, 403)
+        self.assert_one_primary(away)
+        self.assertTrue(Membership.objects.get(user=away, node=self.u3).is_primary)
+
+    def test_a_lead_may_rehome_within_their_own_branch_and_place_newcomers(self):
+        settled = person("9400000014")
+        join(settled, self.u2)  # primary at U2, inside D1
+        fresh = person("9400000015")  # no memberships at all
+        self.as_(self.lead_d1)
+        self.assertEqual(self.post_member(settled, self.u1, is_primary=True).status_code, 201)
+        self.assertTrue(Membership.objects.get(user=settled, node=self.u1).is_primary)
+        self.assert_one_primary(settled)
+        self.as_(self.lead_s1)
+        self.assertEqual(self.post_member(fresh, self.s1, is_primary=False).data["is_primary"], True)  # first is always primary
+
+    def test_a_capability_holder_can_rehome_anyone(self):
+        away = person("9400000016")
+        join(away, self.u3)
+        self.as_(self.ceo)
+        self.assertEqual(self.post_member(away, self.s1, is_primary=True).status_code, 201)
+        self.assert_one_primary(away)
+
+    # -- the flags say what the endpoints will do -----------------------------
+
+    def flags(self, user):
+        self.as_(user)
+        return {n["id"]: n for n in self.client.get(reverse("org-tree")).data["nodes"]}
+
+    def test_the_flags_follow_the_lead_axis(self):
+        flags = self.flags(self.lead_u1)
+        led = {self.u1.pk, self.s1.pk}  # the unit and what is below it — not the other «واحد فروش» under D2
+        for node in OrgNode.objects.all():
+            with self.subTest(node=node.name, id=node.pk):
+                got = {f: flags[node.pk][f] for f in ("can_edit", "can_add_child", "can_manage_members")}
+                self.assertEqual(got, dict.fromkeys(got, node.pk in led))
+
+    def test_a_company_lead_can_add_but_not_edit_the_company_node(self):
+        company = self.flags(self.lead_root)[self.root.pk]
+        self.assertEqual((company["can_add_child"], company["can_manage_members"], company["can_edit"]), (True, True, False))
+
+    def test_a_capability_holder_sees_everything_enabled(self):
+        for node in self.flags(self.ceo).values():
+            self.assertTrue(node["can_edit"] and node["can_add_child"] and node["can_manage_members"])
+
+    def test_flags_and_endpoints_never_disagree(self):
+        """The whole point of one function: every button the flags would show is a request the
+        server accepts (or rejects for a reason other than permission), and vice versa."""
+        targets = {}
+        for user in (self.lead_u1, self.lead_d1, self.lead_root, self.lead_s1, self.member, self.guild):
+            flags = self.flags(user)
+            for node in OrgNode.objects.all():
+                flag = flags[node.pk]
+                with self.subTest(user=user.full_name, node=node.name):
+                    kind = {COMPANY: DOMAIN, DOMAIN: UNIT, UNIT: SECTION, SECTION: SECTION}[node.kind]
+                    made = self.add_node(kind, f"تست {user.pk} {node.pk}", node)
+                    self.assertEqual(made.status_code == 403, not flag["can_add_child"], made.data)
+                    renamed = self.rename(node, f"نام {user.pk} {node.pk}")
+                    self.assertEqual(renamed.status_code == 403, not flag["can_edit"], renamed.data)
+                    # One target per node, shared by every viewer (a repeat is a 409, never a 403).
+                    if node.pk not in targets:
+                        targets[node.pk] = person(f"95{len(targets):08d}")
+                    joined = self.post_member(targets[node.pk], node)
+                    self.assertEqual(joined.status_code == 403, not flag["can_manage_members"])
+
+    def test_a_page_of_nodes_costs_one_membership_query_not_one_per_node(self):
+        self.as_(self.lead_u1)
+        with self.assertNumQueries(3):  # the count, the nodes, the viewer's lead memberships
+            self.client.get(reverse("org-node-list"), {"page_size": 50})
+
+
+class DocumentAxisTests(SampleTree, TestCase):
+    """docs/11 §5.2: the org-position axis may only widen access to the org surfaces. It may
+    never grant, withhold or modify a document capability."""
+
+    SCENARIOS = ("no membership", "member of a بخش", "lead of a بخش", "lead of the company", "lead of everything")
+
+    def setUp(self):
+        self.build()
+
+    def place(self, user, scenario):
+        if scenario == "member of a بخش":
+            join(user, self.s1)
+        elif scenario == "lead of a بخش":
+            join(user, self.s1, is_lead=True)
+        elif scenario == "lead of the company":
+            join(user, self.root, is_lead=True)
+        elif scenario == "lead of everything":
+            for node in OrgNode.objects.all():
+                join(user, node, is_lead=True)
+
+    def test_capabilities_are_exactly_the_rolls_whatever_the_memberships(self):
+        number = 0
+        for roll in AccessRoll.values:
+            for level in AccessLevel.values:
+                expected = (
+                    frozenset(Capability.values)
+                    if (roll, level) in FULL_ACCESS_POSITIONS
+                    else ROLL_CAPABILITIES[roll]
+                )
+                for scenario in self.SCENARIOS:
+                    number += 1
+                    user = make_user(f"93{number:08d}", roll, level)
+                    self.place(user, scenario)
+                    with self.subTest(roll=roll, level=level, scenario=scenario):
+                        self.assertEqual(user.capabilities, expected)
+                        for capability in Capability.values:
+                            self.assertEqual(user.has_capability(capability), capability in expected)
+
+    def test_leading_a_node_never_confers_the_org_capabilities_either(self):
+        lead = make_user("9350000001", AccessRoll.GUILD, AccessLevel.LEVEL_3)
+        join(lead, self.root, is_lead=True)
+        for capability in (Capability.MANAGE_ORGANIZATION, Capability.MANAGE_MEMBERSHIP, Capability.CREATE_PROJECT):
+            self.assertFalse(lead.has_capability(capability))  # widening is access.py's job, not a capability's
+
+    def test_no_document_module_reads_the_org_tables(self):
+        """A structural guard: the workflow cannot depend on memberships if nothing in
+        apps/documents (or User.capabilities) so much as mentions them."""
+        documents = pathlib.Path(inspect.getfile(Membership)).parents[1] / "documents"
+        offenders = [
+            path.name
+            for path in documents.glob("*.py")
+            if not path.name.startswith("test") and any(word in path.read_text() for word in ("apps.organization", "Membership", "memberships"))
+        ]
+        self.assertEqual(offenders, [])
+        self.assertNotIn("membership", inspect.getsource(User.capabilities.fget).lower())
+
+
+class DocumentWorkflowUnaffectedByLeadershipTests(ApiTestCase):
+    """The same rule through the real workflow endpoints."""
+
+    def test_a_lead_of_the_whole_company_still_cannot_confirm_or_approve(self):
+        from apps.documents import services as document_services
+
+        self.build()
+        lead = person("9360000001")  # صفی
+        for node in OrgNode.objects.all():
+            join(lead, node, is_lead=True)
+        doc = document_services.create_document(user=lead, category="INSIDE", title="سند مسئول", group="FORM")
+        self.as_(lead)
+        for verb in ("confirm", "approve"):
+            response = self.client.post(reverse(f"document-{verb}", args=[doc.pk]), {}, format="multipart")
+            self.assertEqual(response.status_code, 403, verb)
+
+    def test_and_a_lead_keeps_exactly_the_document_abilities_their_roll_gives(self):
+        self.build()
+        lead = person("9360000002")  # صفی: may author, may not confirm
+        join(lead, self.root, is_lead=True)
+        self.as_(lead)
+        created = self.client.post(
+            reverse("document-list"), {"category": "INSIDE", "title": "سند تازه", "group": "FORM"}, format="json"
+        )
+        self.assertEqual(created.status_code, 201, created.data)
