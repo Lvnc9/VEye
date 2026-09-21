@@ -190,6 +190,14 @@ class PersonnelViewSet(viewsets.ModelViewSet):
                 code="user_has_memberships",
                 memberships=membership_count,
             )
+        # Projects reference their creator and their members with PROTECT too.
+        project_count = person.project_memberships.count() + person.created_projects.count()
+        if project_count:
+            raise ConflictError(
+                "این شخص در پروژه‌ها حضور دارد و حذف نمی‌شود. ابتدا او را از پروژه‌ها خارج کنید یا حساب او را غیرفعال کنید.",
+                code="user_has_projects",
+                projects=project_count,
+            )
         # Documents reference their author with on_delete=PROTECT, so removing
         # someone who ever authored one would otherwise be an unhandled 500. The
         # right way to retire a person is to deactivate them (is_active=false),

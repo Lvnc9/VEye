@@ -245,9 +245,12 @@ def unarchive_node(node: OrgNode) -> OrgNode:
 
 
 def node_blockers(node: OrgNode) -> dict[str, int]:
-    """What stops a node being deleted, as counts. Later slices add the projects and
-    conversations that hang off a node."""
-    return {"children": node.children.count(), "members": node.memberships.count()}
+    """What stops a node being deleted, as counts. (Conversations join in Phase 9.)"""
+    return {
+        "children": node.children.count(),
+        "members": node.memberships.count(),
+        "projects": node.projects.count(),
+    }
 
 
 @transaction.atomic

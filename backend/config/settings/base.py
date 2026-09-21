@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "apps.core",
     "apps.accounts",
     "apps.organization",
+    "apps.projects",
     "apps.documents",
     "apps.dashboard",
     "apps.pdfgen",
@@ -278,3 +279,8 @@ SETUP_RATELIMIT_RATE = env("SETUP_RATELIMIT_RATE", default="5/m")
 # it the endpoint returns only the top two levels plus `"truncated": true`, and the
 # client fetches the rest a branch at a time with `?parent=<id>`.
 ORG_TREE_MAX_NODES = env.int("ORG_TREE_MAX_NODES", default=2000)
+
+# Projects (docs/11 §2.4): how many people may be on one project. Objectives per project
+# (PROJECT_MAX_OBJECTIVES, slice 8.2) is bounded the same way, mirroring `revision_limit`.
+PROJECT_MAX_MEMBERS = env.int("PROJECT_MAX_MEMBERS", default=100)
+PROJECT_MAX_OBJECTIVES = env.int("PROJECT_MAX_OBJECTIVES", default=200)
