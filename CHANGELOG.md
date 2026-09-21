@@ -7,6 +7,7 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 > git history is per-slice from Phase 6 on.
 
 ## [Unreleased]
+- Dev: opening the app on `http://127.0.0.1:3000` now redirects to `http://localhost:3000` (`next.config.ts`). Next blocked its dev resources for `127.0.0.1` (no hydration, so the login form silently reloaded) and the API's host-only session cookies live on `localhost`.
 - Designer: after a successful «ذخیره» the app returns to «ساخت مستند» with a «ذخیره شد» message (as V_1.0 did).
 - **مدیر عامل** (کارفرمایی لول ۱) now holds every capability (was approve + personnel + PDF only); the one-person-per-step rule still applies to him.
 
