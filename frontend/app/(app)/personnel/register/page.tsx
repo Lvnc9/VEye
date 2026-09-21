@@ -11,7 +11,13 @@ import {
 } from "@/lib/types";
 import { apiPost, ApiError } from "@/lib/api-client";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { OrgPlacement } from "@/components/personnel/OrgPlacement";
+import { UnassignedPeople } from "@/components/personnel/UnassignedPeople";
 import { useCurrentUser } from "@/lib/current-user";
+import { normalizeNationalCode } from "@/lib/login";
+import type { OrgTreeResponse } from "@/lib/organization";
+import { EMPTY_ASSIGNMENT, hasAssignment, membershipBody, registerOutcome, type AssignmentForm } from "@/lib/personnel-org";
+import { useApiQuery } from "@/lib/use-api-query";
 
 /**
  * Personnel Register page (skeleton.md §2/§3).
@@ -32,9 +38,14 @@ export default function PersonnelRegisterPage() {
   const [accessLevel, setAccessLevel] = useState<AccessLevel>("L1");
   const [password, setPassword] = useState("");
 
+  const [assignment, setAssignment] = useState<AssignmentForm>(EMPTY_ASSIGNMENT);
+  const [reload, setReload] = useState(0);
+  const tree = useApiQuery<OrgTreeResponse>("/org/tree/", reload);
+  const nodes = tree.data?.nodes ?? [];
+
   const [previewTitle, setPreviewTitle] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{ tone: "success" | "partial"; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   function handleSelect() {
@@ -49,14 +60,28 @@ export default function PersonnelRegisterPage() {
     try {
       const payload: PersonnelWritePayload = {
         full_name: fullName,
-        national_code: nationalCode,
-        mobile_phone: mobilePhone,
+        // ASCII digits, as the login page sends them: a code stored with Persian digits could never sign in.
+        national_code: normalizeNationalCode(nationalCode),
+        mobile_phone: normalizeNationalCode(mobilePhone),
         access_roll: accessRoll,
         access_level: accessLevel,
         ...(password ? { password } : {}),
       };
-      await apiPost("/personnel/", payload);
-      setSuccess("پروفایل پرسنل با موفقیت ثبت شد.");
+      const created = await apiPost<{ id: number }>("/personnel/", payload);
+
+      // The account exists now; placing them is a second request that may fail on its own.
+      let placementError: string | null = null;
+      const placedIn = hasAssignment(assignment) ? nodes.find((node) => node.id === assignment.nodeId)?.name ?? null : null;
+      if (hasAssignment(assignment)) {
+        try {
+          await apiPost("/org/memberships/", membershipBody(created.id, assignment));
+        } catch (err) {
+          placementError = err instanceof ApiError ? err.message : "درخواست ناموفق بود.";
+        }
+      }
+      setSuccess(registerOutcome(placedIn, placementError));
+      setAssignment(EMPTY_ASSIGNMENT);
+      setReload((n) => n + 1);
       setFullName("");
       setNationalCode("");
       setMobilePhone("");
@@ -89,8 +114,13 @@ export default function PersonnelRegisterPage() {
       >
         {error && <ErrorBanner message={error} />}
         {success && (
-          <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-            {success}
+          <div
+            role="status"
+            className={`rounded border px-3 py-2 text-sm ${
+              success.tone === "success" ? "border-green-200 bg-green-50 text-green-700" : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}
+          >
+            {success.message}
           </div>
         )}
 
@@ -169,6 +199,8 @@ export default function PersonnelRegisterPage() {
           </div>
         </div>
 
+        <OrgPlacement nodes={nodes} value={assignment} onChange={setAssignment} />
+
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -192,6 +224,8 @@ export default function PersonnelRegisterPage() {
           {saving ? "در حال ذخیره..." : "ذخیره"}
         </button>
       </form>
+
+      <UnassignedPeople nodes={nodes} reload={reload} onPlaced={() => setReload((n) => n + 1)} />
     </div>
   );
 }
