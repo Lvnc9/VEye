@@ -3,11 +3,23 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* The dark surfaces of the public pages (login, setup). The app shell keeps its light theme. */
+  --surface: #0a1020;
+  --surface-raised: #111a30;
+  --line: #22304d;
+  --accent: #38bdf8;
+  --accent-strong: #0ea5e9;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --font-sans: var(--font-vazir), system-ui, sans-serif;
 }
 
@@ -28,4 +40,46 @@ body {
   font-feature-settings: normal;
   direction: ltr;
   unicode-bidi: embed;
+}
+
+/* Public-page motion: a staggered entrance (set --i per element) and a slow drifting accent rule.
+   Both switch off for people who ask for reduced motion. */
+@keyframes veye-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes veye-drift {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.veye-rise {
+  animation: veye-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+.veye-rule {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #818cf8, #34d399, var(--accent));
+  background-size: 200% 100%;
+  animation: veye-drift 6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .veye-rise,
+  .veye-rule {
+    animation: none;
+  }
 }

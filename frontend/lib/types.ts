@@ -59,7 +59,10 @@ export type Capability =
   | "confirm_document"
   | "approve_document"
   | "manage_personnel"
-  | "print_document";
+  | "print_document"
+  | "manage_organization"
+  | "manage_membership"
+  | "create_project";
 
 export const CAPABILITY_LABELS: Record<Capability, string> = {
   create_document: "تدوین مستند",
@@ -67,6 +70,9 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   approve_document: "تصویب مستند",
   manage_personnel: "مدیریت پرسنل",
   print_document: "ساخت و نمایش PDF مستند",
+  manage_organization: "مدیریت ساختار سازمانی",
+  manage_membership: "مدیریت عضویت افراد",
+  create_project: "ایجاد پروژه",
 };
 
 export interface User {
@@ -578,4 +584,20 @@ export interface Paginated<T> {
 
 export function unwrapList<T>(payload: T[] | Paginated<T>): T[] {
   return Array.isArray(payload) ? payload : payload.results;
+}
+
+// ---------------------------------------------------------------------------
+// First-run setup (backend apps/organization/setup_views.py)
+// ---------------------------------------------------------------------------
+
+export type SetupStep = "COMPANY" | "DOMAINS" | "UNITS" | "SECTIONS" | "PEOPLE" | "DONE";
+
+/** `GET /setup/status/` — public, and deliberately nothing more than this. */
+export interface SetupStatus {
+  /** No company exists yet: the database is fresh and bootstrap is possible. */
+  needed: boolean;
+  /** An active کارفرمایی لول ۱ account exists, so the wizard can offer to promote it. */
+  has_users: boolean;
+  /** Where the wizard last was; null before a company exists. */
+  step: SetupStep | null;
 }
