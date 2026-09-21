@@ -16,6 +16,9 @@
  * inherently a browser-side concern anyway.
  */
 
+import { extractErrorMessage } from "./api-errors";
+import { loginRedirectUrl } from "./login";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
@@ -81,31 +84,6 @@ async function refreshAccessToken(): Promise<boolean> {
 
 const SESSION_ENDPOINTS = /^\/auth\/(login|refresh|logout)\/?$/;
 
-/**
- * Turns an error body into one readable Persian message.
- *
- * The backend sends either `{ detail: "..." }` (permission errors, conflicts,
- * bad credentials) or DRF field errors `{ title: ["..."], group: ["..."] }`
- * for validation failures. Both are flattened; anything else falls back to a
- * generic message rather than leaking an English status line into the UI.
- */
-function extractErrorMessage(data: unknown, status: number): string {
-  if (typeof data === "object" && data !== null) {
-    const body = data as Record<string, unknown>;
-    if (typeof body.detail === "string" && body.detail) return body.detail;
-
-    const messages = Object.values(body).flatMap((value) =>
-      Array.isArray(value)
-        ? value.filter((item): item is string => typeof item === "string")
-        : typeof value === "string"
-          ? [value]
-          : [],
-    );
-    if (messages.length > 0) return messages.join(" ");
-  }
-  return `درخواست ناموفق بود (کد ${status}).`;
-}
-
 interface RequestOptions extends Omit<RequestInit, "body"> {
   params?: QueryParams;
   body?: BodyInit | null;
@@ -145,8 +123,7 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
     }
     if (typeof window !== "undefined") {
       // Deliberate full-page navigation: a dead session should drop all client state.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = "/login";
+      window.location.href = loginRedirectUrl(window.location.pathname, window.location.search);
     }
     throw new ApiError("نشست شما منقضی شده است. لطفاً دوباره وارد شوید.", 401);
   }
@@ -176,10 +153,11 @@ export function apiGet<T>(path: string, params?: QueryParams): Promise<T> {
   return apiRequest<T>(path, { method: "GET", params });
 }
 
-export function apiPost<T>(path: string, body?: unknown): Promise<T> {
+export function apiPost<T>(path: string, body?: unknown, extra?: { headers?: HeadersInit }): Promise<T> {
   return apiRequest<T>(path, {
     method: "POST",
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    headers: extra?.headers,
   });
 }
 
@@ -251,8 +229,9 @@ export function apiUploadWithProgress<T>(
             return;
           }
           // Deliberate full-page navigation: a dead session should drop all client state.
-          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-          if (typeof window !== "undefined") window.location.href = "/login";
+          if (typeof window !== "undefined") {
+            window.location.href = loginRedirectUrl(window.location.pathname, window.location.search);
+          }
           reject(new ApiError("نشست شما منقضی شده است. لطفاً دوباره وارد شوید.", 401));
           return;
         }

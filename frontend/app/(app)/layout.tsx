@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { apiPost } from "@/lib/api-client";
+import { SetupBanner } from "@/components/SetupBanner";
 import { CurrentUserProvider, useCurrentUser } from "@/lib/current-user";
 import type { Capability } from "@/lib/types";
 
@@ -117,7 +118,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           stick to. */}
       <div className="flex h-screen overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto bg-slate-50 p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-slate-50 p-8">
+          <SetupBanner />
+          {children}
+        </main>
       </div>
     </CurrentUserProvider>
   );

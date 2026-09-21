@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_AFTER_LOGIN, normalizeDigits, normalizeNationalCode, safeNextPath } from "./login";
+import { DEFAULT_AFTER_LOGIN, loginRedirectUrl, normalizeDigits, normalizeNationalCode, safeNextPath } from "./login";
 
 describe("safeNextPath", () => {
   it("keeps a plain in-app path, with its query and hash", () => {
@@ -47,5 +47,18 @@ describe("national code typing", () => {
   it("drops whitespace, so a pasted code with spaces still matches", () => {
     expect(normalizeNationalCode(" ۱۲۳ ۴۵ 67 ")).toBe("1234567");
     expect(normalizeNationalCode("9000000001")).toBe("9000000001");
+  });
+});
+
+describe("loginRedirectUrl", () => {
+  it("remembers where a dead session was, so signing in returns there", () => {
+    expect(loginRedirectUrl("/documents/12/edit")).toBe("/login?next=%2Fdocuments%2F12%2Fedit");
+    expect(loginRedirectUrl("/projects", "?status=active")).toBe("/login?next=%2Fprojects%3Fstatus%3Dactive");
+  });
+
+  it("does not loop, and does not bother for the default landing page", () => {
+    expect(loginRedirectUrl("/login")).toBe("/login");
+    expect(loginRedirectUrl("/login/extra")).toBe("/login");
+    expect(loginRedirectUrl("/dashboard")).toBe("/login");
   });
 });

@@ -53,3 +53,14 @@ export function normalizeDigits(text: string): string {
 export function normalizeNationalCode(text: string): string {
   return normalizeDigits(text).replace(/\s+/g, "");
 }
+
+/**
+ * Where a dead session sends the browser: `/login`, remembering the page it was on so the sign-in
+ * returns there (the same `?next=` proxy.ts sets). Already on the login page → plain `/login`.
+ */
+export function loginRedirectUrl(pathname: string, search = ""): string {
+  if (pathname === "/login" || pathname.startsWith("/login/")) return "/login";
+  const here = safeNextPath(pathname + search);
+  // The dashboard is where a login goes anyway, and an unsafe path already fell back to it.
+  return here === DEFAULT_AFTER_LOGIN ? "/login" : `/login?next=${encodeURIComponent(here)}`;
+}

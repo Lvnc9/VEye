@@ -12,11 +12,12 @@ import { NextRequest, NextResponse } from "next/server";
  * blocks JS access in the browser. So presence of access_token/refresh_token
  * is checked here, redirecting to /login when neither is set.
  *
- * /login and /verify/* (the public QR-scan landing page, Phase 5) bypass the
- * guard entirely.
+ * /login, /setup (the first-run wizard: on a fresh deployment nobody can sign in yet, and its
+ * one dangerous call is protected by the setup token on the server) and /verify/* (the public
+ * QR-scan landing page, Phase 5) bypass the guard entirely.
  */
 
-const PUBLIC_EXACT_PATHS = new Set(["/login"]);
+const PUBLIC_EXACT_PATHS = new Set(["/login", "/setup"]);
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_EXACT_PATHS.has(pathname)) return true;
