@@ -5,32 +5,34 @@ import { usePathname, useRouter } from "next/navigation";
 import { apiPost } from "@/lib/api-client";
 import { SetupBanner } from "@/components/SetupBanner";
 import { CurrentUserProvider, useCurrentUser } from "@/lib/current-user";
-import type { Capability } from "@/lib/types";
+import type { Capability, User } from "@/lib/types";
 
-/**
- * Sidebar mirrors the desktop app's nav (V_1.0 main.py:894-954).
- * `ready: false` marks routes whose screens arrive in a later phase — they
- * render as disabled rather than as links that 404.
- * `capability` hides an entry the current user could not use anyway.
- */
-const NAV_ITEMS: {
+interface NavItem {
   href: string;
   label: string;
   ready: boolean;
   capability?: Capability;
-}[] = [
-  { href: "/dashboard", label: "داشبورد", ready: true },
-  { href: "/documents", label: "ساخت مستند", ready: true },
-  { href: "/documents/history", label: "سوابق مستندات", ready: true },
-  {
-    href: "/personnel/register",
-    label: "ثبت پرسنل",
-    ready: true,
-    capability: "manage_personnel",
-  },
-  { href: "/settings", label: "تنظیمات", ready: true },
-  { href: "/account", label: "اکانت", ready: true },
-];
+}
+
+/**
+ * The sidebar. The company's entry is labelled with the company's own name, so this is a function of
+ * the current user (whose `/auth/me/` carries the company) rather than a constant.
+ * `ready: false` marks routes whose screens arrive in a later phase — they render as disabled rather
+ * than as links that 404. `capability` hides an entry the current user could not use anyway.
+ */
+function navItemsFor(user: User | null): NavItem[] {
+  return [
+    { href: "/dashboard", label: "داشبورد", ready: true },
+    { href: "/inbox", label: "کارتابل", ready: false },
+    { href: "/organization", label: user?.company?.name ?? "ساختار سازمان", ready: true },
+    { href: "/projects", label: "پروژه‌ها", ready: false },
+    { href: "/documents", label: "ساخت مستند", ready: true },
+    { href: "/documents/history", label: "سوابق مستندات", ready: true },
+    { href: "/personnel/register", label: "ثبت پرسنل", ready: true, capability: "manage_personnel" },
+    { href: "/settings", label: "تنظیمات", ready: true },
+    { href: "/account", label: "اکانت", ready: true },
+  ];
+}
 
 function Sidebar() {
   const pathname = usePathname();
@@ -39,7 +41,8 @@ function Sidebar() {
 
   // The most specific matching item is the active one, so /documents/history
   // doesn't also light up «ساخت مستند» (whose href is a prefix of it).
-  const activeHref = NAV_ITEMS.filter(
+  const navItems = navItemsFor(user);
+  const activeHref = navItems.filter(
     (item) =>
       item.ready &&
       (pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"))),
@@ -68,7 +71,7 @@ function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 px-3">
-        {NAV_ITEMS.filter((item) => !item.capability || can(item.capability)).map((item) => {
+        {navItems.filter((item) => !item.capability || can(item.capability)).map((item) => {
           if (!item.ready) {
             return (
               <span

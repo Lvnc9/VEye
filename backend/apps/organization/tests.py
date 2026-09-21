@@ -1714,3 +1714,45 @@ class DocumentWorkflowUnaffectedByLeadershipTests(ApiTestCase):
             reverse("document-list"), {"category": "INSIDE", "title": "سند تازه", "group": "FORM"}, format="json"
         )
         self.assertEqual(created.status_code, 201, created.data)
+
+
+class MeContextTests(ApiTestCase):
+    """`GET /auth/me/` also carries the company and the caller's memberships (the sidebar's label)."""
+
+    def test_before_setup_there_is_no_company_and_no_memberships(self):
+        response = self.as_(self.guild).get(reverse("auth-me"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["company"])
+        self.assertEqual(response.data["memberships"], [])
+
+    def test_the_existing_keys_are_untouched(self):
+        response = self.as_(self.guild).get(reverse("auth-me"))
+        for key in ("id", "national_code", "full_name", "title", "capabilities", "is_active"):
+            self.assertIn(key, response.data)
+
+    def test_the_company_and_its_setup_state(self):
+        self.build()
+        company = self.as_(self.guild).get(reverse("auth-me")).data["company"]
+        self.assertEqual((company["name"], company["setup_complete"]), ("شرکت نمونه", False))
+        self.assertIsNone(company["logo_url"])
+        Company.objects.update(setup_completed_at="2026-09-21T10:00:00Z")
+        self.assertTrue(self.client.get(reverse("auth-me")).data["company"]["setup_complete"])
+
+    def test_the_callers_memberships_primary_first_and_active_nodes_only(self):
+        self.build()
+        join(self.guild, self.u1)
+        join(self.guild, self.s1, is_lead=True)
+        join(self.guild, self.u2)
+        tree.archive_node(self.u2)
+        rows = self.as_(self.guild).get(reverse("auth-me")).data["memberships"]
+        self.assertEqual([(r["node_name"], r["is_primary"], r["is_lead"]) for r in rows],
+                         [("واحد فروش", True, False), ("بخش یک", False, True)])
+        self.assertEqual(set(rows[0]), {"id", "node", "node_name", "node_kind", "is_lead", "is_primary"})
+
+    def test_it_costs_two_more_queries_not_one_per_membership(self):
+        self.build()
+        for node in (self.u1, self.u2, self.u3, self.s1):
+            join(self.guild, node)
+        self.as_(self.guild)
+        with self.assertNumQueries(2):  # the company, the memberships (the user comes from the session)
+            self.client.get(reverse("auth-me"))

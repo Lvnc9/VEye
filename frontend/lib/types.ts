@@ -86,6 +86,25 @@ export interface User {
   capabilities: Capability[];
   is_active: boolean;
   date_joined: string;
+  /** Only on `GET /auth/me/`: the company (null before setup) and the caller's own places in it. */
+  company?: MeCompany | null;
+  memberships?: MeMembership[];
+}
+
+export interface MeCompany {
+  id: number;
+  name: string;
+  logo_url: string | null;
+  setup_complete: boolean;
+}
+
+export interface MeMembership {
+  id: number;
+  node: number;
+  node_name: string;
+  node_kind: "COMPANY" | "DOMAIN" | "UNIT" | "SECTION";
+  is_lead: boolean;
+  is_primary: boolean;
 }
 
 export function hasCapability(user: User | null, capability: Capability): boolean {

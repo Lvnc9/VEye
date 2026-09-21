@@ -159,7 +159,10 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(UserSerializer(request.user).data)
+        # Imported here so accounts never depends on the org app at import time.
+        from apps.organization.me import org_context
+
+        return Response({**UserSerializer(request.user).data, **org_context(request.user, request)})
 
 
 class PersonnelViewSet(viewsets.ModelViewSet):

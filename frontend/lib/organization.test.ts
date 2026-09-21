@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  ZOOM_MAX,
+  ZOOM_MIN,
   ancestorsOf,
   buildTree,
+  chartLayout,
   childKindsOf,
+  clampZoom,
   countByKind,
   descendantsOf,
+  fitView,
   initials,
+  memberCaption,
   nodeOptions,
   pathLabel,
+  zoomAround,
   type OrgNode,
   type OrgNodeKind,
 } from "./organization";
@@ -132,5 +139,100 @@ describe("initials", () => {
     expect(initials("علی")).toBe("ع");
     expect(initials("  ")).toBe("؟");
     expect(initials("می" + String.fromCharCode(0x200c) + "نا")).toBe("من");
+  });
+});
+
+describe("chartLayout (the building)", () => {
+  it("makes the company the building, each حوزه a floor, each واحد a room, each بخش a desk", () => {
+    const { nodes } = sample();
+    const layout = chartLayout(nodes)!;
+    expect(layout.company.name).toBe("شرکت");
+    expect(layout.floors.map((f) => f.node?.name ?? null)).toEqual(["حوزه یک", null]); // ground floor last
+    const [floor, ground] = layout.floors;
+    expect(floor.rooms.map((r) => r.node.name)).toEqual(["واحد فروش", "واحد مالی"]);
+    expect(floor.rooms[0].desks.map((d) => d.name)).toEqual(["بخش یک"]);
+    expect(floor.rooms[1].desks).toEqual([]);
+    expect(ground.rooms.map((r) => r.node.name)).toEqual(["واحد مستقل"]);
+  });
+
+  it("gives a company with no حوزه a single implicit ground floor", () => {
+    const { company, u3 } = sample();
+    const layout = chartLayout([company, u3])!;
+    expect(layout.floors).toHaveLength(1);
+    expect(layout.floors[0].node).toBeNull();
+    expect(layout.floors[0].rooms).toHaveLength(1);
+  });
+
+  it("is a lone building for a company with nothing in it, and null for an empty chart", () => {
+    const { company } = sample();
+    expect(chartLayout([company])!.floors).toEqual([]);
+    expect(chartLayout([])).toBeNull();
+  });
+
+  it("leaves archived nodes out unless asked, without hiding the company itself", () => {
+    const { nodes, u2, d1 } = sample();
+    const archived = nodes.map((n) => (n.id === u2.id ? { ...n, is_active: false } : n));
+    expect(chartLayout(archived)!.floors[0].rooms.map((r) => r.node.name)).toEqual(["واحد فروش"]);
+    expect(chartLayout(archived, true)!.floors[0].rooms.map((r) => r.node.name)).toEqual(["واحد فروش", "واحد مالی"]);
+    const floorGone = nodes.map((n) => (n.id === d1.id ? { ...n, is_active: false } : n));
+    expect(chartLayout(floorGone)!.floors.map((f) => f.node?.name ?? null)).toEqual([null]); // its rooms go with it
+  });
+});
+
+describe("zoom", () => {
+  it("clamps to the supported range and survives nonsense", () => {
+    expect(clampZoom(10)).toBe(ZOOM_MAX);
+    expect(clampZoom(0.01)).toBe(ZOOM_MIN);
+    expect(clampZoom(1.2)).toBe(1.2);
+    expect(clampZoom(Number.NaN)).toBe(1);
+  });
+
+  it("keeps the point under the cursor fixed while zooming", () => {
+    const view = { x: 40, y: 10, zoom: 1 };
+    const origin = { x: 200, y: 100 };
+    const next = zoomAround(view, 2, origin);
+    expect(next.zoom).toBe(2);
+    // the content point under the origin before and after must be the same
+    const before = { x: (origin.x - view.x) / view.zoom, y: (origin.y - view.y) / view.zoom };
+    const after = { x: (origin.x - next.x) / next.zoom, y: (origin.y - next.y) / next.zoom };
+    expect(after.x).toBeCloseTo(before.x);
+    expect(after.y).toBeCloseTo(before.y);
+  });
+
+  it("does not drift once the limit is reached", () => {
+    const atMax = { x: 5, y: 5, zoom: ZOOM_MAX };
+    expect(zoomAround(atMax, 2, { x: 50, y: 50 })).toEqual(atMax);
+  });
+});
+
+describe("memberCaption", () => {
+  it("prefers the written position, else says who leads what, else nothing", () => {
+    expect(memberCaption({ is_lead: true, position_label: "رئیس فروش" }, "واحد فروش")).toBe("رئیس فروش");
+    expect(memberCaption({ is_lead: true, position_label: "" }, "واحد فروش")).toBe("مسئول واحد فروش");
+    expect(memberCaption({ is_lead: false, position_label: "" }, "واحد فروش")).toBe("");
+  });
+});
+
+describe("fitView", () => {
+  it("shows a building that fits at 100%, centred", () => {
+    expect(fitView({ width: 1000, height: 600 }, { width: 400, height: 300 })).toEqual({ x: 300, y: 24, zoom: 1 });
+  });
+
+  it("zooms out just enough for a wide building, and keeps it centred", () => {
+    const view = fitView({ width: 1000, height: 600 }, { width: 2000, height: 900 });
+    expect(view.zoom).toBeCloseTo(0.476, 2); // (1000 - 48) / 2000
+    expect(view.x).toBeCloseTo(24, 5); // fills the width minus padding
+  });
+
+  it("also fits a tall building, so the bottom floor is not cut off", () => {
+    const view = fitView({ width: 1000, height: 600 }, { width: 400, height: 1200 });
+    expect(view.zoom).toBeCloseTo(0.46, 2); // (600 - 48) / 1200
+    expect(view.x).toBeCloseTo((1000 - 400 * view.zoom) / 2, 5);
+  });
+
+  it("never zooms below the minimum, and survives an unmeasured viewport", () => {
+    expect(fitView({ width: 300, height: 300 }, { width: 100000, height: 10 }).zoom).toBe(ZOOM_MIN);
+    expect(fitView({ width: 0, height: 0 }, { width: 400, height: 300 })).toEqual({ x: 0, y: 0, zoom: 1 });
+    expect(fitView({ width: 500, height: 500 }, { width: 0, height: 0 })).toEqual({ x: 0, y: 0, zoom: 1 });
   });
 });

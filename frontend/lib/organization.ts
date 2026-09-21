@@ -182,3 +182,108 @@ export function pathLabel(nodes: OrgNode[], id: number): string {
   if (!node) return "";
   return [...ancestorsOf(nodes, id), node].map((n) => n.name).join(" › ");
 }
+
+// ---------------------------------------------------------------------------
+// The building: how the chart is laid out
+// ---------------------------------------------------------------------------
+
+/** A واحد as a room, with its بخش as desks. */
+export interface Room {
+  node: OrgTreeNode;
+  desks: OrgTreeNode[];
+}
+
+/** A حوزه as a floor. `node` is null for the implicit ground floor, which holds the واحد that hang
+ *  straight under the company (a company with no حوزه is just one ground floor). */
+export interface Floor {
+  node: OrgTreeNode | null;
+  rooms: Room[];
+}
+
+export interface ChartLayout {
+  company: OrgTreeNode;
+  floors: Floor[];
+}
+
+/**
+ * The building metaphor as data: company = the building, حوزه = floors, واحد = rooms, بخش = desks.
+ * Archived nodes are left out unless asked for. Floors keep the tree's order; the ground floor
+ * (loose واحد) comes last.
+ */
+export function chartLayout(nodes: OrgNode[], showArchived = false): ChartLayout | null {
+  const company = buildTree(nodes.filter((node) => showArchived || node.is_active || node.kind === "COMPANY"));
+  if (!company) return null;
+
+  const room = (unit: OrgTreeNode): Room => ({
+    node: unit,
+    desks: unit.children.filter((child) => child.kind === "SECTION"),
+  });
+
+  const floors: Floor[] = company.children
+    .filter((child) => child.kind === "DOMAIN")
+    .map((domain) => ({
+      node: domain,
+      rooms: domain.children.filter((child) => child.kind === "UNIT").map(room),
+    }));
+
+  const loose = company.children.filter((child) => child.kind === "UNIT").map(room);
+  if (loose.length > 0) floors.push({ node: null, rooms: loose });
+  return { company, floors };
+}
+
+export const ZOOM_MIN = 0.4;
+export const ZOOM_MAX = 2.5;
+
+export function clampZoom(zoom: number): number {
+  if (!Number.isFinite(zoom)) return 1;
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom));
+}
+
+/** Zoom by a factor around a point of the viewport (so the thing under the cursor stays put). */
+export function zoomAround(
+  view: { x: number; y: number; zoom: number },
+  factor: number,
+  origin: { x: number; y: number },
+): { x: number; y: number; zoom: number } {
+  const zoom = clampZoom(view.zoom * factor);
+  const ratio = zoom / view.zoom;
+  return { zoom, x: origin.x - (origin.x - view.x) * ratio, y: origin.y - (origin.y - view.y) * ratio };
+}
+
+/**
+ * The view that shows the whole building: zoomed out just enough to fit the viewport (never zoomed
+ * *in* past 100%), centred horizontally, near the top. Assumes a transform origin of (0, 0).
+ */
+export function fitView(
+  viewport: { width: number; height: number },
+  content: { width: number; height: number },
+  padding = 24,
+): { x: number; y: number; zoom: number } {
+  if (content.width <= 0 || content.height <= 0 || viewport.width <= 0) return { x: 0, y: 0, zoom: 1 };
+  const zoom = clampZoom(
+    Math.min(1, (viewport.width - padding * 2) / content.width, (viewport.height - padding * 2) / content.height),
+  );
+  return { zoom, x: (viewport.width - content.width * zoom) / 2, y: padding };
+}
+
+export interface Person {
+  id: number;
+  full_name: string;
+  title: string;
+  is_active: boolean;
+  memberships: {
+    id: number;
+    node: number;
+    node_name: string;
+    node_kind: OrgNodeKind;
+    is_primary: boolean;
+    is_lead: boolean;
+    position_label: string;
+  }[];
+}
+
+/** «مسئول واحد فروش» when they lead, else their own position label, else nothing. */
+export function memberCaption(membership: Pick<OrgMembership, "is_lead" | "position_label">, nodeName: string): string {
+  if (membership.position_label) return membership.position_label;
+  return membership.is_lead ? `مسئول ${nodeName}` : "";
+}
