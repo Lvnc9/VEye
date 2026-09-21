@@ -31,6 +31,16 @@ class Capability(models.TextChoices):
     APPROVE_DOCUMENT = "approve_document", "تصویب مستند"
     MANAGE_PERSONNEL = "manage_personnel", "مدیریت پرسنل"
     PRINT_DOCUMENT = "print_document", "ساخت و نمایش PDF مستند"
+    # The organisation axis (docs/11-phase-7-9-plan.md §5). These three only gate the
+    # coarse "may I use this surface" question; *which* nodes someone can touch is decided
+    # by their Membership (apps/organization), and never changes a document capability.
+    #
+    # Deliberately absent, and to stay so: any "read any conversation" capability. The
+    # مدیر عامل is built from `Capability.values`, so inventing one would silently hand him
+    # everyone's private messages. Chat access is membership-based only.
+    MANAGE_ORGANIZATION = "manage_organization", "مدیریت ساختار سازمانی"
+    MANAGE_MEMBERSHIP = "manage_membership", "مدیریت عضویت افراد"
+    CREATE_PROJECT = "create_project", "ایجاد پروژه"
 
 
 #: Access roll -> capabilities. See User.capabilities for the rationale.
@@ -39,10 +49,22 @@ class Capability(models.TextChoices):
 ROLL_CAPABILITIES = {
     AccessRoll.GUILD: frozenset({Capability.CREATE_DOCUMENT, Capability.PRINT_DOCUMENT}),
     AccessRoll.HEADQUARTERS: frozenset(
-        {Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT, Capability.PRINT_DOCUMENT}
+        {
+            Capability.CREATE_DOCUMENT,
+            Capability.CONFIRM_DOCUMENT,
+            Capability.PRINT_DOCUMENT,
+            Capability.CREATE_PROJECT,
+        }
     ),
     AccessRoll.EMPLOYER: frozenset(
-        {Capability.APPROVE_DOCUMENT, Capability.MANAGE_PERSONNEL, Capability.PRINT_DOCUMENT}
+        {
+            Capability.APPROVE_DOCUMENT,
+            Capability.MANAGE_PERSONNEL,
+            Capability.PRINT_DOCUMENT,
+            Capability.MANAGE_ORGANIZATION,
+            Capability.MANAGE_MEMBERSHIP,
+            Capability.CREATE_PROJECT,
+        }
     ),
 }
 

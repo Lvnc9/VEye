@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     # Local apps
     "apps.core",
     "apps.accounts",
+    "apps.organization",
     "apps.documents",
     "apps.dashboard",
     "apps.pdfgen",
@@ -265,3 +266,8 @@ PDF_FONT_NAME = "Vazir"
 # چاپ لیست (bulk print): the most PDFs one ZIP download may hold. Bulk print only
 # packs files that already exist, so this bounds response size, not render time.
 BULK_PRINT_MAX_FILES = env.int("BULK_PRINT_MAX_FILES", default=200)
+
+# Organisation chart: the most nodes GET /org/tree/ returns in one response. Over
+# it the endpoint returns only the top two levels plus `"truncated": true`, and the
+# client fetches the rest a branch at a time with `?parent=<id>`.
+ORG_TREE_MAX_NODES = env.int("ORG_TREE_MAX_NODES", default=2000)

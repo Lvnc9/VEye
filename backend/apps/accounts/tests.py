@@ -63,7 +63,12 @@ class CapabilityTests(TestCase):
         self.assertEqual(
             user.capabilities,
             frozenset(
-                {Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT, Capability.PRINT_DOCUMENT}
+                {
+                    Capability.CREATE_DOCUMENT,
+                    Capability.CONFIRM_DOCUMENT,
+                    Capability.PRINT_DOCUMENT,
+                    Capability.CREATE_PROJECT,
+                }
             ),
         )
 
@@ -76,7 +81,14 @@ class CapabilityTests(TestCase):
         self.assertEqual(
             user.capabilities,
             frozenset(
-                {Capability.APPROVE_DOCUMENT, Capability.MANAGE_PERSONNEL, Capability.PRINT_DOCUMENT}
+                {
+                    Capability.APPROVE_DOCUMENT,
+                    Capability.MANAGE_PERSONNEL,
+                    Capability.PRINT_DOCUMENT,
+                    Capability.MANAGE_ORGANIZATION,
+                    Capability.MANAGE_MEMBERSHIP,
+                    Capability.CREATE_PROJECT,
+                }
             ),
         )
         # Separation of duties: the approver must not be able to author.
@@ -107,6 +119,27 @@ class CapabilityTests(TestCase):
                     continue
                 user = User(access_roll=roll, access_level=level)
                 self.assertFalse(full_chain.issubset(user.capabilities), (roll, level))
+
+    def test_the_organisation_capabilities_by_roll(self):
+        # docs/11-phase-7-9-plan.md §5.1. صفی gains nothing: if everyone could create projects the
+        # capability would be decorative, and it keeps the document axis untouched.
+        org_axis = {Capability.MANAGE_ORGANIZATION, Capability.MANAGE_MEMBERSHIP, Capability.CREATE_PROJECT}
+        expected = {
+            AccessRoll.GUILD: set(),
+            AccessRoll.HEADQUARTERS: {Capability.CREATE_PROJECT},
+            AccessRoll.EMPLOYER: org_axis,
+        }
+        for roll, granted in expected.items():
+            for level in (AccessLevel.LEVEL_2, AccessLevel.LEVEL_3):  # L1 employer is the مدیر عامل, below
+                held = User(access_roll=roll, access_level=level).capabilities
+                self.assertEqual(set(held) & org_axis, granted, (roll, level))
+
+    def test_no_capability_reads_other_peoples_conversations(self):
+        """The مدیر عامل is built from `Capability.values`, so any such capability would silently
+        hand him everyone's private messages. Chat access is membership-based only — do not add one."""
+        for value in Capability.values:
+            for word in ("conversation", "chat", "message", "inbox"):
+                self.assertNotIn(word, value)
 
     def test_superuser_has_everything(self):
         user = User(access_roll=AccessRoll.GUILD, access_level=AccessLevel.LEVEL_3, is_superuser=True)

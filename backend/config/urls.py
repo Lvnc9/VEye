@@ -6,6 +6,7 @@ from django.urls import include, path
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/v1/", include("apps.accounts.urls")),
+    path("api/v1/", include("apps.organization.urls")),
     # pdfgen first: its documents/bulk-print/ must win over the documents router's documents/<pk>/.
     path("api/v1/", include("apps.pdfgen.urls")),
     path("api/v1/", include("apps.documents.urls")),
