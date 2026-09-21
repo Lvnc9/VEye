@@ -43,6 +43,7 @@ ALLOWED_PARENT_KINDS = {
 
 #: Names of the constraints tree.py reacts to; kept here so the two cannot drift.
 NODE_NAME_CONSTRAINT = "uniq_org_node_name_per_parent"
+PRIMARY_MEMBERSHIP_CONSTRAINT = "uniq_primary_membership_per_user"
 
 
 def company_logo_upload_to(instance, filename):
@@ -159,3 +160,46 @@ class Company(TimeStampedModel):
 
     def __str__(self):
         return self.root.name
+
+
+class Membership(TimeStampedModel):
+    """A person's place in the structure. Several per person is what makes the real
+    organisation expressible: مدیر عامل on the company, ستادی on a حوزه, صفی on a بخش.
+
+    Two things here are the org-position axis and are *not* the roll × level matrix:
+    `is_lead` (مسئول این گره — slice 7.3 lets a lead manage their own branch) and
+    `position_label` (free text, «مدیر واحد فروش»). `User.title` stays the authoritative
+    roll × level value for document sign-offs.
+
+    Invariant, kept by memberships.py: a person with any membership has exactly one
+    primary (their "home" node). The partial unique index below is the net for "at most
+    one"; "at least one" is the service's job.
+
+    No `ended_at`: leaving a node deletes the row, and history survives because feed
+    entries snapshot the actor's name and title as text (the DocumentEvent device). A
+    soft-ended membership would put a second "is this row live?" test on the
+    access-control hot path.
+    """
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="memberships")
+    node = models.ForeignKey(OrgNode, on_delete=models.PROTECT, related_name="memberships")
+    is_primary = models.BooleanField(default=False)
+    is_lead = models.BooleanField(default=False)
+    position_label = models.CharField(max_length=255, blank=True)
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["node_id", "-is_lead", "id"]
+        constraints = [
+            UniqueConstraint(fields=["user", "node"], name="uniq_membership_user_node"),
+            UniqueConstraint(
+                fields=["user"], condition=Q(is_primary=True), name=PRIMARY_MEMBERSHIP_CONSTRAINT
+            ),
+        ]
+        # (user is already indexed by its foreign key, and by the unique constraint above.)
+        indexes = [Index(fields=["node", "is_lead"], name="membership_node_lead_idx")]
+
+    def __str__(self):
+        return f"{self.user.full_name} @ {self.node.name}"

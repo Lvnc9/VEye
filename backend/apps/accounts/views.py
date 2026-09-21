@@ -176,6 +176,17 @@ class PersonnelViewSet(viewsets.ModelViewSet):
     write_capability = Capability.MANAGE_PERSONNEL
 
     def destroy(self, request, *args, **kwargs):
+        person = self.get_object()
+        # Memberships (apps/organization) also reference a person with PROTECT. Say so
+        # here, with the count, rather than let the handler below blame documents.
+        # (`memberships` is that app's reverse accessor; accounts imports nothing from it.)
+        membership_count = person.memberships.count()
+        if membership_count:
+            raise ConflictError(
+                "این شخص عضو ساختار سازمانی است و حذف نمی‌شود. ابتدا عضویت‌های او را حذف کنید یا حساب او را غیرفعال کنید.",
+                code="user_has_memberships",
+                memberships=membership_count,
+            )
         # Documents reference their author with on_delete=PROTECT, so removing
         # someone who ever authored one would otherwise be an unhandled 500. The
         # right way to retire a person is to deactivate them (is_active=false),

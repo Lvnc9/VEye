@@ -15,9 +15,10 @@ from rest_framework.test import APIClient
 from apps.accounts.models import AccessLevel, AccessRoll, Capability, User
 from apps.accounts.tests import LOCMEM_CACHE, make_user
 from apps.core.exceptions import ConflictError
+from apps.core.text import normalize_search_term
 
-from . import tree
-from .models import ALLOWED_PARENT_KINDS, Company, OrgNode, OrgNodeKind, SetupStep
+from . import memberships, queries, tree
+from .models import ALLOWED_PARENT_KINDS, Company, Membership, OrgNode, OrgNodeKind, SetupStep
 
 COMPANY, DOMAIN, UNIT, SECTION = (
     OrgNodeKind.COMPANY,
@@ -688,15 +689,8 @@ class CompanyEndpointTests(ApiTestCase):
         self.assertEqual(response.status_code, 400)
 
 
-@skipUnlessDBFeature("has_select_for_update")
-class ConcurrencyTests(TreeAssertions, TransactionTestCase):
-    """Real threads against a real database. Skipped on SQLite, which has no row locks; run
-    in the compose backend container (Postgres)."""
-
-    def setUp(self):
-        self.root = make_company()
-        self.d1 = add(DOMAIN, "حوزه یک", self.root)
-        self.d2 = add(DOMAIN, "حوزه دو", self.root)
+class Threaded:
+    """Run a worker in N real threads, released together, each on its own connection."""
 
     def run_concurrently(self, worker, n):
         results, barrier = [], threading.Barrier(n)
@@ -714,6 +708,17 @@ class ConcurrencyTests(TreeAssertions, TransactionTestCase):
         [t.start() for t in threads]
         [t.join() for t in threads]
         return results
+
+
+@skipUnlessDBFeature("has_select_for_update")
+class ConcurrencyTests(Threaded, TreeAssertions, TransactionTestCase):
+    """Real threads against a real database. Skipped on SQLite, which has no row locks; run
+    in the compose backend container (Postgres)."""
+
+    def setUp(self):
+        self.root = make_company()
+        self.d1 = add(DOMAIN, "حوزه یک", self.root)
+        self.d2 = add(DOMAIN, "حوزه دو", self.root)
 
     def assert_exactly_one_winner(self, results, losers):
         self.assertEqual(len([r for r in results if r[0] == "ok"]), 1, results)
@@ -748,3 +753,495 @@ class ConcurrencyTests(TreeAssertions, TransactionTestCase):
             results = self.run_concurrently(worker, 2)
             self.assertEqual([r for r in results if r[0] == "err"], [], round_)
             self.assert_tree_consistent()
+
+
+# ---------------------------------------------------------------------------
+# Memberships (slice 7.2)
+# ---------------------------------------------------------------------------
+
+
+def person(code, name=None, roll=AccessRoll.GUILD, level=AccessLevel.LEVEL_3, **extra):
+    return make_user(code, roll, level, full_name=name or f"شخص {code}", **extra)
+
+
+def join(user, node, **kwargs):
+    return memberships.add_membership(user=user, node=node, **kwargs)
+
+
+class MembershipAssertions:
+    def assert_one_primary(self, user):
+        rows = list(Membership.objects.filter(user=user))
+        primaries = [m for m in rows if m.is_primary]
+        self.assertEqual(len(primaries), 1 if rows else 0, [(m.node.name, m.is_primary) for m in rows])
+
+
+class MembershipServiceTests(MembershipAssertions, SampleTree, TestCase):
+    def setUp(self):
+        self.build()
+        self.ali = person("9200000001", "علی رضايي")
+
+    def test_the_first_membership_is_primary_whatever_is_asked(self):
+        for number, asked in enumerate((None, False, True)):
+            user = person(f"921{number:07d}")
+            self.assertTrue(join(user, self.s1, is_primary=asked).is_primary, asked)
+
+    def test_later_memberships_are_not_primary_unless_asked(self):
+        first = join(self.ali, self.s1)
+        second = join(self.ali, self.u2)
+        self.assertEqual((first.is_primary, second.is_primary), (True, False))
+        self.assert_one_primary(self.ali)
+
+    def test_asking_for_primary_demotes_the_old_one(self):
+        first = join(self.ali, self.s1)
+        second = join(self.ali, self.u2, is_primary=True)
+        first.refresh_from_db()
+        self.assertEqual((first.is_primary, second.is_primary), (False, True))
+        self.assert_one_primary(self.ali)
+
+    def test_the_same_person_cannot_join_a_node_twice(self):
+        first = join(self.ali, self.s1)
+        with self.assertRaises(ConflictError) as caught:
+            join(self.ali, self.s1, is_lead=True)
+        self.assertEqual(caught.exception.payload["code"], "already_member")
+        self.assertEqual(caught.exception.payload["existing_id"], first.pk)
+
+    def test_an_inactive_person_cannot_be_added(self):
+        self.ali.is_active = False
+        self.ali.save()
+        with self.assertRaises(ConflictError) as caught:
+            join(self.ali, self.s1)
+        self.assertEqual(caught.exception.payload["code"], "user_inactive")
+
+    def test_nobody_can_be_added_to_an_archived_node(self):
+        tree.archive_node(self.u2)
+        with self.assertRaises(ConflictError) as caught:
+            join(self.ali, self.u2)
+        self.assertEqual(caught.exception.payload["code"], "node_archived")
+
+    def test_any_kind_of_node_takes_members_including_the_company(self):
+        for node in (self.root, self.d1, self.u1, self.s1):
+            self.assertEqual(join(person(f"93{node.pk:08d}"), node).node_id, node.pk)
+
+    def test_a_node_may_have_several_leads_and_the_label_is_normalised(self):
+        head = join(person("9200000010"), self.u1, is_lead=True, position_label="  رئيس   واحد ")
+        deputy = join(person("9200000011"), self.u1, is_lead=True, position_label="معاون")
+        self.assertEqual(head.position_label, "رئیس واحد")
+        self.assertEqual(Membership.objects.filter(node=self.u1, is_lead=True).count(), 2)
+        self.assertTrue(deputy.is_lead)
+
+    def test_added_by_is_recorded(self):
+        ceo = person("9200000012")
+        self.assertEqual(join(self.ali, self.s1, added_by=ceo).added_by, ceo)
+
+    def test_update_changes_lead_and_label(self):
+        m = join(self.ali, self.s1)
+        m = memberships.update_membership(m, is_lead=True, position_label="سرپرست بخش")
+        m.refresh_from_db()
+        self.assertEqual((m.is_lead, m.position_label), (True, "سرپرست بخش"))
+        self.assertTrue(m.is_primary)  # untouched
+
+    def test_making_another_membership_primary_moves_the_flag(self):
+        first, second = join(self.ali, self.s1), join(self.ali, self.u2)
+        memberships.update_membership(second, is_primary=True)
+        first.refresh_from_db(); second.refresh_from_db()
+        self.assertEqual((first.is_primary, second.is_primary), (False, True))
+        self.assert_one_primary(self.ali)
+
+    def test_the_primary_cannot_simply_be_unset(self):
+        m = join(self.ali, self.s1)
+        with self.assertRaises(ConflictError) as caught:
+            memberships.update_membership(m, is_primary=False)
+        self.assertEqual(caught.exception.payload["code"], "primary_required")
+        m.refresh_from_db()
+        self.assertTrue(m.is_primary)
+
+    def test_unsetting_a_membership_that_is_not_primary_is_a_no_op(self):
+        join(self.ali, self.s1)
+        other = join(self.ali, self.u2)
+        memberships.update_membership(other, is_primary=False)
+        self.assert_one_primary(self.ali)
+
+    def test_removing_a_non_primary_membership_leaves_the_primary_alone(self):
+        first, second = join(self.ali, self.s1), join(self.ali, self.u2)
+        memberships.remove_membership(second)
+        first.refresh_from_db()
+        self.assertTrue(first.is_primary)
+
+    def test_removing_the_primary_promotes_the_earliest_remaining(self):
+        first = join(self.ali, self.s1)
+        second, third = join(self.ali, self.u2), join(self.ali, self.u4)
+        memberships.remove_membership(first)
+        second.refresh_from_db(); third.refresh_from_db()
+        self.assertEqual((second.is_primary, third.is_primary), (True, False))
+        memberships.remove_membership(second)
+        third.refresh_from_db()
+        self.assertTrue(third.is_primary)
+        memberships.remove_membership(third)
+        self.assertFalse(Membership.objects.filter(user=self.ali).exists())
+
+    def test_a_node_with_members_cannot_be_deleted_and_the_answer_counts_them(self):
+        m = join(self.ali, self.u4)
+        with self.assertRaises(ConflictError) as caught:
+            tree.delete_node(self.u4)
+        self.assertEqual(caught.exception.payload["code"], "node_not_empty")
+        self.assertEqual(caught.exception.payload["members"], 1)
+        memberships.remove_membership(m)
+        tree.delete_node(self.u4)
+        self.assertFalse(OrgNode.objects.filter(pk=self.u4.pk).exists())
+
+    def test_archiving_a_node_keeps_its_members(self):
+        join(self.ali, self.u2)
+        tree.archive_node(self.u2)
+        self.assertEqual(Membership.objects.filter(node=self.u2).count(), 1)
+
+
+class MembershipConstraintTests(SampleTree, TestCase):
+    def setUp(self):
+        self.build()
+        self.ali = person("9200000020")
+
+    def test_two_primaries_for_one_person_are_refused_by_the_database(self):
+        Membership.objects.create(user=self.ali, node=self.u1, is_primary=True)
+        with self.assertRaises(IntegrityError) as caught, transaction.atomic():
+            Membership.objects.create(user=self.ali, node=self.u2, is_primary=True)
+        self.assertIn("uniq_primary_membership_per_user", str(caught.exception))
+        Membership.objects.create(user=person("9200000021"), node=self.u2, is_primary=True)  # another person: fine
+
+    def test_a_person_may_have_any_number_of_non_primary_memberships(self):
+        for node in (self.u1, self.u2, self.u3, self.u4):
+            Membership.objects.create(user=self.ali, node=node, is_primary=False)
+
+    def test_one_membership_per_person_and_node(self):
+        Membership.objects.create(user=self.ali, node=self.u1)
+        with self.assertRaises(IntegrityError) as caught, transaction.atomic():
+            Membership.objects.create(user=self.ali, node=self.u1)
+        self.assertIn("uniq_membership_user_node", str(caught.exception))
+
+    def test_the_foreign_keys_protect_people_and_nodes(self):
+        Membership.objects.create(user=self.ali, node=self.u4)
+        with self.assertRaises(ProtectedError):
+            self.ali.delete()
+        with self.assertRaises(ProtectedError):
+            self.u4.delete()
+
+
+class SearchExpressionTests(TestCase):
+    NAMES = [
+        "علی رضايي",  # Arabic yeh, as the importer keeps it
+        "  كاربر   ۱۲٣  ",  # Arabic kaf, Persian + Arabic-Indic digits, stray spaces
+        "Sam   LEE",
+        "می\u200cشود",  # ZWNJ must survive
+        "ئ ي ى ك",
+        "\tتب\u00a0ت ",  # tab and no-break space
+    ]
+
+    def test_the_sql_normalisation_agrees_with_the_python_one(self):
+        """The SQL expression is a second implementation of normalize_search_term; this is what
+        stops the two drifting apart."""
+        users = [person(f"94{i:08d}", name) for i, name in enumerate(self.NAMES)]
+        rows = {
+            u.pk: u.name_key
+            for u in User.objects.filter(pk__in=[u.pk for u in users]).annotate(
+                name_key=queries.normalized_name_expression()
+            )
+        }
+        for user, name in zip(users, self.NAMES):
+            with self.subTest(name=name):
+                self.assertEqual(rows[user.pk], normalize_search_term(name))
+
+    def test_search_finds_people_however_the_letters_were_typed(self):
+        ali = person("9500000001", "علی رضايي")
+        person("9500000002", "کاربر ۱۲")
+        person("9500000003", "Sam Lee")
+        for term, expected in (
+            ("رضایی", "علی رضايي"),
+            ("رضايي", "علی رضايي"),
+            ("  علی   رضایی ", "علی رضايي"),
+            ("12", "کاربر ۱۲"),
+            ("۱۲", "کاربر ۱۲"),
+            ("SAM", "Sam Lee"),
+        ):
+            with self.subTest(term=term):
+                found = queries.search_people(User.objects.all(), term)
+                self.assertEqual([u.full_name for u in found], [expected])
+        self.assertEqual(queries.search_people(User.objects.all(), "   ").count(), User.objects.count())
+        self.assertTrue(User.objects.filter(pk=ali.pk).exists())
+
+
+class MembershipApiTests(MembershipAssertions, ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.build()
+        self.ali = person("9600000001", "علی رضايي")
+        self.as_(self.ceo)
+
+    def post(self, **body):
+        return self.client.post(reverse("org-membership-list"), body, format="json")
+
+    def test_only_employers_hold_manage_membership(self):
+        holders = {
+            (roll, level)
+            for roll in AccessRoll.values
+            for level in AccessLevel.values
+            if User(access_roll=roll, access_level=level).has_capability(Capability.MANAGE_MEMBERSHIP)
+        }
+        self.assertEqual(holders, {(AccessRoll.EMPLOYER, level) for level in AccessLevel.values})
+
+    def test_the_matrix_follows_manage_membership_for_every_roll_and_level(self):
+        combos = [(roll, level) for roll in AccessRoll.values for level in AccessLevel.values]
+        for number, (roll, level) in enumerate(combos):
+            actor = make_user(f"9601{number:06d}", roll, level)
+            target = person(f"9602{number:06d}")
+            allowed = actor.has_capability(Capability.MANAGE_MEMBERSHIP)
+            self.as_(actor)
+            with self.subTest(roll=roll, level=level):
+                self.assertEqual(self.client.get(reverse("org-membership-list")).status_code, 200)
+                response = self.post(user=target.pk, node=self.u2.pk)
+                self.assertEqual(response.status_code, 201 if allowed else 403, response.data)
+
+    def test_create_returns_the_membership_without_personal_data(self):
+        response = self.post(user=self.ali.pk, node=self.s1.pk, is_lead=True, position_label="سرپرست")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(
+            set(response.data),
+            {"id", "user", "user_name", "user_title", "user_is_active", "node", "node_name", "node_kind",
+             "is_primary", "is_lead", "position_label"},
+        )
+        self.assertEqual(response.data["user_name"], "علی رضايي")
+        self.assertEqual(response.data["user_title"], "کارمند/اپراتور")
+        self.assertEqual((response.data["is_primary"], response.data["is_lead"]), (True, True))
+        self.assertEqual(Membership.objects.get().added_by, self.ceo)
+
+    def test_bad_input_is_a_400(self):
+        for body in ({}, {"user": self.ali.pk}, {"node": self.s1.pk}, {"user": 999999999, "node": self.s1.pk},
+                     {"user": self.ali.pk, "node": 999999999}):
+            with self.subTest(body=body):
+                self.assertEqual(self.post(**body).status_code, 400)
+
+    def test_domain_conflicts_are_typed_409s(self):
+        self.post(user=self.ali.pk, node=self.s1.pk)
+        again = self.post(user=self.ali.pk, node=self.s1.pk)
+        self.assertEqual((again.status_code, again.data["code"]), (409, "already_member"))
+        self.assertIsInstance(again.data["existing_id"], int)
+        tree.archive_node(self.u2)
+        self.assertEqual(self.post(user=self.ali.pk, node=self.u2.pk).data["code"], "node_archived")
+        self.ali.is_active = False
+        self.ali.save()
+        self.assertEqual(self.post(user=self.ali.pk, node=self.u4.pk).data["code"], "user_inactive")
+
+    def test_patch_edits_lead_label_and_primary(self):
+        first = self.post(user=self.ali.pk, node=self.s1.pk).data
+        second = self.post(user=self.ali.pk, node=self.u2.pk).data
+        url = reverse("org-membership-detail", args=[second["id"]])
+        response = self.client.patch(url, {"is_primary": True, "is_lead": True, "position_label": "مدیر مالی"}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual((response.data["is_primary"], response.data["is_lead"], response.data["position_label"]),
+                         (True, True, "مدیر مالی"))
+        self.assertFalse(Membership.objects.get(pk=first["id"]).is_primary)
+        self.assert_one_primary(self.ali)
+
+    def test_unsetting_the_primary_is_a_409(self):
+        m = self.post(user=self.ali.pk, node=self.s1.pk).data
+        response = self.client.patch(reverse("org-membership-detail", args=[m["id"]]), {"is_primary": False}, format="json")
+        self.assertEqual((response.status_code, response.data["code"]), (409, "primary_required"))
+
+    def test_the_person_and_node_cannot_be_changed(self):
+        m = self.post(user=self.ali.pk, node=self.s1.pk).data
+        url = reverse("org-membership-detail", args=[m["id"]])
+        moved = self.client.patch(url, {"node": self.u2.pk}, format="json")
+        self.assertEqual(moved.status_code, 400)
+        self.assertIn("node", moved.data)
+        swapped = self.client.patch(url, {"user": self.ceo.pk}, format="json")
+        self.assertEqual(swapped.status_code, 400)
+        self.assertEqual(self.client.patch(url, {"node": self.s1.pk, "is_lead": True}, format="json").status_code, 200)
+        self.assertEqual(self.client.put(url, {}, format="json").status_code, 405)
+
+    def test_delete_removes_and_promotes(self):
+        first = self.post(user=self.ali.pk, node=self.s1.pk).data
+        second = self.post(user=self.ali.pk, node=self.u2.pk).data
+        self.assertEqual(self.client.delete(reverse("org-membership-detail", args=[first["id"]])).status_code, 204)
+        self.assertTrue(Membership.objects.get(pk=second["id"]).is_primary)
+
+    def test_a_guild_user_cannot_change_memberships(self):
+        m = self.post(user=self.ali.pk, node=self.s1.pk).data
+        self.as_(self.guild)
+        url = reverse("org-membership-detail", args=[m["id"]])
+        self.assertEqual(self.client.patch(url, {"is_lead": True}, format="json").status_code, 403)
+        self.assertEqual(self.client.delete(url).status_code, 403)
+        self.assertFalse(Membership.objects.get(pk=m["id"]).is_lead)
+
+    def test_anonymous_gets_401(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(reverse("org-membership-list")).status_code, 401)
+
+    def test_the_list_filters(self):
+        bea = person("9600000002", "بئاتریس")
+        join(self.ali, self.s1, is_lead=True)
+        join(self.ali, self.u2)
+        join(bea, self.s1)
+        url = reverse("org-membership-list")
+        self.assertEqual(self.client.get(url).data["count"], 3)
+        self.assertEqual(self.client.get(url, {"node": self.s1.pk}).data["count"], 2)
+        self.assertEqual(self.client.get(url, {"user": self.ali.pk}).data["count"], 2)
+        self.assertEqual(self.client.get(url, {"is_lead": "1"}).data["count"], 1)
+        self.assertEqual(self.client.get(url, {"node": "x"}).data["count"], 0)
+
+    def test_deactivated_people_are_hidden_by_default_but_keep_their_memberships(self):
+        m = join(self.ali, self.s1)
+        self.ali.is_active = False
+        self.ali.save()
+        url = reverse("org-membership-list")
+        self.assertEqual(self.client.get(url).data["count"], 0)
+        self.assertEqual(self.client.get(url, {"include_inactive": "1"}).data["count"], 1)
+        self.assertEqual(self.client.get(reverse("org-membership-detail", args=[m.pk])).status_code, 200)
+        self.ali.is_active = True
+        self.ali.save()
+        self.assertEqual(self.client.get(url).data["count"], 1)  # reactivating restores it
+
+    def test_node_members_lists_leads_first_then_by_name(self):
+        for code, name, lead in (("9600000003", "ژاله", False), ("9600000004", "ب", True), ("9600000005", "الف", False)):
+            join(person(code, name), self.s1, is_lead=lead)
+        gone = person("9600000006", "غایب")
+        join(gone, self.s1)
+        gone.is_active = False
+        gone.save()
+        self.as_(self.guild)
+        response = self.client.get(reverse("org-node-members", args=[self.s1.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([m["user_name"] for m in response.data["results"]], ["ب", "الف", "ژاله"])
+        everyone = self.client.get(reverse("org-node-members", args=[self.s1.pk]), {"include_inactive": "1"})
+        self.assertEqual(everyone.data["count"], 4)
+        self.assertEqual(self.client.get(reverse("org-node-members", args=[999999999])).status_code, 404)
+
+    def test_node_members_only_lists_that_nodes_direct_members(self):
+        join(self.ali, self.s1)
+        join(person("9600000007"), self.u1)
+        self.assertEqual(self.client.get(reverse("org-node-members", args=[self.u1.pk])).data["count"], 1)
+
+    def test_deleting_a_node_with_members_is_a_409_that_counts_them(self):
+        join(self.ali, self.u4)
+        response = self.client.delete(reverse("org-node-detail", args=[self.u4.pk]))
+        self.assertEqual((response.status_code, response.data["members"]), (409, 1))
+
+
+class PeopleApiTests(MembershipAssertions, ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.build()
+        self.ali = person("9700000001", "علی رضايي", mobile_phone="09121112233")
+        self.bea = person("9700000002", "بهار احمدی")
+        self.cyrus = person("9700000003", "کوروش")
+        join(self.ali, self.s1, is_lead=True, position_label="سرپرست")
+        join(self.ali, self.u2)
+        join(self.bea, self.s1)
+        self.as_(self.guild)
+        self.url = reverse("org-people")
+
+    def names(self, **params):
+        return [p["full_name"] for p in self.client.get(self.url, params).data["results"]]
+
+    def test_it_needs_a_login(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.url).status_code, 401)
+
+    def test_a_person_exposes_name_title_and_places_but_never_personal_data(self):
+        person_row = next(p for p in self.client.get(self.url, {"q": "رضایی"}).data["results"])
+        self.assertEqual(set(person_row), {"id", "full_name", "title", "is_active", "memberships"})
+        self.assertEqual(person_row["title"], "کارمند/اپراتور")
+        self.assertEqual(
+            set(person_row["memberships"][0]),
+            {"id", "node", "node_name", "node_kind", "is_primary", "is_lead", "position_label"},
+        )
+        self.assertNotIn("09121112233", str(self.client.get(self.url).data))
+        self.assertNotIn(self.ali.national_code, str(self.client.get(self.url).data))
+
+    def test_memberships_come_primary_first(self):
+        row = next(iter(self.client.get(self.url, {"q": "رضایی"}).data["results"]))
+        self.assertEqual([m["node_name"] for m in row["memberships"]], ["بخش یک", "واحد مالی"])
+        self.assertTrue(row["memberships"][0]["is_primary"])
+
+    def test_search_ignores_letterform_and_digit_differences(self):
+        self.assertEqual(self.names(q="رضایی"), ["علی رضايي"])
+        self.assertEqual(self.names(q="رضايي"), ["علی رضايي"])
+        self.assertEqual(self.names(q="کوروش"), ["کوروش"])
+        self.assertEqual(self.names(q="نامعلوم"), [])
+
+    def test_unassigned_and_node_filters(self):
+        self.assertIn("کوروش", self.names(unassigned="1"))
+        self.assertNotIn("علی رضايي", self.names(unassigned="1"))
+        self.assertEqual(sorted(self.names(node=self.s1.pk)), sorted(["علی رضايي", "بهار احمدی"]))
+        self.assertEqual(self.names(node=self.u2.pk), ["علی رضايي"])  # one row, though Ali has two places
+        self.assertEqual(self.names(node="x"), [])
+
+    def test_deactivated_people_are_hidden_unless_asked_for(self):
+        self.cyrus.is_active = False
+        self.cyrus.save()
+        self.assertNotIn("کوروش", self.names())
+        self.assertIn("کوروش", self.names(include_inactive="1"))
+
+    def test_the_directory_is_ordered_by_name_and_paginated(self):
+        response = self.client.get(self.url)
+        self.assertIn("count", response.data)
+        names = [p["full_name"] for p in response.data["results"]]
+        self.assertEqual(names, sorted(names))
+
+    def test_a_page_costs_three_queries_however_many_people_there_are(self):
+        for i in range(10):
+            join(person(f"98{i:08d}", f"نفر {i}"), self.s1)
+        with self.assertNumQueries(3):  # the count, the people, their memberships
+            self.client.get(self.url, {"page_size": 50})
+
+
+class PersonnelDeletionWithMembershipsTests(ApiTestCase):
+    def test_a_person_with_memberships_cannot_be_deleted_and_the_answer_says_why(self):
+        self.build()
+        member = person("9800000001")
+        join(member, self.s1)
+        join(member, self.u2)
+        response = self.as_(self.ceo).delete(reverse("personnel-detail", args=[member.pk]))
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["code"], "user_has_memberships")
+        self.assertEqual(response.data["memberships"], 2)
+        self.assertIn("غیرفعال", response.data["detail"])
+        self.assertTrue(User.objects.filter(pk=member.pk).exists())
+
+    def test_once_their_memberships_are_gone_they_can_be_deleted(self):
+        self.build()
+        member = person("9800000002")
+        membership = join(member, self.s1)
+        memberships.remove_membership(membership)
+        self.assertEqual(self.as_(self.ceo).delete(reverse("personnel-detail", args=[member.pk])).status_code, 204)
+
+    def test_deactivating_is_the_supported_way_and_keeps_the_memberships(self):
+        self.build()
+        member = person("9800000003")
+        join(member, self.s1)
+        response = self.as_(self.ceo).patch(reverse("personnel-detail", args=[member.pk]), {"is_active": False}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Membership.objects.filter(user=member).count(), 1)
+
+
+@skipUnlessDBFeature("has_select_for_update")
+class MembershipConcurrencyTests(Threaded, MembershipAssertions, SampleTree, TransactionTestCase):
+    def setUp(self):
+        self.build()
+        self.ali = person("9900000001")
+
+    def test_concurrent_first_memberships_leave_exactly_one_primary(self):
+        nodes = [self.u1, self.u2, self.u3, self.u4]
+        results = self.run_concurrently(lambda i: join(self.ali, nodes[i]), 4)
+        self.assertEqual([r for r in results if r[0] == "err"], [])
+        self.assertEqual(Membership.objects.filter(user=self.ali).count(), 4)
+        self.assert_one_primary(self.ali)
+
+    def test_concurrent_primary_changes_leave_exactly_one_primary(self):
+        rows = [join(self.ali, node) for node in (self.u1, self.u2, self.u3, self.u4)]
+        results = self.run_concurrently(lambda i: memberships.update_membership(rows[i], is_primary=True), 4)
+        self.assertEqual([r for r in results if r[0] == "err"], [])
+        self.assert_one_primary(self.ali)
+
+    def test_concurrent_removal_of_the_primary_and_another_keeps_one_primary(self):
+        rows = [join(self.ali, node) for node in (self.u1, self.u2, self.u3)]
+        results = self.run_concurrently(lambda i: memberships.remove_membership(rows[i]), 2)
+        self.assertEqual([r for r in results if r[0] == "err"], [])
+        self.assert_one_primary(self.ali)

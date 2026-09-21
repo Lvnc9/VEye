@@ -47,7 +47,7 @@ def _clean_name(name: str) -> tuple[str, str]:
     return name, normalize_search_term(name)
 
 
-def _lock(pk: int) -> OrgNode:
+def lock_node(pk: int) -> OrgNode:
     try:
         return OrgNode.objects.select_for_update().get(pk=pk)
     except OrgNode.DoesNotExist:
@@ -136,7 +136,7 @@ def create_root(*, name: str, created_by=None) -> OrgNode:
 def create_node(*, kind: str, name: str, parent: OrgNode, created_by=None) -> OrgNode:
     if kind == OrgNodeKind.COMPANY:
         raise ValueError("the company root is made by create_root()")
-    parent = _lock(parent.pk)
+    parent = lock_node(parent.pk)
     _require_parent_kind(kind, parent)
     _require_active(parent)
     name, key = _clean_name(name)
@@ -146,7 +146,7 @@ def create_node(*, kind: str, name: str, parent: OrgNode, created_by=None) -> Or
 
 @transaction.atomic
 def rename_node(node: OrgNode, name: str) -> OrgNode:
-    node = _lock(node.pk)
+    node = lock_node(node.pk)
     name, key = _clean_name(name)
     _check_name_free(node.parent_id, key, exclude_pk=node.pk)
     node.name, node.name_key = name, key
@@ -163,11 +163,11 @@ def move_node(node: OrgNode, new_parent: OrgNode) -> OrgNode:
     applies (a بخش moves between واحدها, a واحد between حوزه or up to the company); the
     cycle check comes first because it is the answer that explains itself.
     """
-    node = _lock(node.pk)
+    node = lock_node(node.pk)
     _require_not_root(node, "شرکت را نمی‌توان جابه‌جا کرد.")
     if new_parent.pk == node.parent_id:
         return node
-    new_parent = _lock(new_parent.pk)
+    new_parent = lock_node(new_parent.pk)
 
     # A node's own path is a prefix of every path beneath it (and of nothing else), so this
     # catches "under itself" (equal paths) and "under one of its descendants" alike.
@@ -213,7 +213,7 @@ def archive_node(node: OrgNode) -> OrgNode:
 
     Refused while it still has active children, so an active node never sits under an
     archived one — the chart would otherwise show a live بخش inside a retired واحد."""
-    node = _lock(node.pk)
+    node = lock_node(node.pk)
     _require_not_root(node, "شرکت را نمی‌توان بایگانی کرد.")
     if not node.is_active:
         return node
@@ -231,27 +231,27 @@ def archive_node(node: OrgNode) -> OrgNode:
 
 @transaction.atomic
 def unarchive_node(node: OrgNode) -> OrgNode:
-    node = _lock(node.pk)
+    node = lock_node(node.pk)
     if node.is_active:
         return node
     if node.parent_id is not None:
-        _require_active(_lock(node.parent_id))
+        _require_active(lock_node(node.parent_id))
     node.is_active = True
     node.save(update_fields=["is_active", "updated_at"])
     return node
 
 
 def node_blockers(node: OrgNode) -> dict[str, int]:
-    """What stops a node being deleted, as counts. Later slices add the members,
-    projects and conversations that hang off a node."""
-    return {"children": node.children.count()}
+    """What stops a node being deleted, as counts. Later slices add the projects and
+    conversations that hang off a node."""
+    return {"children": node.children.count(), "members": node.memberships.count()}
 
 
 @transaction.atomic
 def delete_node(node: OrgNode) -> None:
     """Delete an empty node. PROTECT on every inbound foreign key is the real net; this
     pre-flight exists to say *why* — an unhandled ProtectedError would be a 500."""
-    node = _lock(node.pk)
+    node = lock_node(node.pk)
     _require_not_root(node, "شرکت را نمی‌توان حذف کرد.")
     blockers = node_blockers(node)
     if any(blockers.values()):
