@@ -1064,3 +1064,224 @@ class ObjectiveApiTests(ProjectApiCase):
         )
         self.assertEqual(missing_objective.status_code, 404)
         self.assertEqual(self.client.get(reverse("project-objectives", args=[999999])).status_code, 404)
+
+
+# ---------------------------------------------------------------------------
+# Slice 8.3 — the activity feed
+# ---------------------------------------------------------------------------
+
+
+class ActivityLabelTests(ProjectFixtures, TestCase):
+    """`from_status`/`to_status` are overloaded by kind; only the two status-carrying kinds get a
+    human label — the others (a blank pair, or an ISO-date pair) get none."""
+
+    def setUp(self):
+        self.build_world()
+        self.project = new_project(self.mgr, self.s1)
+        self.mgr_member = self.project.members.get(user=self.mgr)
+
+    def serialize(self, event):
+        from .history import ProjectActivitySerializer
+
+        return ProjectActivitySerializer(event).data
+
+    def test_a_project_status_change_carries_project_status_labels(self):
+        services.update_project(self.project, actor=self.mgr, changes={"status": ProjectStatus.ON_HOLD})
+        row = self.serialize(self.project.events.get(kind=ProjectEventKind.PROJECT_STATUS_CHANGED))
+        self.assertEqual((row["from_status"], row["from_status_label"]), (ProjectStatus.ACTIVE, "در حال اجرا"))
+        self.assertEqual((row["to_status"], row["to_status_label"]), (ProjectStatus.ON_HOLD, "متوقف"))
+
+    def test_an_objective_status_change_carries_objective_status_labels(self):
+        objective = add_objective(self.project, self.mgr, self.mgr_member)
+        services.update_objective(objective, actor=self.mgr, changes={"status": ObjectiveStatus.DONE})
+        row = self.serialize(self.project.events.get(kind=ProjectEventKind.OBJECTIVE_STATUS_CHANGED))
+        self.assertEqual((row["from_status"], row["from_status_label"]), (ObjectiveStatus.TODO, "انجام نشده"))
+        self.assertEqual((row["to_status"], row["to_status_label"]), (ObjectiveStatus.DONE, "انجام شد"))
+
+    def test_a_due_date_change_carries_iso_dates_and_no_label(self):
+        objective = add_objective(self.project, self.mgr, self.mgr_member, due_on=date(2026, 5, 1))
+        services.update_objective(objective, actor=self.mgr, changes={"due_on": date(2026, 6, 1)})
+        row = self.serialize(self.project.events.get(kind=ProjectEventKind.OBJECTIVE_DUE_CHANGED))
+        self.assertEqual((row["from_status"], row["to_status"]), ("2026-05-01", "2026-06-01"))
+        self.assertEqual((row["from_status_label"], row["to_status_label"]), ("", ""))
+
+    def test_a_plain_event_carries_no_status_at_all(self):
+        row = self.serialize(self.project.events.get(kind=ProjectEventKind.PROJECT_CREATED))
+        self.assertEqual((row["from_status"], row["to_status"], row["from_status_label"], row["to_status_label"]), ("", "", "", ""))
+
+    def test_the_objective_is_null_once_it_is_deleted_and_the_project_is_always_present(self):
+        objective = add_objective(self.project, self.mgr, self.mgr_member, title="زودگذر")
+        services.remove_objective(objective, actor=self.mgr)
+        row = self.serialize(self.project.events.get(kind=ProjectEventKind.OBJECTIVE_REMOVED))
+        self.assertIsNone(row["objective"])
+        self.assertEqual(row["subject_title"], "زودگذر")
+        self.assertEqual(row["project"], {"id": self.project.pk, "name": self.project.name})
+
+    def test_a_live_objective_reference_carries_its_id_and_title(self):
+        objective = add_objective(self.project, self.mgr, self.mgr_member, title="پابرجا")
+        row = self.serialize(self.project.events.get(kind=ProjectEventKind.OBJECTIVE_ADDED))
+        self.assertEqual(row["objective"], {"id": objective.pk, "title": "پابرجا"})
+
+
+class ProjectActivityApiTests(ProjectApiCase):
+    """`GET /projects/{id}/activity/` — one project's own feed."""
+
+    def setUp(self):
+        super().setUp()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.mgr_member = self.project.members.get(user=self.mgr)
+        self.url = reverse("project-activity", args=[self.project.pk])
+
+    def test_it_is_newest_first_and_starts_with_project_created(self):
+        self.as_(self.mgr)
+        add_objective(self.project, self.mgr, self.mgr_member, title="یک")
+        services.update_project(self.project, actor=self.mgr, changes={"status": ProjectStatus.ON_HOLD})
+        rows = self.client.get(self.url).data["results"]
+        kinds = [r["kind"] for r in rows]
+        self.assertEqual(kinds[0], ProjectEventKind.PROJECT_STATUS_CHANGED)  # newest first
+        self.assertEqual(kinds[-1], ProjectEventKind.PROJECT_CREATED)
+
+    def test_anyone_who_can_read_the_project_reads_its_feed_an_outsider_and_an_unknown_id_get_404(self):
+        for user in (self.mgr, self.member, self.lead_s1, self.lead_d1, self.ceo):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.as_(self.outsider)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.as_(self.mgr)
+        self.assertEqual(self.client.get(reverse("project-activity", args=[999999])).status_code, 404)
+
+    def test_a_lead_of_a_different_branch_gets_404_not_the_wrong_projects_feed(self):
+        self.as_(self.lead_d2)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_only_this_projects_events_appear_never_another_projects(self):
+        self.as_(self.mgr)
+        other = new_project(self.mgr, self.s1, "پروژهٔ دیگر")
+        services.update_project(other, actor=self.mgr, changes={"goal": "چیز دیگر"})
+        rows = self.client.get(self.url).data["results"]
+        self.assertTrue(all(r["project"]["id"] == self.project.pk for r in rows))
+
+    def test_kind_filter_and_an_unknown_kind_matches_nothing(self):
+        self.as_(self.mgr)
+        add_objective(self.project, self.mgr, self.mgr_member)
+        by_kind = self.client.get(self.url, {"kind": ProjectEventKind.OBJECTIVE_ADDED}).data["results"]
+        self.assertTrue(all(r["kind"] == ProjectEventKind.OBJECTIVE_ADDED for r in by_kind))
+        self.assertNotEqual(len(by_kind), 0)
+        nothing = self.client.get(self.url, {"kind": "not_a_real_kind"}).data["results"]
+        self.assertEqual(nothing, [])
+
+    def test_objective_filter_narrows_to_one_objectives_history(self):
+        self.as_(self.mgr)
+        a = add_objective(self.project, self.mgr, self.mgr_member, title="الف")
+        b = add_objective(self.project, self.mgr, self.mgr_member, title="ب")
+        services.update_objective(a, actor=self.mgr, changes={"status": ObjectiveStatus.DONE})
+        rows = self.client.get(self.url, {"objective": a.pk}).data["results"]
+        self.assertTrue(all(r["objective"]["id"] == a.pk for r in rows))
+        self.assertGreaterEqual(len(rows), 2)  # objective_added + objective_status_changed
+        self.assertEqual(self.client.get(self.url, {"objective": "x"}).data["results"], [])
+
+    def test_actor_filter_matches_the_snapshotted_name(self):
+        self.as_(self.mgr)
+        services.add_member(self.project, actor=self.mgr, user=self.outsider)
+        services.update_project(self.project, actor=self.mgr, changes={"goal": "چیزی"})
+        rows = self.client.get(self.url, {"actor": "مدیر"}).data["results"]
+        self.assertTrue(all("مدیر" in r["actor_name"] for r in rows))
+        self.assertNotEqual(len(rows), 0)
+
+    def test_actor_filter_normalises_the_query_letterform(self):
+        # The actor name is stored raw (the snapshot), typed here with a Persian yeh; searching with
+        # the Arabic yeh only matches if the query is letterform-normalised before the icontains.
+        # update_project only records an event on a *status* change (services.py) — goal/name edits
+        # are silent — so use add_member, which always writes one.
+        writer = person("9800000040", "علی رضایی")
+        services.add_member(self.project, actor=writer, user=self.outsider)
+        self.as_(self.mgr)
+        rows = self.client.get(self.url, {"actor": "رضايي"}).data["results"]  # Arabic yeh
+        self.assertTrue(any(r["actor_name"] == "علی رضایی" for r in rows))
+
+    def test_days_filter(self):
+        self.as_(self.mgr)
+        old = ProjectEvent.objects.create(
+            project=self.project, kind=ProjectEventKind.COMMENT_ADDED, actor=self.mgr,
+            actor_name="قدیمی", note="خیلی وقت پیش",
+        )
+        ProjectEvent.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=40))
+        within_range = self.client.get(self.url, {"days": "7"}).data["results"]
+        self.assertFalse(any(r["id"] == old.pk for r in within_range))
+        everything = self.client.get(self.url, {"days": "9999"}).data["results"]
+        self.assertTrue(any(r["id"] == old.pk for r in everything))
+        self.assertEqual(self.client.get(self.url, {"days": "0"}).data["results"], [])
+        self.assertEqual(self.client.get(self.url, {"days": "not-a-number"}).data["results"], [])
+
+    def test_anonymous_gets_401(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.url).status_code, 401)
+
+
+class AllProjectsActivityApiTests(ProjectApiCase):
+    """`GET /projects/activity/` — the feed across every project the caller may read."""
+
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("projects-activity")
+        self.mine = new_project(self.mgr, self.s1, "پروژهٔ بخش یک", members=[{"user": self.member}])
+        self.theirs = new_project(self.hq, self.s2, "پروژهٔ بخش دو")
+
+    def kinds(self, **params):
+        return [r["kind"] for r in self.client.get(self.url, params).data["results"]]
+
+    def project_names(self, **params):
+        return sorted({r["project"]["name"] for r in self.client.get(self.url, params).data["results"]})
+
+    def test_a_member_sees_only_events_from_projects_they_can_read(self):
+        self.as_(self.member)
+        self.assertEqual(self.project_names(), ["پروژهٔ بخش یک"])
+        self.as_(self.hq)
+        self.assertEqual(self.project_names(), ["پروژهٔ بخش دو"])
+
+    def test_a_lead_sees_their_whole_subtree_and_manage_organization_sees_everything(self):
+        self.as_(self.lead_d1)
+        self.assertEqual(self.project_names(), ["پروژهٔ بخش یک"])
+        self.as_(self.ceo)
+        self.assertEqual(self.project_names(), ["پروژهٔ بخش دو", "پروژهٔ بخش یک"])
+
+    def test_an_outsider_sees_nothing(self):
+        self.as_(self.outsider)
+        self.assertEqual(self.client.get(self.url).data["results"], [])
+
+    def test_newest_first_across_projects(self):
+        services.update_project(self.mine, actor=self.mgr, changes={"status": ProjectStatus.ON_HOLD})
+        self.as_(self.ceo)
+        rows = self.client.get(self.url).data["results"]
+        self.assertEqual(rows[0]["kind"], ProjectEventKind.PROJECT_STATUS_CHANGED)
+        created_at = [r["created_at"] for r in rows]
+        self.assertEqual(created_at, sorted(created_at, reverse=True))
+
+    def test_the_project_filter_narrows_and_an_invisible_id_yields_nothing_not_a_403(self):
+        self.as_(self.ceo)
+        self.assertEqual(self.project_names(project=self.mine.pk), ["پروژهٔ بخش یک"])
+        self.as_(self.member)  # cannot read پروژهٔ بخش دو
+        self.assertEqual(self.kinds(project=self.theirs.pk), [])
+        self.assertEqual(self.kinds(project="not-a-number"), [])
+
+    def test_q_searches_the_project_name_letterform_insensitively(self):
+        third = new_project(self.mgr, self.s1, "طرح ي ویژه")  # Arabic yeh in the stored name's raw input
+        self.as_(self.ceo)
+        self.assertIn("طرح ی ویژه", self.project_names(q="طرح ي"))  # typed with Arabic yeh
+        self.assertIn("طرح ی ویژه", self.project_names(q="طرح ی"))  # typed with Persian yeh
+        self.assertEqual(self.project_names(q="نامعلوم"), [])
+
+    def test_kind_actor_objective_and_days_filters_apply_here_too(self):
+        mgr_member = self.mine.members.get(user=self.mgr)
+        objective = add_objective(self.mine, self.mgr, mgr_member, title="ریزهدف")
+        self.as_(self.ceo)
+        self.assertEqual(self.kinds(kind="not_a_real_kind"), [])
+        by_objective = self.client.get(self.url, {"objective": objective.pk}).data["results"]
+        self.assertTrue(all(r["objective"]["id"] == objective.pk for r in by_objective))
+        by_actor = self.client.get(self.url, {"actor": "مدیر پروژه"}).data["results"]
+        self.assertTrue(all("مدیر پروژه" in r["actor_name"] for r in by_actor))
+
+    def test_anonymous_gets_401(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.url).status_code, 401)
