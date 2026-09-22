@@ -1,10 +1,20 @@
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.organization.models import OrgNode
 
 from .access import can_manage_project
-from .models import Project, ProjectMember, ProjectRole, ProjectStatus
+from .models import (
+    CLOSED_OBJECTIVE_STATUSES,
+    Objective,
+    ObjectiveStatus,
+    Project,
+    ProjectMember,
+    ProjectRole,
+    ProjectStatus,
+)
+from .queries import progress_percent
 
 User = get_user_model()
 
@@ -36,6 +46,13 @@ class ProjectSerializer(serializers.ModelSerializer):
     can_edit = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
     members_preview = serializers.SerializerMethodField()
+    progress = serializers.SerializerMethodField()
+    # Annotations from queries.with_progress(), not model fields — ModelSerializer cannot infer
+    # their type on its own, so they need an explicit declaration like any other computed value.
+    weight_done = serializers.IntegerField(read_only=True)
+    weight_total = serializers.IntegerField(read_only=True)
+    objective_count = serializers.IntegerField(read_only=True)
+    overdue_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Project
@@ -43,8 +60,13 @@ class ProjectSerializer(serializers.ModelSerializer):
             "id", "name", "goal", "section", "section_name", "status", "status_label",
             "starts_on", "due_on", "is_archived", "archived_at", "created_at",
             "my_role", "can_edit", "member_count", "members_preview",
+            "progress", "weight_done", "weight_total", "objective_count", "overdue_count",
         ]
         read_only_fields = fields
+
+    def get_progress(self, project) -> int | None:
+        """Weighted, 0–100, or null while there is nothing live to measure (queries.py)."""
+        return progress_percent(project.weight_done, project.weight_total)
 
     def get_can_edit(self, project) -> bool:
         return can_manage_project(self.context["request"], project)
@@ -72,6 +94,59 @@ class MemberInputSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=ProjectRole.choices, required=False, default=ProjectRole.MEMBER)
 
 
+class ObjectiveSerializer(serializers.ModelSerializer):
+    """`assignee` is the person's *user id* (the ProjectMember behind it is an internal detail).
+    `can_change_status` / `can_edit` are the viewer's rights, from the very functions the endpoints
+    enforce; pass `manage` (bool) in the serializer context."""
+
+    assignee = serializers.IntegerField(source="assignee.user_id", read_only=True)
+    assignee_name = serializers.CharField(source="assignee.user.full_name", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    is_overdue = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    can_change_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Objective
+        fields = [
+            "id", "position", "title", "description", "assignee", "assignee_name", "due_on",
+            "status", "status_label", "weight", "completed_at", "is_overdue", "can_edit", "can_change_status",
+        ]
+        read_only_fields = fields
+
+    def get_is_overdue(self, objective) -> bool:
+        return objective.due_on < timezone.localdate() and objective.status not in CLOSED_OBJECTIVE_STATUSES
+
+    def get_can_edit(self, objective) -> bool:
+        return bool(self.context.get("manage"))
+
+    def get_can_change_status(self, objective) -> bool:
+        return bool(self.context.get("manage")) or objective.assignee.user_id == self.context["request"].user.pk
+
+
+class ObjectiveInputSerializer(serializers.Serializer):
+    """One objective to create. Assignee and deadline are both required: no unassigned backlog."""
+
+    title = serializers.CharField(max_length=255)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    assignee = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    due_on = serializers.DateField()
+    weight = serializers.IntegerField(min_value=1, max_value=100, required=False, default=1)
+
+
+class ObjectiveUpdateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255, required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+    assignee = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
+    due_on = serializers.DateField(required=False)
+    status = serializers.ChoiceField(choices=ObjectiveStatus.choices, required=False)
+    weight = serializers.IntegerField(min_value=1, max_value=100, required=False)
+
+
+class ReorderSerializer(serializers.Serializer):
+    order = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+
+
 class ProjectCreateSerializer(serializers.Serializer):
     section = serializers.PrimaryKeyRelatedField(queryset=OrgNode.objects.all())
     name = serializers.CharField(max_length=255)
@@ -79,6 +154,7 @@ class ProjectCreateSerializer(serializers.Serializer):
     starts_on = serializers.DateField(required=False, allow_null=True, default=None)
     due_on = serializers.DateField(required=False, allow_null=True, default=None)
     members = MemberInputSerializer(many=True, required=False, default=list)
+    objectives = ObjectiveInputSerializer(many=True, required=False, default=list)
 
 
 class ProjectUpdateSerializer(serializers.Serializer):

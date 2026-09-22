@@ -18,6 +18,18 @@ class ProjectRole(models.TextChoices):
     MEMBER = "MEMBER", "عضو"
 
 
+class ObjectiveStatus(models.TextChoices):
+    TODO = "TODO", "انجام نشده"
+    IN_PROGRESS = "IN_PROGRESS", "در حال انجام"
+    BLOCKED = "BLOCKED", "متوقف"
+    DONE = "DONE", "انجام شد"
+    CANCELLED = "CANCELLED", "لغو شد"
+
+
+#: An objective in one of these no longer counts as overdue (finished, or dropped).
+CLOSED_OBJECTIVE_STATUSES = (ObjectiveStatus.DONE, ObjectiveStatus.CANCELLED)
+
+
 class ProjectEventKind(models.TextChoices):
     """Every kind the project's activity feed will ever carry. The objective, comment and document
     kinds are written from slices 8.2–8.4; declaring them all now keeps the column's choices stable."""
@@ -103,6 +115,47 @@ class ProjectMember(TimeStampedModel):
         return f"{self.user.full_name} @ {self.project.name}"
 
 
+class Objective(TimeStampedModel):
+    """A ریز هدف: one piece of a project's plan, with **one assignee and one deadline, both required**
+    — there is no unassigned backlog.
+
+    `assignee` points at the *ProjectMember*, not the User. That is the model's most valuable detail:
+    the database itself then refuses an objective assigned to a non-member, and removing a member who
+    still owns work is a 409 instead of a silent orphan. «هر ریز هدف باید متعلق به یکی از اعضای پروژه
+    باشد» lives in the schema, not in a validator that can be forgotten.
+
+    Progress and overdue-ness are **derived, never stored** (queries.py): a stored percentage is a
+    cache that goes stale the moment anyone edits a weight.
+    """
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="objectives")
+    #: Manual order in the «اهداف» list (1-based, kept dense by the service).
+    position = models.PositiveSmallIntegerField()
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    assignee = models.ForeignKey(ProjectMember, on_delete=models.PROTECT, related_name="objectives")
+    due_on = models.DateField()
+    status = models.CharField(max_length=16, choices=ObjectiveStatus.choices, default=ObjectiveStatus.TODO)
+    #: How much it counts towards the project's progress.
+    weight = models.PositiveSmallIntegerField(default=1)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["position", "id"]
+        constraints = [CheckConstraint(check=Q(weight__gte=1), name="objective_weight_positive")]
+        indexes = [
+            Index(fields=["project", "position"], name="objective_project_position_idx"),
+            Index(fields=["assignee", "status"], name="objective_assignee_status_idx"),
+            Index(fields=["status", "due_on"], name="objective_status_due_idx"),
+        ]
+
+    def __str__(self):
+        return self.title
+
+
 class ProjectEvent(TimeStampedModel):
     """One line of the project's activity feed — a near-copy of DocumentEvent, including the
     load-bearing decision: actor name and title are *text snapshots*, so the trail keeps reading
@@ -116,8 +169,15 @@ class ProjectEvent(TimeStampedModel):
     )
     actor_name = models.CharField(max_length=255)
     actor_title = models.CharField(max_length=255, blank=True)
+    #: The objective it is about, if any. SET_NULL: deleting an objective keeps its history, which
+    #: still reads correctly through `subject_title`.
+    objective = models.ForeignKey(
+        Objective, null=True, blank=True, on_delete=models.SET_NULL, related_name="events"
+    )
     #: What the event is about, as it read at the time (an objective's title, a member's name…).
     subject_title = models.CharField(max_length=255, blank=True)
+    #: A status change's before and after. For `objective_due_changed` the same two fields hold the
+    #: old and new deadline as ISO dates (they fit), so the feed needs no extra columns.
     from_status = models.CharField(max_length=16, blank=True)
     to_status = models.CharField(max_length=16, blank=True)
     note = models.TextField(blank=True)

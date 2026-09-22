@@ -1,11 +1,12 @@
-"""Slice 8.1: projects, their members and their activity events."""
-from datetime import date
+"""Slices 8.1 (projects, members, events) and 8.2 (objectives, progress)."""
+from datetime import date, timedelta
 from unittest import mock
 
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 from django.test import TestCase, TransactionTestCase, override_settings, skipUnlessDBFeature
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.accounts.models import AccessLevel, AccessRoll, Capability, User
 from apps.core.exceptions import ConflictError
@@ -15,7 +16,17 @@ from apps.organization.tests import ApiTestCase as OrgApiTestCase
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from . import services
-from .models import Project, ProjectEvent, ProjectEventKind, ProjectMember, ProjectRole, ProjectStatus
+from .models import (
+    Objective,
+    ObjectiveStatus,
+    Project,
+    ProjectEvent,
+    ProjectEventKind,
+    ProjectMember,
+    ProjectRole,
+    ProjectStatus,
+)
+from .queries import progress_percent
 
 
 def new_project(actor, section, name="پروژه نمونه", **kwargs):
@@ -642,3 +653,414 @@ class ProjectConcurrencyTests(Threaded, ProjectFixtures, TransactionTestCase):
         self.assertTrue(all(isinstance(r[1], ConflictError) and r[1].payload["code"] == "already_member" for r in results if r[0] == "err"))
         self.assertEqual(self.project.members.filter(user=self.outsider).count(), 1)
         self.assertEqual(self.project.events.filter(kind=ProjectEventKind.GUEST_INVITED).count(), 1)
+
+
+# ---------------------------------------------------------------------------
+# Slice 8.2 — objectives, assignment, progress
+# ---------------------------------------------------------------------------
+
+
+def add_objective(project, actor, assignee_member, **kwargs):
+    kwargs.setdefault("title", "ریزهدف نمونه")
+    kwargs.setdefault("due_on", date(2026, 12, 1))
+    return services.add_objective(project, actor=actor, assignee=assignee_member, **kwargs)
+
+
+class ObjectiveServiceTests(ProjectFixtures, TestCase):
+    def setUp(self):
+        self.build_world()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.mgr_member = self.project.members.get(user=self.mgr)
+        self.member_row = self.project.members.get(user=self.member)
+
+    def test_an_objective_needs_an_assignee_and_a_deadline_and_gets_position_one(self):
+        objective = add_objective(self.project, self.mgr, self.member_row, title="  اولین  ")
+        self.assertEqual((objective.title, objective.position, objective.assignee, objective.status),
+                         ("اولین", 1, self.member_row, ObjectiveStatus.TODO))
+        self.assertEqual(events(self.project)[-1], ProjectEventKind.OBJECTIVE_ADDED)
+
+    def test_positions_increase_and_are_never_reused(self):
+        first = add_objective(self.project, self.mgr, self.member_row, title="یک")
+        second = add_objective(self.project, self.mgr, self.member_row, title="دو")
+        services.remove_objective(first, actor=self.mgr)
+        third = add_objective(self.project, self.mgr, self.member_row, title="سه")
+        self.assertEqual((second.position, third.position), (2, 3))
+
+    def test_the_assignee_must_be_a_member_of_this_very_project(self):
+        elsewhere = new_project(self.mgr, self.s1, "پروژهٔ دیگر", members=[{"user": self.outsider}])
+        foreign_member = elsewhere.members.get(user=self.outsider)
+        with self.assertRaises(ValidationError) as caught:
+            add_objective(self.project, self.mgr, foreign_member)
+        self.assertIn("assignee", caught.exception.detail)
+        self.assertFalse(Objective.objects.filter(project=self.project).exists())
+
+    def test_a_blank_title_is_refused(self):
+        with self.assertRaises(ValidationError):
+            add_objective(self.project, self.mgr, self.member_row, title="   ")
+
+    def test_the_database_refuses_a_non_positive_weight(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Objective.objects.create(
+                project=self.project, position=1, title="بد", assignee=self.member_row,
+                due_on=date(2026, 1, 1), weight=0,
+            )
+
+    def test_an_objective_cannot_be_added_to_an_archived_project(self):
+        services.archive_project(self.project, actor=self.mgr)
+        with self.assertRaises(ConflictError) as caught:
+            add_objective(self.project, self.mgr, self.member_row)
+        self.assertEqual(caught.exception.payload["code"], "project_archived")
+
+    @override_settings(PROJECT_MAX_OBJECTIVES=2)
+    def test_a_project_holds_at_most_the_configured_number_of_objectives(self):
+        add_objective(self.project, self.mgr, self.member_row, title="یک")
+        add_objective(self.project, self.mgr, self.member_row, title="دو")
+        with self.assertRaises(ConflictError) as caught:
+            add_objective(self.project, self.mgr, self.member_row, title="سه")
+        self.assertEqual(caught.exception.payload["code"], "objective_limit")
+        self.assertEqual(Objective.objects.filter(project=self.project).count(), 2)
+
+
+class ObjectiveUpdateTests(ProjectFixtures, TestCase):
+    def setUp(self):
+        self.build_world()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.mgr_member = self.project.members.get(user=self.mgr)
+        self.member_row = self.project.members.get(user=self.member)
+        self.objective = add_objective(self.project, self.mgr, self.member_row, due_on=date(2026, 6, 1))
+
+    def update(self, **changes):
+        return services.update_objective(self.objective, actor=self.mgr, changes=changes)
+
+    def test_title_description_and_weight_change_without_an_event(self):
+        before = len(events(self.project))
+        objective = self.update(title="  تازه  ", description="شرح", weight=3)
+        self.assertEqual((objective.title, objective.description, objective.weight), ("تازه", "شرح", 3))
+        self.assertEqual(len(events(self.project)), before)
+
+    def test_a_status_change_is_recorded_with_from_and_to(self):
+        self.update(status=ObjectiveStatus.IN_PROGRESS)
+        event = self.project.events.latest("id")
+        self.assertEqual(
+            (event.kind, event.from_status, event.to_status, event.objective_id),
+            (ProjectEventKind.OBJECTIVE_STATUS_CHANGED, ObjectiveStatus.TODO, ObjectiveStatus.IN_PROGRESS, self.objective.pk),
+        )
+
+    def test_completed_at_follows_done_and_only_done(self):
+        objective = self.update(status=ObjectiveStatus.DONE)
+        self.assertIsNotNone(objective.completed_at)
+        objective = self.update(status=ObjectiveStatus.IN_PROGRESS)
+        self.assertIsNone(objective.completed_at)
+
+    def test_marking_done_twice_writes_no_second_event(self):
+        self.update(status=ObjectiveStatus.DONE)
+        before = len(events(self.project))
+        self.update(status=ObjectiveStatus.DONE)
+        self.assertEqual(len(events(self.project)), before)
+
+    def test_a_due_date_change_is_recorded_as_iso_dates(self):
+        self.update(due_on=date(2026, 7, 15))
+        event = self.project.events.latest("id")
+        self.assertEqual(
+            (event.kind, event.from_status, event.to_status),
+            (ProjectEventKind.OBJECTIVE_DUE_CHANGED, "2026-06-01", "2026-07-15"),
+        )
+
+    def test_reassigning_is_recorded_and_must_stay_inside_the_project(self):
+        other = services.add_member(self.project, actor=self.mgr, user=self.outsider)
+        objective = self.update(assignee=other)
+        self.assertEqual(objective.assignee_id, other.pk)
+        event = self.project.events.latest("id")
+        self.assertEqual((event.kind, event.note), (ProjectEventKind.OBJECTIVE_ASSIGNED, "بیرونی"))
+
+        elsewhere = new_project(self.mgr, self.s1, "پروژهٔ دیگر")
+        foreign = elsewhere.members.get(user=self.mgr)
+        with self.assertRaises(ValidationError):
+            self.update(assignee=foreign)
+
+    def test_several_changes_in_one_call_write_one_event_each(self):
+        self.update(status=ObjectiveStatus.DONE, due_on=date(2026, 8, 1), title="دیگر")
+        kinds = events(self.project)[-2:]
+        self.assertEqual(set(kinds), {ProjectEventKind.OBJECTIVE_STATUS_CHANGED, ProjectEventKind.OBJECTIVE_DUE_CHANGED})
+
+    def test_an_unknown_field_is_a_programming_error(self):
+        with self.assertRaises(ValueError):
+            self.update(project=self.project)
+
+    def test_updates_are_refused_on_an_archived_project(self):
+        services.archive_project(self.project, actor=self.mgr)
+        with self.assertRaises(ConflictError) as caught:
+            self.update(title="نباید")
+        self.assertEqual(caught.exception.payload["code"], "project_archived")
+
+
+class ObjectiveRemovalTests(ProjectFixtures, TestCase):
+    def setUp(self):
+        self.build_world()
+        self.project = new_project(self.mgr, self.s1)
+        self.mgr_member = self.project.members.get(user=self.mgr)
+        self.objective = add_objective(self.project, self.mgr, self.mgr_member, title="برای حذف")
+
+    def test_removal_is_recorded_and_the_title_survives_in_the_feed(self):
+        services.remove_objective(self.objective, actor=self.mgr)
+        self.assertFalse(Objective.objects.filter(pk=self.objective.pk).exists())
+        event = self.project.events.latest("id")
+        self.assertEqual((event.kind, event.subject_title, event.objective), (ProjectEventKind.OBJECTIVE_REMOVED, "برای حذف", None))
+
+    def test_removal_is_refused_on_an_archived_project(self):
+        services.archive_project(self.project, actor=self.mgr)
+        with self.assertRaises(ConflictError) as caught:
+            services.remove_objective(self.objective, actor=self.mgr)
+        self.assertEqual(caught.exception.payload["code"], "project_archived")
+        self.assertTrue(Objective.objects.filter(pk=self.objective.pk).exists())
+
+    def test_a_member_who_still_owns_an_objective_cannot_be_removed(self):
+        with self.assertRaises(ConflictError) as caught:
+            services.remove_member(self.mgr_member, actor=self.mgr)
+        self.assertIn(caught.exception.payload["code"], {"last_manager", "member_has_objectives"})
+        # give the project a second manager so the last_manager guard is not what fires
+        second = services.add_member(self.project, actor=self.mgr, user=self.member, role=ProjectRole.MANAGER)
+        with self.assertRaises(ConflictError) as caught:
+            services.remove_member(self.mgr_member, actor=self.mgr)
+        self.assertEqual((caught.exception.payload["code"], caught.exception.payload["objectives"]), ("member_has_objectives", 1))
+
+    def test_once_reassigned_the_former_owner_can_be_removed(self):
+        second = services.add_member(self.project, actor=self.mgr, user=self.member, role=ProjectRole.MANAGER)
+        services.update_objective(self.objective, actor=self.mgr, changes={"assignee": second})
+        services.remove_member(self.mgr_member, actor=self.mgr)
+        self.assertFalse(self.project.members.filter(user=self.mgr).exists())
+
+
+class ReorderTests(ProjectFixtures, TestCase):
+    def setUp(self):
+        self.build_world()
+        self.project = new_project(self.mgr, self.s1)
+        self.mgr_member = self.project.members.get(user=self.mgr)
+        self.a = add_objective(self.project, self.mgr, self.mgr_member, title="الف")
+        self.b = add_objective(self.project, self.mgr, self.mgr_member, title="ب")
+        self.c = add_objective(self.project, self.mgr, self.mgr_member, title="ج")
+
+    def positions(self):
+        return list(self.project.objectives.order_by("position").values_list("title", flat=True))
+
+    def test_reordering_sets_the_new_positions(self):
+        services.reorder_objectives(self.project, actor=self.mgr, ordered_ids=[self.c.pk, self.a.pk, self.b.pk])
+        self.assertEqual(self.positions(), ["ج", "الف", "ب"])
+
+    def test_a_partial_or_stale_list_is_refused(self):
+        for ids in ([self.a.pk, self.b.pk], [self.a.pk, self.b.pk, self.c.pk, 999999], [self.a.pk, self.a.pk, self.b.pk]):
+            with self.subTest(ids=ids), self.assertRaises(ConflictError) as caught:
+                services.reorder_objectives(self.project, actor=self.mgr, ordered_ids=ids)
+            self.assertEqual(caught.exception.payload["code"], "objectives_changed")
+        self.assertEqual(self.positions(), ["الف", "ب", "ج"])
+
+    def test_reordering_an_archived_project_is_refused(self):
+        services.archive_project(self.project, actor=self.mgr)
+        with self.assertRaises(ConflictError) as caught:
+            services.reorder_objectives(self.project, actor=self.mgr, ordered_ids=[self.a.pk, self.b.pk, self.c.pk])
+        self.assertEqual(caught.exception.payload["code"], "project_archived")
+
+
+class CreateProjectWithObjectivesTests(ProjectFixtures, TestCase):
+    def setUp(self):
+        self.build_world()
+
+    def test_objectives_are_created_assigned_to_the_new_members(self):
+        project = new_project(
+            self.mgr, self.s1,
+            members=[{"user": self.member}],
+            objectives=[
+                {"title": "یک", "assignee": self.mgr, "due_on": date(2026, 5, 1)},
+                {"title": "دو", "assignee": self.member, "due_on": date(2026, 6, 1), "weight": 2},
+            ],
+        )
+        rows = list(project.objectives.order_by("position"))
+        self.assertEqual([(o.title, o.assignee.user, o.position, o.weight) for o in rows],
+                         [("یک", self.mgr, 1, 1), ("دو", self.member, 2, 2)])
+        self.assertEqual(events(project).count(ProjectEventKind.OBJECTIVE_ADDED), 2)
+
+    def test_an_objective_assigned_to_a_non_member_rolls_back_the_whole_project(self):
+        with self.assertRaises(ValidationError):
+            new_project(
+                self.mgr, self.s1,
+                objectives=[{"title": "بد", "assignee": self.outsider, "due_on": date(2026, 5, 1)}],
+            )
+        self.assertFalse(Project.objects.exists())
+        self.assertFalse(ProjectMember.objects.exists())
+
+
+class ProgressQueryTests(ProjectFixtures, TestCase):
+    def setUp(self):
+        self.build_world()
+        self.project = new_project(self.mgr, self.s1)
+        self.mgr_member = self.project.members.get(user=self.mgr)
+
+    def fetch(self):
+        from .queries import with_progress
+        return with_progress(Project.objects.filter(pk=self.project.pk)).get()
+
+    def test_a_project_with_no_objectives_has_null_progress(self):
+        row = self.fetch()
+        self.assertEqual((row.weight_total, row.weight_done, row.objective_count), (0, 0, 0))
+        self.assertIsNone(progress_percent(row.weight_done, row.weight_total))
+
+    def test_progress_is_weighted_and_ignores_cancelled_work(self):
+        a = add_objective(self.project, self.mgr, self.mgr_member, title="۱", weight=1)
+        b = add_objective(self.project, self.mgr, self.mgr_member, title="۲", weight=3)
+        c = add_objective(self.project, self.mgr, self.mgr_member, title="۳", weight=5)
+        services.update_objective(a, actor=self.mgr, changes={"status": ObjectiveStatus.DONE})
+        services.update_objective(c, actor=self.mgr, changes={"status": ObjectiveStatus.CANCELLED})
+        row = self.fetch()
+        # total counts only live (non-cancelled) weight: a(1) + b(3) = 4; done: a(1)
+        self.assertEqual((row.weight_total, row.weight_done), (4, 1))
+        self.assertEqual(progress_percent(row.weight_done, row.weight_total), 25)
+
+    def test_overdue_counts_only_open_objectives_past_their_deadline(self):
+        yesterday = timezone.localdate() - timedelta(days=1)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        late_open = add_objective(self.project, self.mgr, self.mgr_member, title="دیرکرد", due_on=yesterday)
+        add_objective(self.project, self.mgr, self.mgr_member, title="به‌موقع", due_on=tomorrow)
+        late_done = add_objective(self.project, self.mgr, self.mgr_member, title="دیر ولی انجام‌شده", due_on=yesterday)
+        services.update_objective(late_done, actor=self.mgr, changes={"status": ObjectiveStatus.DONE})
+        row = self.fetch()
+        self.assertEqual(row.overdue_count, 1)
+
+
+class ObjectiveApiTests(ProjectApiCase):
+    def setUp(self):
+        super().setUp()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.mgr_member = self.project.members.get(user=self.mgr)
+        self.member_row = self.project.members.get(user=self.member)
+        self.list_url = reverse("project-objectives", args=[self.project.pk])
+
+    def objective_url(self, objective):
+        return reverse("project-objective", args=[self.project.pk, objective.pk])
+
+    def post(self, **body):
+        body = {"title": "ریزهدف", "assignee": self.member.pk, "due_on": "2026-06-01", **body}
+        return self.client.post(self.list_url, body, format="json")
+
+    def test_anyone_who_can_read_the_project_reads_its_objectives_an_outsider_gets_404(self):
+        add_objective(self.project, self.mgr, self.member_row)
+        for user in (self.mgr, self.member, self.lead_s1, self.lead_d1, self.ceo):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                self.assertEqual(self.client.get(self.list_url).status_code, 200)
+        self.as_(self.outsider)
+        self.assertEqual(self.client.get(self.list_url).status_code, 404)
+
+    def test_only_the_manager_or_a_lead_may_create_an_objective(self):
+        for user in (self.mgr, self.lead_s1, self.lead_d1):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                self.assertEqual(self.post(title=f"از {user.pk}").status_code, 201)
+        self.as_(self.member)
+        denied = self.post(title="ممنوع")
+        self.assertEqual((denied.status_code, denied.data["detail"]), (403, "شما مدیر این پروژه نیستید."))
+
+    def test_the_assignee_and_due_date_are_required_and_the_assignee_must_be_a_member(self):
+        self.as_(self.mgr)
+        for body in ({"title": "بی‌مسئول", "due_on": "2026-06-01"}, {"title": "بی‌مهلت", "assignee": self.member.pk},
+                     {"title": "بیرونی", "assignee": self.outsider.pk, "due_on": "2026-06-01"}):
+            with self.subTest(body=body):
+                self.assertEqual(self.client.post(self.list_url, body, format="json").status_code, 400)
+        self.assertEqual(self.client.post(self.list_url, {**{"title": "بد وزن", "assignee": self.member.pk, "due_on": "2026-06-01"}, "weight": 0}, format="json").status_code, 400)
+
+    def test_create_returns_the_objective_with_the_viewer_rights(self):
+        self.as_(self.mgr)
+        response = self.post(weight=2)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(
+            (response.data["assignee"], response.data["assignee_name"], response.data["weight"], response.data["can_edit"], response.data["can_change_status"]),
+            (self.member.pk, "عضو پروژه", 2, True, True),
+        )
+
+    def test_the_assignee_may_change_only_the_status_not_other_fields(self):
+        objective = add_objective(self.project, self.mgr, self.member_row)
+        self.as_(self.member)
+        ok = self.client.patch(self.objective_url(objective), {"status": "DONE"}, format="json")
+        self.assertEqual((ok.status_code, ok.data["status"]), (200, "DONE"))
+        denied = self.client.patch(self.objective_url(objective), {"title": "هک"}, format="json")
+        self.assertEqual((denied.status_code, denied.data["detail"]), (403, "شما مدیر این پروژه نیستید."))
+        combo = self.client.patch(self.objective_url(objective), {"status": "TODO", "title": "هک"}, format="json")
+        self.assertEqual(combo.status_code, 403)  # status + another field together needs the manager
+        objective.refresh_from_db()
+        self.assertEqual(objective.title, "ریزهدف نمونه")
+
+    def test_a_plain_member_who_is_not_the_assignee_cannot_touch_it(self):
+        other = person("9800000030")
+        join(other, self.s1)
+        services.add_member(self.project, actor=self.mgr, user=other)
+        objective = add_objective(self.project, self.mgr, self.member_row)
+        self.as_(other)
+        self.assertEqual(self.client.patch(self.objective_url(objective), {"status": "DONE"}, format="json").status_code, 403)
+
+    def test_the_manager_and_leads_may_edit_everything_including_reassignment(self):
+        for user in (self.mgr, self.lead_s1, self.lead_d1):
+            objective = add_objective(self.project, self.mgr, self.member_row, title=f"برای {user.pk}")
+            self.as_(user)
+            response = self.client.patch(self.objective_url(objective), {"title": "ویرایش‌شده", "weight": 4}, format="json")
+            self.assertEqual(response.status_code, 200, response.data)
+
+    def test_delete_needs_the_manager_and_the_object_is_gone(self):
+        objective = add_objective(self.project, self.mgr, self.member_row)
+        self.as_(self.member)
+        self.assertEqual(self.client.delete(self.objective_url(objective)).status_code, 403)
+        self.as_(self.mgr)
+        self.assertEqual(self.client.delete(self.objective_url(objective)).status_code, 204)
+        self.assertFalse(Objective.objects.filter(pk=objective.pk).exists())
+
+    def test_reorder_needs_the_manager_and_returns_the_new_order(self):
+        a = add_objective(self.project, self.mgr, self.member_row, title="الف")
+        b = add_objective(self.project, self.mgr, self.member_row, title="ب")
+        reorder_url = reverse("project-reorder", args=[self.project.pk])
+        self.as_(self.member)
+        self.assertEqual(self.client.post(reorder_url, {"order": [b.pk, a.pk]}, format="json").status_code, 403)
+        self.as_(self.mgr)
+        ok = self.client.post(reorder_url, {"order": [b.pk, a.pk]}, format="json")
+        self.assertEqual([o["title"] for o in ok.data], ["ب", "الف"])
+
+    def test_filters_status_assignee_and_overdue(self):
+        yesterday = (timezone.localdate() - timedelta(days=1)).isoformat()
+        mine = add_objective(self.project, self.mgr, self.member_row, title="من", due_on=yesterday)
+        services.update_objective(mine, actor=self.mgr, changes={"status": ObjectiveStatus.IN_PROGRESS})
+        add_objective(self.project, self.mgr, self.mgr_member, title="مدیر")
+        self.as_(self.member)
+        by_status = self.client.get(self.list_url, {"status": "IN_PROGRESS"}).data
+        self.assertEqual([o["title"] for o in by_status], ["من"])
+        by_me = self.client.get(self.list_url, {"assignee": "me"}).data
+        self.assertEqual([o["title"] for o in by_me], ["من"])
+        by_id = self.client.get(self.list_url, {"assignee": self.mgr.pk}).data
+        self.assertEqual([o["title"] for o in by_id], ["مدیر"])
+        overdue = self.client.get(self.list_url, {"overdue": "1"}).data
+        self.assertEqual([o["title"] for o in overdue], ["من"])
+        self.assertTrue(overdue[0]["is_overdue"])
+
+    def test_the_project_row_carries_progress_and_the_overdue_filter_works(self):
+        yesterday = (timezone.localdate() - timedelta(days=1)).isoformat()
+        objective = add_objective(self.project, self.mgr, self.member_row, weight=2, due_on=yesterday)
+        self.as_(self.mgr)
+        row = self.client.get(self.detail_url(self.project)).data
+        self.assertEqual((row["progress"], row["weight_total"], row["weight_done"], row["objective_count"], row["overdue_count"]),
+                         (0, 2, 0, 1, 1))
+        services.update_objective(objective, actor=self.mgr, changes={"status": ObjectiveStatus.DONE})
+        done_row = self.client.get(self.detail_url(self.project)).data
+        self.assertEqual((done_row["progress"], done_row["overdue_count"]), (100, 0))
+
+        overdue_projects = self.client.get(reverse("project-list"), {"overdue": "1"}).data["results"]
+        self.assertEqual(overdue_projects, [])  # the objective is DONE now, so nothing is overdue
+        other = new_project(self.mgr, self.s2, "پروژهٔ دیگر بخش")
+        stale = other.members.get(user=self.mgr)
+        add_objective(other, self.mgr, stale, due_on=yesterday)
+        self.as_(self.ceo)
+        overdue_projects = self.client.get(reverse("project-list"), {"overdue": "1"}).data["results"]
+        self.assertEqual([p["name"] for p in overdue_projects], ["پروژهٔ دیگر بخش"])
+
+    def test_an_unknown_objective_or_project_is_a_404(self):
+        self.as_(self.mgr)
+        missing_objective = self.client.patch(
+            reverse("project-objective", args=[self.project.pk, 999999]), {"status": "DONE"}, format="json"
+        )
+        self.assertEqual(missing_objective.status_code, 404)
+        self.assertEqual(self.client.get(reverse("project-objectives", args=[999999])).status_code, 404)

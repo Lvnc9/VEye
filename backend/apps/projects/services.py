@@ -19,7 +19,15 @@ from apps.core.text import normalize_search_term, normalize_title
 from apps.organization.models import Membership, OrgNodeKind
 from apps.organization.tree import lock_node
 
-from .models import Project, ProjectEvent, ProjectEventKind, ProjectMember, ProjectRole
+from .models import (
+    Objective,
+    ObjectiveStatus,
+    Project,
+    ProjectEvent,
+    ProjectEventKind,
+    ProjectMember,
+    ProjectRole,
+)
 
 User = get_user_model()
 
@@ -28,6 +36,8 @@ UNSET = object()
 
 #: Fields update_project accepts.
 UPDATABLE = ("name", "goal", "starts_on", "due_on", "status")
+#: Fields update_objective accepts. Only `status` may be changed by the assignee (views.py).
+OBJECTIVE_UPDATABLE = ("title", "description", "assignee", "due_on", "status", "weight")
 
 
 def record_event(project: Project, kind: str, actor, **extra) -> ProjectEvent:
@@ -160,6 +170,13 @@ def remove_member(member: ProjectMember, *, actor) -> None:
         raise ConflictError(
             "هر پروژه باید دست‌کم یک مدیر داشته باشد. ابتدا مدیر دیگری تعیین کنید.", code="last_manager"
         )
+    owned = member.objectives.count()
+    if owned:
+        raise ConflictError(
+            "این عضو هنوز ریزهدف دارد. ابتدا آن‌ها را به عضو دیگری واگذار کنید.",
+            code="member_has_objectives",
+            objectives=owned,
+        )
     name = member.user.full_name
     member.delete()
     record_event(project, ProjectEventKind.MEMBER_REMOVED, actor, subject_title=name)
@@ -172,12 +189,14 @@ def remove_member(member: ProjectMember, *, actor) -> None:
 
 @transaction.atomic
 def create_project(
-    *, actor, section, name: str, goal: str = "", starts_on=None, due_on=None, members=()
+    *, actor, section, name: str, goal: str = "", starts_on=None, due_on=None, members=(), objectives=()
 ) -> Project:
     """Create a project in a بخش. The creator is added as its مدیر پروژه automatically (as a guest if
     they are not in that بخش), so there is a manager from the first moment and the creator can
     always see what they made. `members` are `{"user": User, "role": …}`; the creator, if listed, is
-    a manager regardless of the role given."""
+    a manager regardless of the role given. `objectives` are `{"title", "description", "assignee": User,
+    "due_on", "weight"}`, each assigned to someone who is on the project once the members are in — a
+    half-created project (some members, no plan) cannot exist, because it is all one transaction."""
     section = lock_node(section.pk)
     if section.kind != OrgNodeKind.SECTION:
         raise ValidationError({"section": ["پروژه فقط در یک بخش ساخته می‌شود."]})
@@ -203,6 +222,15 @@ def create_project(
             continue
         seen.add(user.pk)
         _add_member(project, user, entry.get("role", ProjectRole.MEMBER), added_by=actor)
+
+    for index, entry in enumerate(objectives):
+        try:
+            assignee = project.members.get(user=entry["assignee"])
+        except ProjectMember.DoesNotExist:
+            raise ValidationError(
+                {"objectives": {index: {"assignee": ["مسئول ریزهدف باید یکی از اعضای پروژه باشد."]}}}
+            )
+        _add_objective(project, actor, assignee=assignee, **{k: v for k, v in entry.items() if k != "assignee"})
     return project
 
 
@@ -263,3 +291,138 @@ def unarchive_project(project: Project, *, actor) -> Project:
     project.save(update_fields=["archived_at", "updated_at"])
     record_event(project, ProjectEventKind.PROJECT_UNARCHIVED, actor)
     return project
+
+
+# --------------------------------------------------------------------------
+# Objectives
+# --------------------------------------------------------------------------
+
+
+def _clean_title(title: str) -> str:
+    title = normalize_title(title or "")
+    if not title:
+        raise ValidationError({"title": ["عنوان ریزهدف نمی‌تواند خالی باشد."]})
+    return title
+
+
+def _add_objective(
+    project: Project, actor, *, title, assignee: ProjectMember, due_on, description="", weight=1,
+    status=ObjectiveStatus.TODO,
+) -> Objective:
+    if project.objectives.count() >= settings.PROJECT_MAX_OBJECTIVES:
+        raise ConflictError(
+            f"یک پروژه حداکثر {settings.PROJECT_MAX_OBJECTIVES} ریزهدف می‌تواند داشته باشد.",
+            code="objective_limit",
+        )
+    last = project.objectives.order_by("-position").values_list("position", flat=True).first() or 0
+    objective = Objective.objects.create(
+        project=project,
+        position=last + 1,
+        title=_clean_title(title),
+        description=(description or "").strip(),
+        assignee=assignee,
+        due_on=due_on,
+        weight=weight,
+        status=status,
+        completed_at=timezone.now() if status == ObjectiveStatus.DONE else None,
+        created_by=actor,
+    )
+    record_event(
+        project, ProjectEventKind.OBJECTIVE_ADDED, actor,
+        objective=objective, subject_title=objective.title, note=assignee.user.full_name,
+    )
+    return objective
+
+
+def _member_of(project: Project, member) -> ProjectMember:
+    if member.project_id != project.pk:
+        raise ValidationError({"assignee": ["مسئول ریزهدف باید یکی از اعضای همین پروژه باشد."]})
+    return member
+
+
+@transaction.atomic
+def add_objective(project: Project, *, actor, assignee: ProjectMember, **fields) -> Objective:
+    project = _lock_project(project.pk)
+    require_writable(project)
+    return _add_objective(project, actor, assignee=_member_of(project, assignee), **fields)
+
+
+def _lock_objective(objective: Objective) -> tuple[Project, Objective]:
+    project = _lock_project(objective.project_id)
+    try:
+        return project, Objective.objects.select_related("assignee__user").get(pk=objective.pk, project=project)
+    except Objective.DoesNotExist:
+        raise NotFound("ریزهدف یافت نشد.")
+
+
+@transaction.atomic
+def update_objective(objective: Objective, *, actor, changes: dict) -> Objective:
+    """Apply any subset of `OBJECTIVE_UPDATABLE`. Status, deadline and assignee changes are each
+    written to the feed (with the old and the new value); edits to the title, description and
+    weight are not events. `completed_at` follows the status: set on DONE, cleared when it leaves."""
+    project, objective = _lock_objective(objective)
+    require_writable(project)
+    unknown = set(changes) - set(OBJECTIVE_UPDATABLE)
+    if unknown:
+        raise ValueError(f"not updatable: {sorted(unknown)}")
+
+    old_status, old_due, old_assignee = objective.status, objective.due_on, objective.assignee
+    if "title" in changes:
+        objective.title = _clean_title(changes["title"])
+    if "description" in changes:
+        objective.description = (changes["description"] or "").strip()
+    if "weight" in changes:
+        objective.weight = changes["weight"]
+    if "due_on" in changes:
+        objective.due_on = changes["due_on"]
+    if "assignee" in changes:
+        objective.assignee = _member_of(project, changes["assignee"])
+    if "status" in changes:
+        objective.status = changes["status"]
+        if objective.status == ObjectiveStatus.DONE and old_status != ObjectiveStatus.DONE:
+            objective.completed_at = timezone.now()
+        elif objective.status != ObjectiveStatus.DONE:
+            objective.completed_at = None
+
+    objective.save()
+    common = {"objective": objective, "subject_title": objective.title}
+    if objective.status != old_status:
+        record_event(
+            project, ProjectEventKind.OBJECTIVE_STATUS_CHANGED, actor,
+            from_status=old_status, to_status=objective.status, **common,
+        )
+    if objective.due_on != old_due:
+        record_event(
+            project, ProjectEventKind.OBJECTIVE_DUE_CHANGED, actor,
+            from_status=old_due.isoformat(), to_status=objective.due_on.isoformat(), **common,
+        )
+    if objective.assignee_id != old_assignee.pk:
+        record_event(
+            project, ProjectEventKind.OBJECTIVE_ASSIGNED, actor, note=objective.assignee.user.full_name, **common
+        )
+    return objective
+
+
+@transaction.atomic
+def remove_objective(objective: Objective, *, actor) -> None:
+    """Delete an objective. Its history stays in the feed, reading through `subject_title`."""
+    project, objective = _lock_objective(objective)
+    require_writable(project)
+    title = objective.title
+    objective.delete()
+    record_event(project, ProjectEventKind.OBJECTIVE_REMOVED, actor, subject_title=title)
+
+
+@transaction.atomic
+def reorder_objectives(project: Project, *, actor, ordered_ids: list[int]) -> None:
+    """Set the manual order. `ordered_ids` must be exactly the project's objectives, each once — a
+    partial or stale list (someone added one meanwhile) is refused rather than half-applied."""
+    project = _lock_project(project.pk)
+    require_writable(project)
+    current = set(project.objectives.values_list("pk", flat=True))
+    if len(ordered_ids) != len(set(ordered_ids)) or set(ordered_ids) != current:
+        raise ConflictError(
+            "فهرست اهداف تغییر کرده است. صفحه را تازه کنید و دوباره تلاش کنید.", code="objectives_changed"
+        )
+    for position, pk in enumerate(ordered_ids, start=1):
+        Objective.objects.filter(pk=pk).update(position=position, updated_at=timezone.now())
