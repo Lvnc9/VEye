@@ -149,3 +149,53 @@ export function parseConversationParam(value: string | null): number | null {
   const id = Number(value);
   return id > 0 ? id : null;
 }
+
+// ---------------------------------------------------------------------------
+// کارتابل summary (GET /dashboard/inbox/) — the sidebar badge and «منتظر اقدام».
+// ---------------------------------------------------------------------------
+
+export interface DueObjective {
+  id: number;
+  title: string;
+  project: { id: number; name: string };
+  due_on: string;
+  status: string;
+  status_label: string;
+  is_overdue: boolean;
+}
+
+export interface InboxSummary {
+  unread_messages: number;
+  awaiting_documents: number;
+  due_objectives: number;
+  total: number;
+  objectives: DueObjective[];
+}
+
+/** The sidebar badge polls this often (the thread itself polls faster). */
+export const BADGE_POLL_MS = 30000;
+
+export type InboxTab = "conversations" | "awaiting";
+
+export function parseInboxTab(value: string | null): InboxTab {
+  return value === "awaiting" ? "awaiting" : "conversations";
+}
+
+/**
+ * Should the chart offer «گفتگوی گروه» for this node? A mirror of the server's rule (chat/access.py)
+ * for affordance only — the server still decides:
+ *   the company node  anyone with any membership;
+ *   any other node    a membership on it, or a lead membership on it or an ancestor.
+ * `memberships` come from /auth/me/, which lists active nodes only — and only an active lead node
+ * confers authority on the server too.
+ */
+export function canOpenNodeChannel(
+  node: { id: number; kind: string },
+  ancestorIds: number[],
+  memberships: { node: number; is_lead: boolean }[],
+): boolean {
+  if (node.kind === "COMPANY") return memberships.length > 0;
+  return memberships.some(
+    (m) => m.node === node.id || (m.is_lead && ancestorIds.includes(m.node)),
+  );
+}

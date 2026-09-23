@@ -3,6 +3,7 @@ import {
   DELETED_TEXT,
   MESSAGE_MAX_LENGTH,
   NODE_PRIVACY_NOTE,
+  canOpenNodeChannel,
   canSend,
   conversationSubtitle,
   lastMessageLine,
@@ -11,6 +12,7 @@ import {
   newestId,
   oldestId,
   parseConversationParam,
+  parseInboxTab,
   readOnlyReason,
   shouldMarkRead,
   sortConversations,
@@ -146,5 +148,23 @@ describe("rules", () => {
   it("parses the ?c= parameter strictly", () => {
     expect(parseConversationParam("12")).toBe(12);
     for (const bad of [null, "", "0", "-3", "1.5", "abc", "12x"]) expect(parseConversationParam(bad)).toBeNull();
+  });
+});
+
+describe("inbox tab and chart affordance", () => {
+  it("defaults to conversations", () => {
+    expect(parseInboxTab("awaiting")).toBe("awaiting");
+    for (const other of [null, "", "x", "conversations"]) expect(parseInboxTab(other)).toBe("conversations");
+  });
+
+  it("mirrors the server's channel rule", () => {
+    const section = { id: 5, kind: "SECTION" };
+    const ancestors = [1, 2, 3]; // company, domain, unit
+    expect(canOpenNodeChannel(section, ancestors, [{ node: 5, is_lead: false }])).toBe(true); // member
+    expect(canOpenNodeChannel(section, ancestors, [{ node: 3, is_lead: true }])).toBe(true); // lead above
+    expect(canOpenNodeChannel(section, ancestors, [{ node: 3, is_lead: false }])).toBe(false); // member above, not lead
+    expect(canOpenNodeChannel(section, ancestors, [{ node: 9, is_lead: true }])).toBe(false); // lead elsewhere
+    expect(canOpenNodeChannel({ id: 1, kind: "COMPANY" }, [], [{ node: 9, is_lead: false }])).toBe(true);
+    expect(canOpenNodeChannel({ id: 1, kind: "COMPANY" }, [], [])).toBe(false);
   });
 });

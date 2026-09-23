@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { apiPost } from "@/lib/api-client";
 import { SetupBanner } from "@/components/SetupBanner";
+import { unreadBadge } from "@/lib/chat";
 import { CurrentUserProvider, useCurrentUser } from "@/lib/current-user";
+import { useInboxSummary } from "@/lib/use-inbox-summary";
 import type { Capability, User } from "@/lib/types";
 
 interface NavItem {
@@ -38,6 +40,7 @@ function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, can } = useCurrentUser();
+  const inbox = useInboxSummary();
 
   // The most specific matching item is the active one, so /documents/history
   // doesn't also light up «ساخت مستند» (whose href is a prefix of it).
@@ -95,7 +98,17 @@ function Sidebar() {
                   : "text-slate-300 hover:bg-slate-800"
               }`}
             >
-              {item.label}
+              <span className="flex items-center justify-between">
+                {item.label}
+                {item.href === "/inbox" && unreadBadge(inbox?.total ?? 0) && (
+                  <span
+                    className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    aria-label={`${inbox?.total} مورد در کارتابل`}
+                  >
+                    {unreadBadge(inbox?.total ?? 0)}
+                  </span>
+                )}
+              </span>
             </Link>
           );
         })}

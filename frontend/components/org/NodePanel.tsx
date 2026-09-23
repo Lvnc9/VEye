@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { ApiError, apiDelete, apiPatch, apiPost } from "@/lib/api-client";
+import { canOpenNodeChannel, type Conversation } from "@/lib/chat";
+import { useCurrentUser } from "@/lib/current-user";
 import { useApiQuery } from "@/lib/use-api-query";
 import {
   ORG_KIND_LABELS,
   ORG_KIND_TONE,
+  ancestorsOf,
   childKindsOf,
   initials,
   memberCaption,
@@ -55,9 +59,58 @@ export function NodePanel({
         </button>
       </header>
 
+      <GroupChat node={node} nodes={nodes} />
       <Members node={node} />
       {(node.can_add_child || node.can_edit) && <StructureActions node={node} onChanged={onStructureChanged} />}
     </aside>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Chat: open a conversation and land in the کارتابل
+// ---------------------------------------------------------------------------
+
+/** POST, then go to /inbox?c=<id>. Returns an error message, or null on success. */
+function useOpenChat() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  async function open(path: string, body: object, fallback: string): Promise<string | null> {
+    setBusy(true);
+    try {
+      const conversation = await apiPost<Conversation>(path, body);
+      router.push(`/inbox?c=${conversation.id}`);
+      return null;
+    } catch (err) {
+      setBusy(false);
+      return err instanceof ApiError ? err.message : fallback;
+    }
+  }
+  return { open, busy };
+}
+
+/** «گفتگوی گروه» — shown only where the server would let the viewer in (the rule mirrored in
+ *  lib/chat.ts for affordance; the server still decides). */
+function GroupChat({ node, nodes }: { node: OrgNode; nodes: OrgNode[] }) {
+  const { user } = useCurrentUser();
+  const { open, busy } = useOpenChat();
+  const [error, setError] = useState<string | null>(null);
+  const ancestorIds = ancestorsOf(nodes, node.id).map((n) => n.id);
+  if (!user || !canOpenNodeChannel(node, ancestorIds, user.memberships ?? [])) return null;
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => setError(await open("/chat/conversations/node/", { node: node.id }, "باز کردن گفتگو ممکن نشد."))}
+        className={`${primary} w-full py-2`}
+      >
+        {node.kind === "COMPANY" ? "گفتگوی همهٔ شرکت" : `گفتگوی گروه ${node.name}`}
+      </button>
+      {node.kind !== "COMPANY" && (
+        <p className="text-[11px] text-slate-500">این گفتگو برای مسئولان گره‌های بالادستی نیز قابل مشاهده است.</p>
+      )}
+      {error && <ErrorBanner message={error} />}
+    </div>
   );
 }
 
@@ -66,6 +119,8 @@ export function NodePanel({
 // ---------------------------------------------------------------------------
 
 function Members({ node }: { node: OrgNode }) {
+  const { user } = useCurrentUser();
+  const chat = useOpenChat();
   const [reload, setReload] = useState(0);
   const members = useApiQuery<Paginated<OrgMembership>>(`/org/nodes/${node.id}/members/?page_size=200`, reload);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +163,19 @@ function Members({ node }: { node: OrgNode }) {
                 </p>
                 <p className="truncate text-xs text-slate-500">{[m.user_title, memberCaption(m, node.name)].filter(Boolean).join(" · ")}</p>
               </div>
+              {user && m.user !== user.id && m.user_is_active && (
+                <button
+                  type="button"
+                  disabled={chat.busy}
+                  aria-label={`گفتگو با ${m.user_name}`}
+                  onClick={async () =>
+                    setError(await chat.open("/chat/conversations/direct/", { user: m.user }, "باز کردن گفتگو ممکن نشد."))
+                  }
+                  className={`${smallButton} shrink-0`}
+                >
+                  گفتگو
+                </button>
+              )}
               {node.can_manage_members && (
                 <div className="flex shrink-0 gap-1">
                   <button
