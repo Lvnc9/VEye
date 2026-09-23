@@ -12,6 +12,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import AccessLevel, AccessRoll, Capability, User
 from apps.accounts.tests import LOCMEM_CACHE, make_user
+from apps.chat.models import Conversation
 from apps.core.exceptions import ConflictError
 
 from . import bootstrap, memberships, services, tree
@@ -334,6 +335,7 @@ class CompleteTests(SetupCase):
         self.assertEqual(self.client.post(self.url_complete).status_code, 200)
 
     def test_without_a_company_it_is_a_404(self):
+        Conversation.objects.all().delete()  # every node's channel PROTECTs it
         Membership.objects.all().delete()
         Company.objects.all().delete()
         OrgNode.objects.all().delete()

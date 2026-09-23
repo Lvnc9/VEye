@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.organization",
     "apps.projects",
+    "apps.chat",
     "apps.documents",
     "apps.dashboard",
     "apps.pdfgen",
@@ -284,3 +285,6 @@ ORG_TREE_MAX_NODES = env.int("ORG_TREE_MAX_NODES", default=2000)
 # (PROJECT_MAX_OBJECTIVES, slice 8.2) is bounded the same way, mirroring `revision_limit`.
 PROJECT_MAX_MEMBERS = env.int("PROJECT_MAX_MEMBERS", default=100)
 PROJECT_MAX_OBJECTIVES = env.int("PROJECT_MAX_OBJECTIVES", default=200)
+
+# Chat (Phase 9): per-user limit on opening DMs (a rate-limited request is a 403, like login/verify).
+CHAT_OPEN_DIRECT_RATELIMIT_RATE = env("CHAT_OPEN_DIRECT_RATELIMIT_RATE", default="30/m")

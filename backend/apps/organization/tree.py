@@ -24,6 +24,8 @@ from rest_framework.exceptions import NotFound, ValidationError
 from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_search_term, normalize_title
 
+from apps.chat import services as chat
+
 from .models import ALLOWED_PARENT_KINDS, NODE_NAME_CONSTRAINT, OrgNode, OrgNodeKind
 from .setup_state import STEP_FOR_NODE_KIND, advance_step
 
@@ -117,6 +119,8 @@ def _insert(*, kind: str, parent: OrgNode | None, name: str, key: str, created_b
         node.save()
     node.path = (parent.path if parent else "") + _segment(node.pk)
     node.save(update_fields=["path"])
+    # Every node has its group channel from birth, in the node's own transaction (docs/11 §2.6).
+    chat.create_node_conversation(node)
     return node
 
 
@@ -245,11 +249,13 @@ def unarchive_node(node: OrgNode) -> OrgNode:
 
 
 def node_blockers(node: OrgNode) -> dict[str, int]:
-    """What stops a node being deleted, as counts. (Conversations join in Phase 9.)"""
+    """What stops a node being deleted, as counts. Its channel blocks only once someone has
+    written in it (owner's decision: no chat history is ever deleted — archive instead)."""
     return {
         "children": node.children.count(),
         "members": node.memberships.count(),
         "projects": node.projects.count(),
+        "messages": chat.node_message_count(node),
     }
 
 
@@ -266,4 +272,5 @@ def delete_node(node: OrgNode) -> None:
             code="node_not_empty",
             **blockers,
         )
+    chat.delete_node_conversations(node)
     node.delete()

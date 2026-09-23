@@ -8,6 +8,7 @@ urlpatterns = [
     path("api/v1/", include("apps.accounts.urls")),
     path("api/v1/", include("apps.organization.urls")),
     path("api/v1/", include("apps.projects.urls")),
+    path("api/v1/", include("apps.chat.urls")),
     # pdfgen first: its documents/bulk-print/ must win over the documents router's documents/<pk>/.
     path("api/v1/", include("apps.pdfgen.urls")),
     path("api/v1/", include("apps.documents.urls")),
