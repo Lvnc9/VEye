@@ -25,7 +25,7 @@ function navItemsFor(user: User | null): NavItem[] {
     { href: "/dashboard", label: "داشبورد", ready: true },
     { href: "/inbox", label: "کارتابل", ready: false },
     { href: "/organization", label: user?.company?.name ?? "ساختار سازمان", ready: true },
-    { href: "/projects", label: "پروژه‌ها", ready: false },
+    { href: "/projects", label: "پروژه‌ها", ready: true },
     { href: "/documents", label: "ساخت مستند", ready: true },
     { href: "/documents/history", label: "سوابق مستندات", ready: true },
     { href: "/personnel/register", label: "ثبت پرسنل", ready: true, capability: "manage_personnel" },
