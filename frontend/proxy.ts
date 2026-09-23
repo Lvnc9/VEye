@@ -26,7 +26,7 @@ function isPublicPath(pathname: string): boolean {
 }
 
 export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
 
   if (isPublicPath(pathname)) {
     return NextResponse.next();
@@ -37,8 +37,10 @@ export function proxy(request: NextRequest) {
 
   if (!accessToken && !refreshToken) {
     const loginUrl = new URL("/login", request.url);
+    // Keep the query too: on /inbox?c=42 it is the open conversation, and the login page's
+    // safeNextPath decides whether the whole thing is a safe place to return to.
     if (pathname !== "/") {
-      loginUrl.searchParams.set("next", pathname);
+      loginUrl.searchParams.set("next", pathname + search);
     }
     return NextResponse.redirect(loginUrl);
   }

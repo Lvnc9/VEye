@@ -8,6 +8,21 @@ describe("safeNextPath", () => {
     expect(safeNextPath("/projects?status=active#top")).toBe("/projects?status=active#top");
   });
 
+  it("keeps the کارتابل's open conversation and tab (the ?next= proxy.ts now sends)", () => {
+    expect(safeNextPath("/inbox?c=42")).toBe("/inbox?c=42");
+    expect(safeNextPath("/inbox?tab=awaiting")).toBe("/inbox?tab=awaiting");
+    // What the login page actually receives: proxy.ts sets it with searchParams, so it arrives encoded.
+    const next = new URL("http://veye.invalid/login?next=" + encodeURIComponent("/inbox?c=42&tab=awaiting"));
+    expect(safeNextPath(next.searchParams.get("next"))).toBe("/inbox?c=42&tab=awaiting");
+  });
+
+  it("a query string does not make an unsafe next safe", () => {
+    for (const raw of ["//evil.example?c=42", "https://evil.example/inbox?c=42", "/\\evil.example?c=42", "/inbox?c=4\n2"]) {
+      expect(safeNextPath(raw), raw).toBe(DEFAULT_AFTER_LOGIN);
+    }
+    expect(safeNextPath("/login?c=42")).toBe(DEFAULT_AFTER_LOGIN);
+  });
+
   it("falls back to the dashboard when there is nothing, or it is not a path", () => {
     for (const raw of [null, undefined, "", "dashboard", "documents", "?next=/x"]) {
       expect(safeNextPath(raw)).toBe(DEFAULT_AFTER_LOGIN);
