@@ -291,3 +291,5 @@ CHAT_OPEN_DIRECT_RATELIMIT_RATE = env("CHAT_OPEN_DIRECT_RATELIMIT_RATE", default
 CHAT_SEND_RATELIMIT_RATE = env("CHAT_SEND_RATELIMIT_RATE", default="60/m")
 CHAT_PAGE_SIZE = env.int("CHAT_PAGE_SIZE", default=50)
 CHAT_MAX_PAGE_SIZE = env.int("CHAT_MAX_PAGE_SIZE", default=200)
+# کارتابل «منتظر اقدام»: an open ریزهدف counts from this many days before its deadline.
+INBOX_DUE_SOON_DAYS = env.int("INBOX_DUE_SOON_DAYS", default=3)

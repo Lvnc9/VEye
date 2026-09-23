@@ -1,5 +1,9 @@
+from datetime import timedelta
+
+from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Count, Q
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -75,6 +79,46 @@ AWAITING_LIST_SIZE = 20
 AWAITING_SCAN_LIMIT = 500
 
 
+def awaiting_documents(user) -> tuple[int, dict, list]:
+    """Documents waiting for this person's step: (count, count per step, the first
+    AWAITING_LIST_SIZE rows). Shared by the card and the کارتابل badge so the two never disagree."""
+    wanted = Q(pk__in=[])
+    if user.has_capability(Capability.CREATE_DOCUMENT):
+        wanted |= Q(status=DocumentStatus.DRAFT, content_saved_at__isnull=False, created_by=user)
+    if user.has_capability(Capability.CONFIRM_DOCUMENT):
+        wanted |= Q(status=DocumentStatus.AWAITING_CONFIRMATION)
+    if user.has_capability(Capability.APPROVE_DOCUMENT):
+        wanted |= Q(status=DocumentStatus.AWAITING_APPROVAL)
+
+    candidates = (
+        Document.objects.filter(wanted)
+        .prefetch_related("signoffs")
+        .order_by("updated_at", "id")[:AWAITING_SCAN_LIMIT]
+    )
+    by_step = {step: 0 for step in workflow.STEP_LABELS}
+    items = []
+    for document in candidates:
+        flow = workflow.next_step_for(document, user)
+        if not flow["can_act"]:
+            continue
+        by_step[flow["step"]] += 1
+        if len(items) < AWAITING_LIST_SIZE:
+            items.append(
+                {
+                    "id": document.pk,
+                    "full_code": document.full_code,
+                    "title": document.title,
+                    "status": document.status,
+                    "status_label": document.get_status_display(),
+                    "step": flow["step"],
+                    "step_label": workflow.STEP_LABELS[flow["step"]],
+                    # The status last changed when the document last changed hands.
+                    "waiting_since": document.updated_at,
+                }
+            )
+    return sum(by_step.values()), by_step, items
+
+
 class DashboardAwaitingView(APIView):
     """GET /dashboard/awaiting/ — documents waiting for the signed-in user's step.
 
@@ -87,39 +131,67 @@ class DashboardAwaitingView(APIView):
     """
 
     def get(self, request):
-        user = request.user
-        wanted = Q(pk__in=[])
-        if user.has_capability(Capability.CREATE_DOCUMENT):
-            wanted |= Q(status=DocumentStatus.DRAFT, content_saved_at__isnull=False, created_by=user)
-        if user.has_capability(Capability.CONFIRM_DOCUMENT):
-            wanted |= Q(status=DocumentStatus.AWAITING_CONFIRMATION)
-        if user.has_capability(Capability.APPROVE_DOCUMENT):
-            wanted |= Q(status=DocumentStatus.AWAITING_APPROVAL)
+        count, by_step, items = awaiting_documents(request.user)
+        return Response({"count": count, "by_step": by_step, "items": items})
 
-        candidates = (
-            Document.objects.filter(wanted)
-            .prefetch_related("signoffs")
-            .order_by("updated_at", "id")[:AWAITING_SCAN_LIMIT]
+
+#: How many objectives «منتظر اقدام» lists.
+INBOX_OBJECTIVES_SIZE = 20
+
+
+class DashboardInboxView(APIView):
+    """GET /dashboard/inbox/ — the کارتابل in numbers, for the sidebar badge (polled), plus the
+    ریزهدف rows of the «منتظر اقدام» tab.
+
+      unread_messages     unread across everything «گفتگوها» lists (chat/queries.py's definition)
+      awaiting_documents  the same count as /dashboard/awaiting/
+      due_objectives      open ریزهدف assigned to me, in live projects, due within
+                          INBOX_DUE_SOON_DAYS days or already overdue
+      total               the three added — the badge
+
+    Chat and projects are imported inside the view (deferred): the dashboard must not become a hub
+    that every app's import graph passes through.
+    """
+
+    def get(self, request):
+        from apps.chat.access import chat_access_for
+        from apps.chat.queries import unread_total
+        from apps.projects.models import CLOSED_OBJECTIVE_STATUSES, Objective
+
+        user = request.user
+        unread = unread_total(chat_access_for(request).listed_conversations(), user)
+        documents, _, _ = awaiting_documents(user)
+
+        today = timezone.localdate()
+        horizon = today + timedelta(days=settings.INBOX_DUE_SOON_DAYS)
+        due = (
+            Objective.objects.filter(
+                assignee__user=user, due_on__lte=horizon, project__archived_at__isnull=True
+            )
+            .exclude(status__in=CLOSED_OBJECTIVE_STATUSES)
+            .select_related("project")
+            .order_by("due_on", "id")
         )
-        by_step = {step: 0 for step in workflow.STEP_LABELS}
-        items = []
-        for document in candidates:
-            flow = workflow.next_step_for(document, user)
-            if not flow["can_act"]:
-                continue
-            by_step[flow["step"]] += 1
-            if len(items) < AWAITING_LIST_SIZE:
-                items.append(
-                    {
-                        "id": document.pk,
-                        "full_code": document.full_code,
-                        "title": document.title,
-                        "status": document.status,
-                        "status_label": document.get_status_display(),
-                        "step": flow["step"],
-                        "step_label": workflow.STEP_LABELS[flow["step"]],
-                        # The status last changed when the document last changed hands.
-                        "waiting_since": document.updated_at,
-                    }
-                )
-        return Response({"count": sum(by_step.values()), "by_step": by_step, "items": items})
+        rows = list(due[: INBOX_OBJECTIVES_SIZE + 1])
+        due_count = due.count() if len(rows) > INBOX_OBJECTIVES_SIZE else len(rows)
+        objectives = [
+            {
+                "id": objective.pk,
+                "title": objective.title,
+                "project": {"id": objective.project_id, "name": objective.project.name},
+                "due_on": objective.due_on,
+                "status": objective.status,
+                "status_label": objective.get_status_display(),
+                "is_overdue": objective.due_on < today,
+            }
+            for objective in rows[:INBOX_OBJECTIVES_SIZE]
+        ]
+        return Response(
+            {
+                "unread_messages": unread,
+                "awaiting_documents": documents,
+                "due_objectives": due_count,
+                "total": unread + documents + due_count,
+                "objectives": objectives,
+            }
+        )

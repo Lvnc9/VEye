@@ -117,3 +117,107 @@ class AwaitingCardTests(TestCase):
         nobody = user("8400000005", "NONE")
         self.doc(DocumentStatus.AWAITING_CONFIRMATION)
         self.assertEqual(self.card(nobody).data, {"count": 0, "by_step": {"submit": 0, "confirm": 0, "approve": 0}, "items": []})
+
+
+@override_settings(CACHES=LOCMEM, INBOX_DUE_SOON_DAYS=3)
+class InboxBadgeTests(TestCase):
+    """GET /dashboard/inbox/ (Phase 9.3): the کارتابل badge — unread chat + documents awaiting my step
+    + my ریزهدف due soon or overdue — and the ریزهدف rows of «منتظر اقدام»."""
+
+    def setUp(self):
+        from apps.chat.tests import ChatWorld
+
+        cache.clear()
+        world = ChatWorld()
+        world.build_world()
+        self.w = world
+        self.today = timezone.localdate()
+
+    def inbox(self, who):
+        client = APIClient()
+        client.force_authenticate(who)
+        return client.get(reverse("dashboard-inbox"))
+
+    def project_with(self, assignee, *days_from_today, section=None):
+        from apps.projects import services as projects
+        from apps.projects.models import Objective
+
+        project = projects.create_project(
+            actor=self.w.s1a, section=section or self.w.s1, name=f"پروژه {Objective.objects.count()}",
+            members=[{"user": assignee}],
+            objectives=[
+                {"title": f"ریزهدف {i}", "assignee": assignee, "due_on": self.today + timedelta(days=30)}
+                for i, _ in enumerate(days_from_today)
+            ],
+        )
+        for objective, days in zip(project.objectives.order_by("id"), days_from_today):
+            Objective.objects.filter(pk=objective.pk).update(due_on=self.today + timedelta(days=days))
+        return project
+
+    def test_requires_authentication(self):
+        self.assertEqual(APIClient().get(reverse("dashboard-inbox")).status_code, 401)
+
+    def test_nothing_to_do_is_all_zeros(self):
+        data = self.inbox(self.w.nobody).data
+        self.assertEqual(
+            {k: data[k] for k in ("unread_messages", "awaiting_documents", "due_objectives", "total")},
+            {"unread_messages": 0, "awaiting_documents": 0, "due_objectives": 0, "total": 0},
+        )
+        self.assertEqual(data["objectives"], [])
+
+    def test_unread_messages_follow_chats_own_definition(self):
+        from apps.chat import services as chat
+        from apps.chat.tests import channel
+
+        dm, _ = chat.open_direct(actor=self.w.s1a, other=self.w.s1b)
+        chat.send_message(dm, sender=self.w.s1a, body="یک")
+        chat.send_message(channel(self.w.s1), sender=self.w.s1a, body="دو")
+        chat.send_message(channel(self.w.u2), sender=self.w.u2m, body="not theirs")
+        self.assertEqual(self.inbox(self.w.s1b).data["unread_messages"], 2)
+        self.assertEqual(self.inbox(self.w.s1a).data["unread_messages"], 0)  # their own words
+        self.assertEqual(self.inbox(self.w.ceo).data["unread_messages"], 0)  # not in the ceo's DMs; S1 not opened
+
+    def test_awaiting_documents_is_the_same_number_as_the_card(self):
+        confirmer = user("8400000013", AccessRoll.HEADQUARTERS)
+        author = user("8400000014", AccessRoll.GUILD)
+        doc = Document.objects.create(
+            category=DocumentCategory.INSIDE, title="سند", group=DocumentGroup.PROCEDURE, number=1, revision=1,
+            status=DocumentStatus.AWAITING_CONFIRMATION, created_by=author, content_saved_at=timezone.now(),
+        )
+        SignOff.objects.create(document=doc, role=SignOffRole.CREATER, name=author.full_name, position="س", signed_by=author)
+        client = APIClient()
+        client.force_authenticate(confirmer)
+        card = client.get(reverse("dashboard-awaiting")).data["count"]
+        self.assertEqual((card, self.inbox(confirmer).data["awaiting_documents"]), (1, 1))
+
+    def test_due_objectives_are_mine_open_live_and_due_within_the_window_or_overdue(self):
+        from apps.projects import services as projects
+        from apps.projects.models import Objective, ObjectiveStatus
+
+        mine = self.project_with(self.w.s1b, -2, 0, 3, 4)                # overdue, today, edge, too far
+        self.project_with(self.w.s1a, 1)                                  # someone else's
+        done = self.project_with(self.w.s1b, 1)
+        Objective.objects.filter(project=done).update(status=ObjectiveStatus.DONE)
+        cancelled = self.project_with(self.w.s1b, 1)
+        Objective.objects.filter(project=cancelled).update(status=ObjectiveStatus.CANCELLED)
+        archived = self.project_with(self.w.s1b, 1)
+        projects.archive_project(archived, actor=self.w.s1a)
+
+        data = self.inbox(self.w.s1b).data
+        self.assertEqual(data["due_objectives"], 3)
+        self.assertEqual([o["title"] for o in data["objectives"]], ["ریزهدف 0", "ریزهدف 1", "ریزهدف 2"])
+        self.assertEqual([o["is_overdue"] for o in data["objectives"]], [True, False, False])
+        self.assertEqual(data["objectives"][0]["project"], {"id": mine.pk, "name": mine.name})
+        self.assertEqual(data["objectives"][0]["status_label"], "انجام نشده")
+
+    def test_the_badge_is_the_sum_and_the_list_is_capped_but_the_count_is_not(self):
+        from apps.chat import services as chat
+
+        dm, _ = chat.open_direct(actor=self.w.s1a, other=self.w.s1b)
+        chat.send_message(dm, sender=self.w.s1a, body="یک")
+        with mock.patch("apps.dashboard.views.INBOX_OBJECTIVES_SIZE", 2):
+            self.project_with(self.w.s1b, 0, 1, 2)
+            data = self.inbox(self.w.s1b).data
+        self.assertEqual((data["due_objectives"], len(data["objectives"])), (3, 2))
+        self.assertEqual(data["total"], data["unread_messages"] + data["awaiting_documents"] + data["due_objectives"])
+        self.assertEqual(data["total"], 4)
