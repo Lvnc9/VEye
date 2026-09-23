@@ -23,7 +23,7 @@ interface NavItem {
 function navItemsFor(user: User | null): NavItem[] {
   return [
     { href: "/dashboard", label: "داشبورد", ready: true },
-    { href: "/inbox", label: "کارتابل", ready: false },
+    { href: "/inbox", label: "کارتابل", ready: true },
     { href: "/organization", label: user?.company?.name ?? "ساختار سازمان", ready: true },
     { href: "/projects", label: "پروژه‌ها", ready: true },
     { href: "/documents", label: "ساخت مستند", ready: true },
