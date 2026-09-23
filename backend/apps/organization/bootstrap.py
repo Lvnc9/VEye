@@ -24,6 +24,10 @@ The manager is کارفرمایی / لول ۱ with no choice offered, so they in
 `FULL_ACCESS_POSITIONS`, present and future. `is_superuser` is deliberately not set: that is a
 Django-admin concept, and the roll already grants everything in-app.
 
+**Starting from a session** (`POST /setup/start/`, decided with the owner 2026-09-23): a signed-in
+active کارفرمایی / لول ۱ needs no setup token — being signed in as that person proves more than the
+token does. They are promoted *themselves* through the very same path below, never anyone else.
+
 **Promoting an existing manager** (the importer path, where users exist but no Company) never sets
 or reads a password: an unauthenticated endpoint that could rewrite an account's password would be
 a privilege-escalation hole even behind a token. The view also issues *no session* for that path —
@@ -47,6 +51,10 @@ User = get_user_model()
 #: Constraints whose violation means "someone else bootstrapped first".
 _ALREADY_BOOTSTRAPPED = {"uniq_company_root_node", "organization_company_pkey"}
 _NATIONAL_CODE_UNIQUE = "accounts_user_national_code_key"
+
+#: Who may be the company's مدیر عامل: an active کارفرمایی / لول ۱ — never the importer's inactive
+#: `import_user`.
+_MANAGER = {"is_active": True, "access_roll": AccessRoll.EMPLOYER, "access_level": AccessLevel.LEVEL_1}
 
 
 @dataclass(frozen=True)
@@ -116,21 +124,17 @@ def _bootstrap(company_name, manager, existing_national_code) -> BootstrapResult
 def _eligible_manager(national_code: str):
     """An active کارفرمایی / لول ۱ — never the importer's inactive `import_user`. One answer for
     "no such person" and "not eligible", so it says nothing about which national codes exist."""
-    user = (
-        User.objects.select_for_update()
-        .filter(
-            national_code=national_code,
-            is_active=True,
-            access_roll=AccessRoll.EMPLOYER,
-            access_level=AccessLevel.LEVEL_1,
-        )
-        .first()
-    )
+    user = User.objects.select_for_update().filter(national_code=national_code, **_MANAGER).first()
     if user is None:
         raise ConflictError(
             "این کد ملی متعلق به یک مدیر عامل فعال نیست.", code="manager_not_eligible"
         )
     return user
+
+
+def is_eligible_manager(user) -> bool:
+    """The signed-in side of the same rule `_eligible_manager` applies inside the transaction."""
+    return all(getattr(user, field, None) == value for field, value in _MANAGER.items())
 
 
 def complete_setup() -> None:
@@ -156,8 +160,6 @@ def setup_status() -> dict:
     company = Company.objects.only("setup_step").first()
     return {
         "needed": company is None,
-        "has_users": User.objects.filter(
-            is_active=True, access_roll=AccessRoll.EMPLOYER, access_level=AccessLevel.LEVEL_1
-        ).exists(),
+        "has_users": User.objects.filter(**_MANAGER).exists(),
         "step": company.setup_step if company else None,
     }

@@ -89,10 +89,12 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: BodyInit | null;
   /** Internal: prevents infinite refresh loops. */
   _isRetry?: boolean;
+  /** A dead session is an answer (a 401 ApiError), not a trip to /login — see apiGetIfSignedIn. */
+  noLoginRedirect?: boolean;
 }
 
 async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { params, _isRetry, ...init } = options;
+  const { params, _isRetry, noLoginRedirect, ...init } = options;
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
 
@@ -121,7 +123,7 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
     if (refreshed) {
       return apiRequest<T>(path, { ...options, _isRetry: true });
     }
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && !noLoginRedirect) {
       // Deliberate full-page navigation: a dead session should drop all client state.
       window.location.href = loginRedirectUrl(window.location.pathname, window.location.search);
     }
@@ -151,6 +153,19 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
 
 export function apiGet<T>(path: string, params?: QueryParams): Promise<T> {
   return apiRequest<T>(path, { method: "GET", params });
+}
+
+/**
+ * A GET on a public page that works for visitors *and* signed-in users (the /setup wizard): the same
+ * silent refresh, but no session means `null` instead of a redirect to /login.
+ */
+export async function apiGetIfSignedIn<T>(path: string): Promise<T | null> {
+  try {
+    return await apiRequest<T>(path, { method: "GET", noLoginRedirect: true });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) return null;
+    throw err;
+  }
 }
 
 export function apiPost<T>(path: string, body?: unknown, extra?: { headers?: HeadersInit }): Promise<T> {

@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { OrgTreeList } from "@/components/OrgTreeList";
 import { AccountStep } from "@/components/setup/AccountStep";
 import { CompanyStep } from "@/components/setup/CompanyStep";
 import { ReadyStep } from "@/components/setup/ReadyStep";
 import { SectionsStep } from "@/components/setup/SectionsStep";
+import { StartSetupButton } from "@/components/setup/StartSetupButton";
 import { UnitsStep } from "@/components/setup/UnitsStep";
 import { DarkError, StepCard, primaryButton } from "@/components/setup/ui";
+import { apiGetIfSignedIn } from "@/lib/api-client";
 import { useApiQuery } from "@/lib/use-api-query";
 import type { Company, OrgTreeResponse } from "@/lib/organization";
 import { CHART_STEPS, wizardStepFor, type WizardStep } from "@/lib/setup";
@@ -43,13 +45,44 @@ export function SetupWizard() {
           <DarkError message={status.error ?? "دریافت وضعیت راه‌اندازی ممکن نشد."} />
         ) : status.data.needed ? (
           <div className="mx-auto max-w-xl">
-            <AccountStep status={status.data} onDone={refresh} />
+            <FirstStep status={status.data} onDone={refresh} />
           </div>
         ) : (
           <SignedInWizard status={status.data} reload={reload} refresh={refresh} />
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * No company yet. A signed-in مدیر عامل gets one button and no setup token (decided with the owner
+ * 2026-09-23); a visitor with no session — a fresh install, where nobody can sign in yet — gets the
+ * token form. The session check must not bounce that visitor to /login, hence apiGetIfSignedIn.
+ */
+function FirstStep({ status, onDone }: { status: SetupStatus; onDone: () => void }) {
+  const [me, setMe] = useState<User | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiGetIfSignedIn<User>("/auth/me/")
+      .then((user) => !cancelled && setMe(user))
+      .catch(() => !cancelled && setMe(null));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (me === undefined) return <p className="text-sm text-slate-400">در حال بارگذاری...</p>;
+  if (!me || !hasCapability(me, "manage_organization")) return <AccountStep status={status} onDone={onDone} />;
+
+  return (
+    <StepCard
+      title="راه‌اندازی شرکت"
+      intro={`با حساب ${me.full_name} وارد شده‌اید؛ شما مدیر عامل و ریشهٔ ساختار سازمان خواهید بود. در گام بعد نام شرکت، لوگو و حوزه‌ها را تعیین می‌کنید.`}
+    >
+      <StartSetupButton onStarted={onDone} className={`${primaryButton} w-full`} errorClassName="text-sm text-red-300" />
+    </StepCard>
   );
 }
 

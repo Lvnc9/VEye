@@ -301,6 +301,75 @@ class PromoteExistingManagerTests(SetupCase):
         self.assertEqual(self.promote("۲۰۰۰۰۰۰۰۰۱").status_code, 201)
 
 
+class SetupStartTests(SetupCase):
+    """`POST /setup/start/`: the signed-in مدیر عامل's one button — no token (decided 2026-09-23)."""
+
+    def setUp(self):
+        super().setUp()
+        self.start_url = reverse("setup-start")
+        self.boss = make_user("2000000001", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1, password="their-own-pass-1")
+
+    def start(self, user=None, body=None):
+        self.client.force_authenticate(user or self.boss)
+        return self.client.post(self.start_url, body or {}, format="json")
+
+    @override_settings(SETUP_TOKEN="")
+    def test_the_manager_starts_setup_with_no_token_even_when_none_is_configured(self):
+        before = self.boss.password
+        response = self.start()
+        self.assertEqual(response.status_code, 201, response.data)
+        company = Company.objects.get()
+        self.assertEqual((company.root.name, company.setup_step), ("شرکت من", SetupStep.DOMAINS))
+        membership = Membership.objects.get()
+        self.assertEqual((membership.user, membership.node, membership.is_lead, membership.is_primary),
+                         (self.boss, company.root, True, True))
+        self.assertEqual(User.objects.count(), 1)
+        self.boss.refresh_from_db()
+        self.assertEqual(self.boss.password, before)
+        self.assertEqual(response.data["user"]["id"], self.boss.id)
+        self.assertEqual(response["Cache-Control"], "no-store")
+
+    def test_a_company_name_can_be_given(self):
+        self.assertEqual(self.start(body={"company_name": "  وپورویر "}).status_code, 201)
+        self.assertEqual(Company.objects.get().root.name, "وپورویر")
+
+    def test_it_needs_a_session(self):
+        self.assertEqual(self.client.post(self.start_url, {}, format="json").status_code, 401)
+        self.nothing_was_created()
+
+    def test_only_an_active_managing_director_may_start_and_it_is_a_persian_403(self):
+        for user in (
+            make_user("2000000002", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2),
+            make_user("2000000003", AccessRoll.GUILD, AccessLevel.LEVEL_3),
+            make_user("2000000004", AccessRoll.HEADQUARTERS, AccessLevel.LEVEL_1),
+        ):
+            with self.subTest(user=user.national_code):
+                response = self.start(user)
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(str(response.data["detail"]), "راه‌اندازی را فقط مدیر عامل می‌تواند شروع کند.")
+        self.nothing_was_created()
+
+    def test_it_cannot_name_somebody_else_as_manager(self):
+        other = make_user("2000000009", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
+        body = {"existing_manager_national_code": other.national_code, "manager": dict(MANAGER)}
+        self.assertEqual(self.start(body=body).status_code, 201)
+        self.assertEqual(Membership.objects.get().user, self.boss)
+        self.assertFalse(User.objects.filter(national_code="1234567890").exists())
+
+    def test_a_second_start_is_a_409_and_the_token_door_stays_shut_too(self):
+        self.assertEqual(self.start().status_code, 201)
+        again = self.start()
+        self.assertEqual((again.status_code, again.data["code"]), (409, "already_bootstrapped"))
+        self.client.force_authenticate(None)
+        self.assertEqual(self.post().status_code, 409)
+        self.assertEqual(Company.objects.count(), 1)
+
+    def test_a_session_is_not_a_way_around_the_token_on_the_bootstrap_endpoint(self):
+        self.client.force_authenticate(self.boss)
+        self.assertEqual(self.post(token=None).status_code, 403)
+        self.nothing_was_created()
+
+
 class CompleteTests(SetupCase):
     def setUp(self):
         super().setUp()

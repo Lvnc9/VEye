@@ -19,7 +19,9 @@ interface BootstrapResponse {
 }
 
 /**
- * Step 0: the one-time setup token, the company's name, and the مدیر عامل account.
+ * Step 0 for a visitor with no session (a fresh install): the one-time setup token, the company's
+ * name, and the مدیر عامل account. A signed-in مدیر عامل never sees this — SetupWizard's FirstStep
+ * gives them StartSetupButton instead.
  *
  * The password fields are for a *new* account only. Where an active مدیر عامل already exists the
  * wizard offers to promote them instead: that never sets a password and never signs anyone in, so
@@ -73,6 +75,16 @@ export function AccountStep({ status, onDone }: { status: SetupStatus; onDone: (
       title="ایجاد حساب مدیر عامل"
       intro="توکن راه‌اندازی را از فایل تنظیمات سرور (VEYE_SETUP_TOKEN) بردارید. پس از پایان کار، آن را از سرور حذف کنید."
     >
+      {status.has_users && (
+        <p className="rounded-lg border border-line px-3.5 py-2.5 text-sm leading-7 text-slate-300">
+          حساب مدیر عامل دارید؟{" "}
+          <Link href="/login?next=%2Fsetup" className="font-medium text-accent hover:underline">
+            وارد شوید
+          </Link>{" "}
+          تا بدون توکن راه‌اندازی کنید.
+        </p>
+      )}
+
       <form onSubmit={submit} className="space-y-5" noValidate>
         {serverError && <DarkError message={serverError} />}
 

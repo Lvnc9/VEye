@@ -1,5 +1,6 @@
-"""The first-run endpoints: `setup/status/` (public), `setup/bootstrap/` (setup token) and
-`setup/complete/` (the new مدیر عامل's session). See bootstrap.py for the rules."""
+"""The first-run endpoints: `setup/status/` (public), `setup/bootstrap/` (setup token — a fresh
+install, where nobody can sign in yet), `setup/start/` (a signed-in مدیر عامل, no token) and
+`setup/complete/` (the مدیر عامل's session). See bootstrap.py for the rules."""
 import hmac
 
 from django.conf import settings
@@ -147,6 +148,41 @@ class SetupBootstrapView(APIView):
             refresh = RefreshToken.for_user(result.user)
             set_jwt_cookies(response, str(refresh.access_token), str(refresh))
             get_token(request)
+        response["Cache-Control"] = "no-store"
+        return response
+
+
+#: The root's name when the مدیر عامل just presses «شروع راه‌اندازی»; the wizard's first step
+#: («شرکت و حوزه‌ها») opens on it for editing.
+DEFAULT_COMPANY_NAME = "شرکت من"
+
+
+class StartSerializer(serializers.Serializer):
+    company_name = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+
+
+class SetupStartView(APIView):
+    """`POST /setup/start/` — the signed-in مدیر عامل starts setup with one button, no token.
+
+    Decided with the owner (2026-09-23): the token guards a fresh install, where nobody can sign in;
+    a session of an active کارفرمایی / لول ۱ proves more than it. The caller becomes the root lead
+    *themselves* (the promotion path, so no password is touched and no new session is issued) —
+    there is no way to name somebody else here. Anyone else signed in is a 403."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = StartSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if not bootstrap.is_eligible_manager(request.user):
+            raise PermissionDenied("راه‌اندازی را فقط مدیر عامل می‌تواند شروع کند.")
+
+        result = bootstrap.bootstrap(
+            company_name=serializer.validated_data["company_name"].strip() or DEFAULT_COMPANY_NAME,
+            existing_manager_national_code=request.user.national_code,
+        )
+        body = {"company": company_payload(result.company, request), "user": UserSerializer(result.user).data}
+        response = Response(body, status=status.HTTP_201_CREATED)
         response["Cache-Control"] = "no-store"
         return response
 
