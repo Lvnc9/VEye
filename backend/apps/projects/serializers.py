@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.documents.models import Document
 from apps.organization.models import OrgNode
 
 from .access import can_manage_project
@@ -10,6 +11,8 @@ from .models import (
     Objective,
     ObjectiveStatus,
     Project,
+    ProjectComment,
+    ProjectDocumentLink,
     ProjectMember,
     ProjectRole,
     ProjectStatus,
@@ -172,3 +175,52 @@ class MemberCreateSerializer(serializers.Serializer):
 
 class MemberUpdateSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=ProjectRole.choices)
+
+
+class ProjectCommentSerializer(serializers.ModelSerializer):
+    """A human note on a project or on one of its objectives. `author` is the person's user id (or
+    null once they are deactivated and the FK has gone through `SET_NULL`); `author_name`/
+    `author_title` are the durable, always-present snapshot. `can_delete` mirrors the one rule the
+    view enforces: **the author only, no exception** — not the project's manager, not مدیر عامل."""
+
+    can_delete = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectComment
+        fields = ["id", "objective", "author", "author_name", "author_title", "body", "created_at", "can_delete"]
+        read_only_fields = fields
+
+    def get_can_delete(self, comment) -> bool:
+        return comment.author_id == self.context["request"].user.pk
+
+
+class CommentCreateSerializer(serializers.Serializer):
+    body = serializers.CharField()
+    #: A comment on the project as a whole when omitted; the service checks it belongs to this project.
+    objective = serializers.PrimaryKeyRelatedField(
+        queryset=Objective.objects.all(), required=False, allow_null=True, default=None
+    )
+
+
+class ProjectDocumentLinkSerializer(serializers.ModelSerializer):
+    """`document` is exposed by id only — the register itself already carries the rest (title,
+    full_code, status); duplicating that here would be a second place for it to go stale."""
+
+    document_full_code = serializers.CharField(source="document.full_code", read_only=True)
+    document_title = serializers.CharField(source="document.title", read_only=True)
+    linked_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectDocumentLink
+        fields = [
+            "id", "document", "document_full_code", "document_title", "caption", "linked_by_name", "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_linked_by_name(self, link) -> str:
+        return link.linked_by.full_name if link.linked_by_id else ""
+
+
+class DocumentLinkCreateSerializer(serializers.Serializer):
+    document = serializers.PrimaryKeyRelatedField(queryset=Document.objects.all())
+    caption = serializers.CharField(required=False, allow_blank=True, default="")

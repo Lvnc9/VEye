@@ -11,16 +11,20 @@ from apps.core.text import normalize_search_term
 
 from . import services
 from .access import CanManageProject, can_create_project, can_manage_project, visible_projects
-from .models import Objective, ProjectMember
+from .models import Objective, ProjectComment, ProjectDocumentLink, ProjectMember
 from .queries import overdue_q, with_progress
 from .serializers import (
+    CommentCreateSerializer,
+    DocumentLinkCreateSerializer,
     MemberCreateSerializer,
     MemberUpdateSerializer,
     ObjectiveInputSerializer,
     ObjectiveSerializer,
     ObjectiveUpdateSerializer,
+    ProjectCommentSerializer,
     ProjectCreateSerializer,
     ProjectDetailSerializer,
+    ProjectDocumentLinkSerializer,
     ProjectMemberSerializer,
     ProjectSerializer,
     ProjectUpdateSerializer,
@@ -221,3 +225,87 @@ class ProjectViewSet(
         services.reorder_objectives(project, actor=request.user, ordered_ids=serializer.validated_data["order"])
         rows = project.objectives.select_related("assignee__user")
         return Response(ObjectiveSerializer(rows, many=True, context=self._objective_context(request, project)).data)
+
+    # -- comments -------------------------------------------------------------
+
+    @action(detail=True, methods=["get", "post"], url_path="comments", permission_classes=[IsAuthenticated])
+    def comments(self, request, pk=None):
+        """The project's discussion (or, with `objective`, one ریز هدف's own). Anyone who can read
+        the project may read and post — a feed with no human note is a machine log. Only a comment's
+        own author may ever delete it (see `comment` below); paginated, since a long-lived project
+        can accumulate many, unlike its (capped) objectives."""
+        project = self.get_object()
+        if request.method == "GET":
+            rows = project.comments.select_related("author", "objective").order_by("-created_at", "-id")
+            page = self.paginate_queryset(rows)
+            return self.get_paginated_response(
+                ProjectCommentSerializer(page, many=True, context=self.get_serializer_context()).data
+            )
+        serializer = CommentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        comment = services.add_comment(
+            project, actor=request.user, body=serializer.validated_data["body"],
+            objective=serializer.validated_data["objective"],
+        )
+        comment = ProjectComment.objects.select_related("author", "objective").get(pk=comment.pk)
+        return Response(
+            ProjectCommentSerializer(comment, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True, methods=["delete"], url_path=r"comments/(?P<comment_id>\d+)",
+        permission_classes=[IsAuthenticated],
+    )
+    def comment(self, request, pk=None, comment_id=None):
+        """Delete a comment — the author only, no exception: not the project's مدیر, not مدیر عامل.
+        The same "sender only" rule the chat design states for messages (docs/11 §2.6)."""
+        project = self.get_object()
+        try:
+            comment = ProjectComment.objects.get(pk=comment_id, project=project)
+        except ProjectComment.DoesNotExist:
+            raise NotFound("یادداشت یافت نشد.")
+        if comment.author_id != request.user.pk:
+            raise PermissionDenied("فقط نویسندهٔ یادداشت می‌تواند آن را حذف کند.")
+        services.remove_comment(comment, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # -- linked documents -------------------------------------------------------------
+
+    @action(detail=True, methods=["get", "post"], url_path="documents", permission_classes=[IsAuthenticated])
+    def documents(self, request, pk=None):
+        """The documents this project produced or relies on. Anyone who can read the project may
+        read the list; linking (and unlinking) needs the project's مدیر or a lead, the same as any
+        other edit to the project's own content."""
+        project = self.get_object()
+        if request.method == "GET":
+            rows = project.document_links.select_related("document", "linked_by")
+            return Response(
+                ProjectDocumentLinkSerializer(rows, many=True, context=self.get_serializer_context()).data
+            )
+        self._manager_only(request, project)
+        serializer = DocumentLinkCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        link = services.link_document(
+            project, actor=request.user, document=serializer.validated_data["document"],
+            caption=serializer.validated_data["caption"],
+        )
+        link = ProjectDocumentLink.objects.select_related("document", "linked_by").get(pk=link.pk)
+        return Response(
+            ProjectDocumentLinkSerializer(link, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True, methods=["delete"], url_path=r"documents/(?P<link_id>\d+)",
+        permission_classes=[IsAuthenticated],
+    )
+    def document_link(self, request, pk=None, link_id=None):
+        project = self.get_object()
+        self._manager_only(request, project)
+        try:
+            link = ProjectDocumentLink.objects.get(pk=link_id, project=project)
+        except ProjectDocumentLink.DoesNotExist:
+            raise NotFound("پیوند مستند یافت نشد.")
+        services.unlink_document(link, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)

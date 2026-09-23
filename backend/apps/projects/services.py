@@ -23,11 +23,19 @@ from .models import (
     Objective,
     ObjectiveStatus,
     Project,
+    ProjectComment,
+    ProjectDocumentLink,
     ProjectEvent,
     ProjectEventKind,
     ProjectMember,
     ProjectRole,
 )
+
+#: A comment is a note, not a document; bounded generously so the feed stays a feed.
+COMMENT_MAX_LENGTH = 4000
+#: How much of a comment's body a feed row previews. The comment row itself (never edited) is the
+#: source of truth; this is a cheap, never-stale snippet, not a second copy of the data.
+COMMENT_PREVIEW_LENGTH = 160
 
 User = get_user_model()
 
@@ -426,3 +434,93 @@ def reorder_objectives(project: Project, *, actor, ordered_ids: list[int]) -> No
         )
     for position, pk in enumerate(ordered_ids, start=1):
         Objective.objects.filter(pk=pk).update(position=position, updated_at=timezone.now())
+
+
+# --------------------------------------------------------------------------
+# Comments
+# --------------------------------------------------------------------------
+
+
+def _clean_body(body: str) -> str:
+    body = (body or "").strip()
+    if not body:
+        raise ValidationError({"body": ["متن یادداشت نمی‌تواند خالی باشد."]})
+    if len(body) > COMMENT_MAX_LENGTH:
+        raise ValidationError({"body": [f"متن یادداشت نباید بیش از {COMMENT_MAX_LENGTH} نویسه باشد."]})
+    return body
+
+
+@transaction.atomic
+def add_comment(project: Project, *, actor, body: str, objective: Objective | None = None) -> ProjectComment:
+    """Append-only: this is a feed, not a document. `objective`, if given, must belong to this very
+    project — the same rule `_member_of` enforces for an objective's assignee."""
+    project = _lock_project(project.pk)
+    require_writable(project)
+    body = _clean_body(body)
+    if objective is not None and objective.project_id != project.pk:
+        raise ValidationError({"objective": ["این ریزهدف متعلق به این پروژه نیست."]})
+
+    comment = ProjectComment.objects.create(
+        project=project, objective=objective, author=actor,
+        author_name=actor.full_name if actor else "", author_title=actor.title if actor else "",
+        body=body,
+    )
+    record_event(
+        project, ProjectEventKind.COMMENT_ADDED, actor,
+        objective=objective, subject_title=objective.title if objective else project.name,
+        note=body[:COMMENT_PREVIEW_LENGTH],
+    )
+    return comment
+
+
+@transaction.atomic
+def remove_comment(comment: ProjectComment, *, actor) -> None:
+    """Delete a comment. Who may call this is decided by the view (author-only, no exception — the
+    same "sender only, never a lead, never مدیر عامل" rule the chat design states for messages,
+    §2.6); this only enforces that the project is still writable and records the removal."""
+    project = _lock_project(comment.project_id)
+    require_writable(project)
+    try:
+        comment = ProjectComment.objects.get(pk=comment.pk, project=project)
+    except ProjectComment.DoesNotExist:
+        raise NotFound("یادداشت یافت نشد.")
+    subject = comment.objective.title if comment.objective_id else project.name
+    comment.delete()
+    record_event(project, ProjectEventKind.COMMENT_REMOVED, actor, subject_title=subject)
+
+
+# --------------------------------------------------------------------------
+# Linked documents
+# --------------------------------------------------------------------------
+
+
+@transaction.atomic
+def link_document(project: Project, *, actor, document, caption: str = "") -> ProjectDocumentLink:
+    project = _lock_project(project.pk)
+    require_writable(project)
+    existing = ProjectDocumentLink.objects.filter(project=project, document=document).first()
+    if existing is not None:
+        raise ConflictError(
+            "این مستند قبلاً به این پروژه پیوست شده است.", code="already_linked", existing_id=existing.pk
+        )
+    link = ProjectDocumentLink.objects.create(
+        project=project, document=document, caption=(caption or "").strip(), linked_by=actor
+    )
+    record_event(
+        project, ProjectEventKind.DOCUMENT_LINKED, actor,
+        subject_title=document.full_code, note=link.caption,
+    )
+    return link
+
+
+@transaction.atomic
+def unlink_document(link: ProjectDocumentLink, *, actor) -> None:
+    project = _lock_project(link.project_id)
+    require_writable(project)
+    try:
+        link = ProjectDocumentLink.objects.select_related("document").get(pk=link.pk, project=project)
+    except ProjectDocumentLink.DoesNotExist:
+        raise NotFound("پیوند مستند یافت نشد.")
+    full_code = link.document.full_code
+    link.delete()
+    record_event(project, ProjectEventKind.DOCUMENT_UNLINKED, actor, subject_title=full_code)

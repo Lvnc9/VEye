@@ -48,7 +48,9 @@ class ProjectEventKind(models.TextChoices):
     OBJECTIVE_DUE_CHANGED = "objective_due_changed", "مهلت ریزهدف تغییر کرد"
     OBJECTIVE_REMOVED = "objective_removed", "ریزهدف حذف شد"
     COMMENT_ADDED = "comment_added", "یادداشت افزوده شد"
+    COMMENT_REMOVED = "comment_removed", "یادداشت حذف شد"
     DOCUMENT_LINKED = "document_linked", "مستند پیوست شد"
+    DOCUMENT_UNLINKED = "document_unlinked", "پیوند مستند حذف شد"
 
 
 class Project(TimeStampedModel):
@@ -189,3 +191,58 @@ class ProjectEvent(TimeStampedModel):
 
     def __str__(self):
         return f"{self.project.name} {self.kind} by {self.actor_name}"
+
+
+class ProjectComment(TimeStampedModel):
+    """A human note on a project (or, with `objective` set, on one ریز هدف of it) — a feed with no
+    human note is a machine log; without this, people discuss the project in chat and the project
+    loses its record. Append-only: no editing, no deleting except by the author (the same "sender
+    only, never a lead" principle the chat design states for messages, §2.6).
+
+    `author_name`/`author_title` are text snapshots, the same device as every other actor field in
+    this app, so a comment keeps reading correctly after its author is deactivated or moves بخش.
+    """
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="comments")
+    #: Nullable: a comment on the project as a whole, or on one specific ریز هدف.
+    objective = models.ForeignKey(
+        Objective, null=True, blank=True, on_delete=models.SET_NULL, related_name="comments"
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    author_name = models.CharField(max_length=255)
+    author_title = models.CharField(max_length=255, blank=True)
+    body = models.TextField()
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [Index(fields=["project", "created_at"], name="projectcomment_time_idx")]
+
+    def __str__(self):
+        return f"{self.author_name} on {self.project.name}"
+
+
+class ProjectDocumentLink(TimeStampedModel):
+    """VEye *is* a document system; a project that produced PR-07 should say so.
+
+    `document` PROTECTs: a document a project points at cannot be deleted out from under the link
+    (documents are never hard-deleted in this app anyway, but the guard costs nothing and matches
+    the PROTECT convention used everywhere else a row is *referenced*, not *owned*).
+    """
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="document_links")
+    document = models.ForeignKey(
+        "documents.Document", on_delete=models.PROTECT, related_name="project_links"
+    )
+    caption = models.CharField(max_length=255, blank=True)
+    linked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [UniqueConstraint(fields=["project", "document"], name="uniq_project_document_link")]
+
+    def __str__(self):
+        return f"{self.project.name} → {self.document.full_code}"

@@ -20,6 +20,8 @@ from .models import (
     Objective,
     ObjectiveStatus,
     Project,
+    ProjectComment,
+    ProjectDocumentLink,
     ProjectEvent,
     ProjectEventKind,
     ProjectMember,
@@ -27,6 +29,7 @@ from .models import (
     ProjectStatus,
 )
 from .queries import progress_percent
+from .services import COMMENT_MAX_LENGTH
 
 
 def new_project(actor, section, name="پروژه نمونه", **kwargs):
@@ -1285,3 +1288,293 @@ class AllProjectsActivityApiTests(ProjectApiCase):
     def test_anonymous_gets_401(self):
         self.client.force_authenticate(None)
         self.assertEqual(self.client.get(self.url).status_code, 401)
+
+
+# ---------------------------------------------------------------------------
+# Slice 8.4 — comments and linked documents
+# ---------------------------------------------------------------------------
+
+
+def make_document(author, title="سند نمونه", group="FORM", category="INSIDE"):
+    from apps.documents import services as document_services
+
+    return document_services.create_document(user=author, category=category, title=title, group=group)
+
+
+class CommentServiceTests(ProjectFixtures, TestCase):
+    def setUp(self):
+        self.build_world()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.mgr_member = self.project.members.get(user=self.mgr)
+
+    def test_a_comment_is_recorded_with_a_snapshot_and_an_event(self):
+        comment = services.add_comment(self.project, actor=self.mgr, body="  یادداشت اول  ")
+        self.assertEqual((comment.body, comment.author, comment.author_name, comment.author_title, comment.objective),
+                         ("یادداشت اول", self.mgr, "مدیر پروژه", "کارمند/اپراتور", None))
+        event = self.project.events.latest("id")
+        self.assertEqual((event.kind, event.subject_title, event.note), (ProjectEventKind.COMMENT_ADDED, self.project.name, "یادداشت اول"))
+
+    def test_a_comment_may_be_attached_to_one_of_the_projects_own_objectives(self):
+        objective = add_objective(self.project, self.mgr, self.mgr_member, title="هدف")
+        comment = services.add_comment(self.project, actor=self.mgr, body="روی این کار کنید", objective=objective)
+        self.assertEqual(comment.objective, objective)
+        event = self.project.events.latest("id")
+        self.assertEqual((event.objective_id, event.subject_title), (objective.pk, "هدف"))
+
+    def test_an_objective_from_another_project_is_refused(self):
+        other = new_project(self.mgr, self.s1, "پروژهٔ دیگر")
+        foreign = add_objective(other, self.mgr, other.members.get(user=self.mgr))
+        with self.assertRaises(ValidationError) as caught:
+            services.add_comment(self.project, actor=self.mgr, body="نامعتبر", objective=foreign)
+        self.assertIn("objective", caught.exception.detail)
+        self.assertFalse(ProjectComment.objects.exists())
+
+    def test_a_blank_or_too_long_comment_is_refused(self):
+        with self.assertRaises(ValidationError):
+            services.add_comment(self.project, actor=self.mgr, body="   ")
+        with self.assertRaises(ValidationError):
+            services.add_comment(self.project, actor=self.mgr, body="خ" * (COMMENT_MAX_LENGTH + 1))
+        self.assertFalse(ProjectComment.objects.exists())
+
+    def test_comments_are_refused_on_an_archived_project(self):
+        services.archive_project(self.project, actor=self.mgr)
+        with self.assertRaises(ConflictError) as caught:
+            services.add_comment(self.project, actor=self.mgr, body="نباید ثبت شود")
+        self.assertEqual(caught.exception.payload["code"], "project_archived")
+
+    def test_removal_is_recorded_and_preserves_the_subject(self):
+        objective = add_objective(self.project, self.mgr, self.mgr_member, title="هدف حذف‌شده")
+        comment = services.add_comment(self.project, actor=self.member, body="نظر", objective=objective)
+        services.remove_comment(comment, actor=self.member)
+        self.assertFalse(ProjectComment.objects.filter(pk=comment.pk).exists())
+        event = self.project.events.latest("id")
+        self.assertEqual((event.kind, event.subject_title), (ProjectEventKind.COMMENT_REMOVED, "هدف حذف‌شده"))
+
+    def test_removal_is_refused_on_an_archived_project(self):
+        comment = services.add_comment(self.project, actor=self.mgr, body="نظر")
+        services.archive_project(self.project, actor=self.mgr)
+        with self.assertRaises(ConflictError) as caught:
+            services.remove_comment(comment, actor=self.mgr)
+        self.assertEqual(caught.exception.payload["code"], "project_archived")
+
+    def test_the_actor_is_snapshotted_and_survives_a_rename(self):
+        services.add_comment(self.project, actor=self.mgr, body="پیش از تغییر نام")
+        self.mgr.full_name = "نام تازه"
+        self.mgr.save()
+        comment = self.project.comments.latest("id")
+        self.assertEqual(comment.author_name, "مدیر پروژه")
+
+
+class DocumentLinkServiceTests(ProjectFixtures, TestCase):
+    def setUp(self):
+        self.build_world()
+        self.project = new_project(self.mgr, self.s1)
+        self.document = make_document(self.mgr, title="سند یک")
+
+    def test_linking_is_recorded_by_the_documents_printed_code(self):
+        link = services.link_document(self.project, actor=self.mgr, document=self.document, caption="  گزارش نهایی  ")
+        self.assertEqual((link.document, link.caption, link.linked_by), (self.document, "گزارش نهایی", self.mgr))
+        event = self.project.events.latest("id")
+        self.assertEqual((event.kind, event.subject_title, event.note),
+                         (ProjectEventKind.DOCUMENT_LINKED, self.document.full_code, "گزارش نهایی"))
+
+    def test_the_same_document_cannot_be_linked_twice(self):
+        first = services.link_document(self.project, actor=self.mgr, document=self.document)
+        with self.assertRaises(ConflictError) as caught:
+            services.link_document(self.project, actor=self.mgr, document=self.document)
+        self.assertEqual((caught.exception.payload["code"], caught.exception.payload["existing_id"]), ("already_linked", first.pk))
+
+    def test_the_database_refuses_a_duplicate_link_independently_of_the_service(self):
+        """The service's own pre-check (above) is a nicety for a clean 409; this is the net."""
+        ProjectDocumentLink.objects.create(project=self.project, document=self.document)
+        with self.assertRaises(IntegrityError) as caught, transaction.atomic():
+            ProjectDocumentLink.objects.create(project=self.project, document=self.document)
+        self.assertIn("uniq_project_document_link", str(caught.exception))
+
+    def test_a_different_project_may_link_the_same_document(self):
+        other = new_project(self.mgr, self.s1, "پروژهٔ دیگر")
+        services.link_document(self.project, actor=self.mgr, document=self.document)
+        services.link_document(other, actor=self.mgr, document=self.document)
+        self.assertEqual(ProjectDocumentLink.objects.filter(document=self.document).count(), 2)
+
+    def test_linking_is_refused_on_an_archived_project(self):
+        services.archive_project(self.project, actor=self.mgr)
+        with self.assertRaises(ConflictError) as caught:
+            services.link_document(self.project, actor=self.mgr, document=self.document)
+        self.assertEqual(caught.exception.payload["code"], "project_archived")
+
+    def test_unlinking_is_recorded_and_the_link_is_gone(self):
+        link = services.link_document(self.project, actor=self.mgr, document=self.document)
+        services.unlink_document(link, actor=self.mgr)
+        self.assertFalse(ProjectDocumentLink.objects.filter(pk=link.pk).exists())
+        event = self.project.events.latest("id")
+        self.assertEqual((event.kind, event.subject_title), (ProjectEventKind.DOCUMENT_UNLINKED, self.document.full_code))
+
+    def test_unlinking_is_refused_on_an_archived_project(self):
+        link = services.link_document(self.project, actor=self.mgr, document=self.document)
+        services.archive_project(self.project, actor=self.mgr)
+        with self.assertRaises(ConflictError) as caught:
+            services.unlink_document(link, actor=self.mgr)
+        self.assertEqual(caught.exception.payload["code"], "project_archived")
+
+    def test_deleting_the_document_is_protected_while_linked(self):
+        services.link_document(self.project, actor=self.mgr, document=self.document)
+        with self.assertRaises(ProtectedError):
+            self.document.delete()
+
+
+class CommentApiTests(ProjectApiCase):
+    def setUp(self):
+        super().setUp()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.list_url = reverse("project-comments", args=[self.project.pk])
+
+    def detail_url_by_id(self, comment_id):
+        return reverse("project-comment", args=[self.project.pk, comment_id])
+
+    def test_anyone_who_can_read_the_project_may_read_and_post_an_outsider_gets_404(self):
+        for user in (self.mgr, self.member, self.lead_s1, self.lead_d1, self.ceo):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                self.assertEqual(self.client.get(self.list_url).status_code, 200)
+                response = self.client.post(self.list_url, {"body": f"از {user.pk}"}, format="json")
+                self.assertEqual(response.status_code, 201, response.data)
+        self.as_(self.outsider)
+        self.assertEqual(self.client.get(self.list_url).status_code, 404)
+        self.assertEqual(self.client.post(self.list_url, {"body": "ممنوع"}, format="json").status_code, 404)
+
+    def test_a_plain_member_may_comment_though_they_cannot_edit_the_project(self):
+        self.as_(self.member)
+        response = self.client.post(self.list_url, {"body": "نظر من"}, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual((response.data["author"], response.data["author_name"], response.data["can_delete"]),
+                         (self.member.pk, "عضو پروژه", True))
+
+    def test_a_blank_body_is_a_400(self):
+        self.as_(self.mgr)
+        self.assertEqual(self.client.post(self.list_url, {"body": "  "}, format="json").status_code, 400)
+        self.assertEqual(self.client.post(self.list_url, {}, format="json").status_code, 400)
+
+    def test_only_the_author_may_delete_their_own_comment(self):
+        self.as_(self.mgr)
+        comment = self.client.post(self.list_url, {"body": "نظر مدیر"}, format="json").data
+        self.as_(self.member)
+        denied = self.client.delete(self.detail_url_by_id(comment["id"]))
+        self.assertEqual(denied.status_code, 403)
+        self.as_(self.mgr)
+        self.assertEqual(self.client.delete(self.detail_url_by_id(comment["id"])).status_code, 204)
+
+    def test_not_even_a_lead_or_manage_organization_may_delete_someone_elses_comment(self):
+        self.as_(self.member)
+        comment_id = self.client.post(self.list_url, {"body": "نظر عضو"}, format="json").data["id"]
+        for user in (self.mgr, self.lead_s1, self.lead_d1, self.ceo):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                self.assertEqual(self.client.delete(self.detail_url_by_id(comment_id)).status_code, 403)
+        self.assertTrue(ProjectComment.objects.filter(pk=comment_id).exists())
+
+    def test_the_can_delete_flag_matches_the_enforcement(self):
+        self.as_(self.mgr)
+        comment = self.client.post(self.list_url, {"body": "نظر مدیر"}, format="json").data
+        self.assertTrue(comment["can_delete"])
+        self.as_(self.member)
+        seen = self.client.get(self.list_url).data["results"][0]
+        self.assertFalse(seen["can_delete"])
+
+    def test_comments_can_target_one_objective(self):
+        self.as_(self.mgr)
+        mgr_member = self.project.members.get(user=self.mgr)
+        objective = add_objective(self.project, self.mgr, mgr_member)
+        response = self.client.post(self.list_url, {"body": "روی این کار کنید", "objective": objective.pk}, format="json")
+        self.assertEqual(response.data["objective"], objective.pk)
+
+    def test_the_list_is_paginated_newest_first(self):
+        self.as_(self.mgr)
+        for i in range(3):
+            self.client.post(self.list_url, {"body": f"نظر {i}"}, format="json")
+        body = self.client.get(self.list_url).data
+        self.assertIn("count", body)
+        self.assertEqual([r["body"] for r in body["results"]], ["نظر 2", "نظر 1", "نظر 0"])
+
+    def test_an_unknown_comment_is_a_404(self):
+        self.as_(self.mgr)
+        self.assertEqual(self.client.delete(self.detail_url_by_id(999999)).status_code, 404)
+
+    def test_anonymous_gets_401(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.list_url).status_code, 401)
+
+
+class DocumentLinkApiTests(ProjectApiCase):
+    def setUp(self):
+        super().setUp()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.document = make_document(self.mgr, title="سند آزمایشی")
+        self.list_url = reverse("project-documents", args=[self.project.pk])
+
+    def link_url(self, link_id):
+        return reverse("project-document-link", args=[self.project.pk, link_id])
+
+    def test_the_manager_and_leads_may_link_a_document_a_plain_member_may_not(self):
+        for user, document in ((self.mgr, self.document), (self.lead_s1, make_document(self.mgr, "سند دو")), (self.lead_d1, make_document(self.mgr, "سند سه"))):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                response = self.client.post(self.list_url, {"document": document.pk}, format="json")
+                self.assertEqual(response.status_code, 201, response.data)
+        self.as_(self.member)
+        denied = self.client.post(self.list_url, {"document": make_document(self.mgr, "سند چهار").pk}, format="json")
+        self.assertEqual(denied.status_code, 403)
+
+    def test_reading_the_list_needs_only_project_read_access(self):
+        self.as_(self.mgr)
+        self.client.post(self.list_url, {"document": self.document.pk, "caption": "سند اصلی"}, format="json")
+        for user in (self.mgr, self.member, self.lead_s1, self.ceo):
+            self.as_(user)
+            rows = self.client.get(self.list_url).data
+            self.assertEqual([r["document_full_code"] for r in rows], [self.document.full_code])
+            self.assertEqual(rows[0]["caption"], "سند اصلی")
+        self.as_(self.outsider)
+        self.assertEqual(self.client.get(self.list_url).status_code, 404)
+
+    def test_linking_the_same_document_twice_is_a_409(self):
+        self.as_(self.mgr)
+        self.client.post(self.list_url, {"document": self.document.pk}, format="json")
+        again = self.client.post(self.list_url, {"document": self.document.pk}, format="json")
+        self.assertEqual((again.status_code, again.data["code"]), (409, "already_linked"))
+
+    def test_an_unknown_document_id_is_a_400(self):
+        self.as_(self.mgr)
+        self.assertEqual(self.client.post(self.list_url, {"document": 999999999}, format="json").status_code, 400)
+
+    def test_unlink_needs_the_manager_too(self):
+        self.as_(self.mgr)
+        link_id = self.client.post(self.list_url, {"document": self.document.pk}, format="json").data["id"]
+        self.as_(self.member)
+        self.assertEqual(self.client.delete(self.link_url(link_id)).status_code, 403)
+        self.as_(self.mgr)
+        self.assertEqual(self.client.delete(self.link_url(link_id)).status_code, 204)
+        self.assertFalse(ProjectDocumentLink.objects.filter(pk=link_id).exists())
+
+    def test_an_unknown_link_is_a_404(self):
+        self.as_(self.mgr)
+        self.assertEqual(self.client.delete(self.link_url(999999)).status_code, 404)
+
+    def test_anonymous_gets_401(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.list_url).status_code, 401)
+
+
+class CommentAndLinkActivityApiTests(ProjectApiCase):
+    """The feed (8.3) picks up the two new kinds without any changes of its own."""
+
+    def test_comment_and_document_events_appear_in_both_feeds(self):
+        project = new_project(self.mgr, self.s1)
+        document = make_document(self.mgr, title="سند فعالیت")
+        services.add_comment(project, actor=self.mgr, body="یادداشت")
+        services.link_document(project, actor=self.mgr, document=document)
+        self.as_(self.mgr)
+        per_project = self.client.get(reverse("project-activity", args=[project.pk])).data["results"]
+        kinds = {r["kind"] for r in per_project}
+        self.assertTrue({ProjectEventKind.COMMENT_ADDED, ProjectEventKind.DOCUMENT_LINKED} <= kinds)
+        cross_project = self.client.get(reverse("projects-activity"), {"project": project.pk}).data["results"]
+        self.assertTrue({ProjectEventKind.COMMENT_ADDED, ProjectEventKind.DOCUMENT_LINKED} <= {r["kind"] for r in cross_project})
