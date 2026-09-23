@@ -25,6 +25,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework.exceptions import NotFound, PermissionDenied
 
+from apps.chat import services as chat
 from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_title
 
@@ -106,6 +107,7 @@ def add_membership(
         position_label=normalize_title(position_label),
         added_by=added_by,
     )
+    chat.post_system_message(node, f"{user.full_name} به گفتگو اضافه شد.")
     if advance_setup:
         advance_step(SetupStep.PEOPLE)
     return membership
@@ -148,6 +150,7 @@ def remove_membership(membership: Membership) -> None:
     membership = _lock_membership(membership.pk)
     was_primary = membership.is_primary
     membership.delete()
+    chat.post_system_message(membership.node, f"{membership.user.full_name} از گفتگو خارج شد.")
     if was_primary:
         # Keep "any membership => exactly one primary": the earliest remaining one takes over.
         successor = Membership.objects.filter(user_id=membership.user_id).order_by("id").first()

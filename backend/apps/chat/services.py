@@ -10,7 +10,9 @@ IntegrityError, re-reads and returns the winner's row — the `get_or_create`-un
 idiom `documents/services.py` and `pdfgen/services.py` already use.
 """
 from django.db import IntegrityError, transaction
-from rest_framework.exceptions import ValidationError
+from django.db.models import Q
+from django.utils import timezone
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 from apps.core.exceptions import ConflictError
 
@@ -21,10 +23,12 @@ from .models import (
     Conversation,
     ConversationKind,
     ConversationParticipant,
+    Message,
     MessageKind,
 )
 
 KEY_WIDTH = 10
+MESSAGE_MAX_LENGTH = 4000
 
 
 def direct_key(a_id: int, b_id: int) -> str:
@@ -137,3 +141,115 @@ def open_direct(*, actor, other) -> tuple[Conversation, bool]:
             raise
         return Conversation.objects.get(kind=ConversationKind.DIRECT, direct_key=key), False
     return conversation, True
+
+
+# --------------------------------------------------------------------------
+# Messages
+# --------------------------------------------------------------------------
+
+
+def _lock_conversation(pk: int) -> Conversation:
+    try:
+        return Conversation.objects.select_for_update(of=("self",)).select_related("node").get(pk=pk)
+    except Conversation.DoesNotExist:
+        raise NotFound("گفتگو یافت نشد.")
+
+
+def require_can_post(conversation: Conversation, actor) -> None:
+    """An archived node's channel is read-only (owner's decision); so is a DM whose other person
+    has been deactivated. `ConversationSerializer.can_post` shows the same answer."""
+    if conversation.kind == ConversationKind.NODE:
+        if not conversation.node.is_active:
+            raise ConflictError(
+                "این گره بایگانی شده و گفتگوی آن فقط‌خواندنی است.", code="conversation_read_only"
+            )
+        return
+    other = conversation.participants.exclude(user=actor).select_related("user").first()
+    if other is None or not other.user.is_active:
+        raise ConflictError("این شخص غیرفعال است و نمی‌توان برای او پیام فرستاد.", code="user_inactive")
+
+
+def _clean_body(body: str) -> str:
+    body = (body or "").strip()
+    if not body:
+        raise ValidationError({"body": ["متن پیام نمی‌تواند خالی باشد."]})
+    if len(body) > MESSAGE_MAX_LENGTH:
+        raise ValidationError({"body": [f"متن پیام حداکثر {MESSAGE_MAX_LENGTH} نویسه است."]})
+    return body
+
+
+def _append(conversation: Conversation, message: Message) -> None:
+    """Under the conversation's row lock, so `last_message_*` always names the newest message."""
+    conversation.last_message_at = message.created_at
+    conversation.last_message_id = message.pk
+    conversation.save(update_fields=["last_message_at", "last_message_id", "updated_at"])
+
+
+@transaction.atomic
+def send_message(conversation: Conversation, *, sender, body: str) -> Message:
+    """Post a message. The caller has already decided the sender may read the conversation. The
+    sender's own read mark moves to their message, so it never counts as unread for them."""
+    body = _clean_body(body)
+    conversation = _lock_conversation(conversation.pk)
+    require_can_post(conversation, sender)
+    message = Message.objects.create(
+        conversation=conversation,
+        sender=sender,
+        sender_name=sender.full_name,
+        sender_title=sender.title,
+        body=body,
+    )
+    _append(conversation, message)
+    ensure_participant(conversation, sender)
+    ConversationParticipant.objects.filter(conversation=conversation, user=sender).update(
+        last_read_message_id=message.pk
+    )
+    return message
+
+
+@transaction.atomic
+def post_system_message(node, body: str) -> Message:
+    """A system line in a node's channel («… به گفتگو اضافه شد»), so a group stays legible as
+    membership changes. Written in the caller's transaction; no sender."""
+    conversation = _lock_conversation(node_conversation(node).pk)
+    message = Message.objects.create(
+        conversation=conversation, kind=MessageKind.SYSTEM, sender=None, sender_name="", body=body
+    )
+    _append(conversation, message)
+    return message
+
+
+def mark_read(conversation: Conversation, *, user, up_to: int) -> int | None:
+    """Move the person's read mark forward to `up_to` (never back, never past the newest message).
+    One conditional UPDATE, so two tabs racing can only ever move it forward."""
+    participant = ensure_participant(conversation, user)
+    newest = Conversation.objects.filter(pk=conversation.pk).values_list("last_message_id", flat=True).first()
+    target = min(up_to, newest or 0)
+    if target > 0:
+        ConversationParticipant.objects.filter(pk=participant.pk).filter(
+            Q(last_read_message_id__isnull=True) | Q(last_read_message_id__lt=target)
+        ).update(last_read_message_id=target)
+    return ConversationParticipant.objects.filter(pk=participant.pk).values_list(
+        "last_read_message_id", flat=True
+    ).first()
+
+
+@transaction.atomic
+def delete_message(message: Message, *, actor) -> Message:
+    """Tombstone a message. **Only its sender, no exception** — not a lead, not the مدیر عامل
+    (owner's decision). Idempotent. No editing exists."""
+    try:
+        message = Message.objects.select_for_update().get(pk=message.pk)
+    except Message.DoesNotExist:
+        raise NotFound("پیام یافت نشد.")
+    if message.sender_id is None or message.sender_id != actor.pk:
+        raise PermissionDenied("فقط فرستندهٔ پیام می‌تواند آن را حذف کند.")
+    if message.deleted_at is not None:
+        return message
+    conversation = Conversation.objects.select_related("node").get(pk=message.conversation_id)
+    if conversation.kind == ConversationKind.NODE and not conversation.node.is_active:
+        raise ConflictError("این گره بایگانی شده و گفتگوی آن فقط‌خواندنی است.", code="conversation_read_only")
+    message.deleted_at = timezone.now()
+    message.deleted_by = actor
+    message.save(update_fields=["deleted_at", "deleted_by", "updated_at"])
+    return message

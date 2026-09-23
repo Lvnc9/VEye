@@ -2,7 +2,11 @@ from rest_framework import serializers
 
 from apps.organization.models import OrgNodeKind
 
-from .models import Conversation, ConversationKind
+from .models import Conversation, ConversationKind, Message, MessageKind
+from .services import MESSAGE_MAX_LENGTH
+
+DELETED_TEXT = "پیام حذف شد"
+PREVIEW_LENGTH = 120
 
 
 class OpenDirectSerializer(serializers.Serializer):
@@ -11,6 +15,53 @@ class OpenDirectSerializer(serializers.Serializer):
 
 class OpenNodeSerializer(serializers.Serializer):
     node = serializers.IntegerField()
+
+
+class SendMessageSerializer(serializers.Serializer):
+    # The length rule lives in services._clean_body (Persian message); this only bounds the payload.
+    body = serializers.CharField(allow_blank=True, trim_whitespace=False, max_length=MESSAGE_MAX_LENGTH * 2)
+
+
+class MarkReadSerializer(serializers.Serializer):
+    message = serializers.IntegerField(min_value=1)
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    """A deleted message keeps its row (a tombstone) but never its words: `body` is blank and
+    `is_deleted` is true; the client shows «پیام حذف شد»."""
+
+    body = serializers.SerializerMethodField()
+    is_deleted = serializers.SerializerMethodField()
+    is_mine = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = [
+            "id",
+            "conversation",
+            "kind",
+            "sender",
+            "sender_name",
+            "sender_title",
+            "body",
+            "is_deleted",
+            "is_mine",
+            "can_delete",
+            "created_at",
+        ]
+
+    def get_body(self, message):
+        return "" if message.deleted_at else message.body
+
+    def get_is_deleted(self, message):
+        return message.deleted_at is not None
+
+    def get_is_mine(self, message):
+        return message.sender_id is not None and message.sender_id == self.context["request"].user.pk
+
+    def get_can_delete(self, message):
+        return self.get_is_mine(message) and message.deleted_at is None and message.kind == MessageKind.TEXT
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -25,6 +76,9 @@ class ConversationSerializer(serializers.ModelSerializer):
     node_kind = serializers.CharField(source="node.kind", read_only=True, default=None)
     is_company_channel = serializers.SerializerMethodField()
     can_post = serializers.SerializerMethodField()
+    unread_count = serializers.IntegerField(read_only=True, default=0)
+    my_last_read_message_id = serializers.IntegerField(source="my_last_read", read_only=True, default=None)
+    last_message = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
@@ -39,6 +93,9 @@ class ConversationSerializer(serializers.ModelSerializer):
             "node_kind",
             "is_company_channel",
             "can_post",
+            "unread_count",
+            "my_last_read_message_id",
+            "last_message",
             "last_message_at",
             "created_at",
         ]
@@ -70,3 +127,17 @@ class ConversationSerializer(serializers.ModelSerializer):
             return conversation.node.is_active
         other = self._other(conversation)
         return other is not None and other.is_active
+
+    def get_last_message(self, conversation):
+        """A one-line preview for the list, from annotations (no query per row)."""
+        if conversation.last_message_id is None:
+            return None
+        deleted = getattr(conversation, "last_deleted", None) is not None
+        body = "" if deleted else (getattr(conversation, "last_body", "") or "")
+        return {
+            "id": conversation.last_message_id,
+            "kind": getattr(conversation, "last_kind", None),
+            "sender_name": getattr(conversation, "last_sender_name", "") or "",
+            "preview": body[:PREVIEW_LENGTH],
+            "is_deleted": deleted,
+        }

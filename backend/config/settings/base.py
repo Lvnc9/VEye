@@ -288,3 +288,6 @@ PROJECT_MAX_OBJECTIVES = env.int("PROJECT_MAX_OBJECTIVES", default=200)
 
 # Chat (Phase 9): per-user limit on opening DMs (a rate-limited request is a 403, like login/verify).
 CHAT_OPEN_DIRECT_RATELIMIT_RATE = env("CHAT_OPEN_DIRECT_RATELIMIT_RATE", default="30/m")
+CHAT_SEND_RATELIMIT_RATE = env("CHAT_SEND_RATELIMIT_RATE", default="60/m")
+CHAT_PAGE_SIZE = env.int("CHAT_PAGE_SIZE", default=50)
+CHAT_MAX_PAGE_SIZE = env.int("CHAT_MAX_PAGE_SIZE", default=200)

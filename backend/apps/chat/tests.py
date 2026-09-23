@@ -356,12 +356,14 @@ class ChatApiTests(ChatWorld, OrgApiTestCase):
 
     def test_the_list_is_the_listed_set_most_recent_activity_first(self):
         dm, _ = services.open_direct(actor=self.s1a, other=self.u2m)
-        Conversation.objects.filter(pk=channel(self.root).pk).update(last_message_at="2026-09-01T10:00:00Z")
-        Conversation.objects.filter(pk=dm.pk).update(last_message_at="2026-09-02T10:00:00Z")
+        quiet, _ = services.open_direct(actor=self.s1a, other=self.ceo)  # never used
+        Conversation.objects.filter(pk=channel(self.s1).pk).update(last_message_at="2030-01-01T10:00:00Z")
+        Conversation.objects.filter(pk=channel(self.root).pk).update(last_message_at="2030-01-02T10:00:00Z")
+        Conversation.objects.filter(pk=dm.pk).update(last_message_at="2030-01-03T10:00:00Z")
         response = self.as_(self.s1a).get(reverse("conversation-list"))
         self.assertEqual(response.status_code, 200)
-        # used ones newest first, then never-used ones (newest id first)
-        self.assertEqual(self.ids(response), [dm.pk, channel(self.root).pk, channel(self.s1).pk])
+        # used ones newest first, then never-used ones
+        self.assertEqual(self.ids(response), [dm.pk, channel(self.root).pk, channel(self.s1).pk, quiet.pk])
 
     def test_a_dm_row_names_the_other_person(self):
         services.open_direct(actor=self.s1a, other=self.u2m)
