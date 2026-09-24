@@ -52,7 +52,11 @@ export function InboxScreen() {
       </div>
 
       {tab === "conversations" ? (
-        <ConversationsTab selectedId={selectedId} onSelect={(id) => router.replace(`/inbox?c=${id}`, { scroll: false })} />
+        <ConversationsTab
+          selectedId={selectedId}
+          onSelect={(id) => router.replace(`/inbox?c=${id}`, { scroll: false })}
+          onBack={() => router.replace("/inbox", { scroll: false })}
+        />
       ) : (
         <AwaitingTab summary={summary} />
       )}
