@@ -22,9 +22,11 @@ import { hasCapability, type SetupStatus, type User } from "@/lib/types";
  * browser lands back on the right step from `GET /setup/status/` + `GET /org/tree/`.
  */
 export function SetupWizard() {
-  const [reload, setReload] = useState(0);
-  const status = useApiQuery<SetupStatus>("/setup/status/", reload);
-  const refresh = () => setReload((n) => n + 1);
+  const [statusReload, setStatusReload] = useState(0);
+  const [nodeReload, setNodeReload] = useState(0);
+  const status = useApiQuery<SetupStatus>("/setup/status/", statusReload);
+  const refreshStatus = () => setStatusReload((n) => n + 1);
+  const refreshNodes = () => setNodeReload((n) => n + 1);
 
   return (
     <main className="min-h-screen bg-surface text-slate-100">
@@ -45,10 +47,10 @@ export function SetupWizard() {
           <DarkError message={status.error ?? "دریافت وضعیت راه‌اندازی ممکن نشد."} />
         ) : status.data.needed ? (
           <div className="mx-auto max-w-xl">
-            <FirstStep status={status.data} onDone={refresh} />
+            <FirstStep status={status.data} onDone={refreshStatus} />
           </div>
         ) : (
-          <SignedInWizard status={status.data} reload={reload} refresh={refresh} />
+          <SignedInWizard status={status.data} reload={nodeReload} refresh={refreshNodes} />
         )}
       </div>
     </main>

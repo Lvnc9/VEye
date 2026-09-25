@@ -8,7 +8,9 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 
 ## [Unreleased]
 ### Phase 10 — A1 · setup and first run (developer account)
-- _(A1: add lines under this heading only)_
+- **SectionsStep is one card per واحد, so adding several بخش never needs re-picking a shared selection.** The step used a single `<select>` for "which واحد" plus one add form; `SectionsStep.tsx` now shows every active واحد as its own card (each with its own inline add form and بخش list), grouped under its حوزه heading, with a «مستقیم زیر شرکت» group for واحد straight under the company — built with `lib/organization.ts`'s existing `chartLayout` (the same grouping the org chart already draws). `UnitsStep` now also lists a «مستقیم زیر شرکت» group when حوزه exist, since a واحد may always sit directly under the company (`ALLOWED_PARENT_KINDS` already permitted it; the step just never showed it). `SetupWizard` no longer reloads `/setup/status/` after a node write (`AddNodeForm`/`DeleteNodeButton`/`CompanyStep`'s `onChanged`) — it now holds two reload counters, one for `/setup/status/` (bumped only when leaving `FirstStep`) and one for `/org/tree/` + `/org/company/` (bumped by node writes), where before both shared one counter.
+
+  Not a live bug on this branch: `CompanyStep`'s multi-حوزه radio (`:28`) and the shared `<select>` losing its pick both trace back to the pre-Phase-10 `useApiQuery`, which is already fixed on `main` (Phase 0.2, keeps stale data across a reload of the same path instead of unmounting). Verified by hand: saving the company name/logo, and adding three بخش in a row to the second واحد of the second حوزه, neither resets anything even without this slice's UI change — this slice is the ADR's UX redesign (one card per واحد) plus the belt-and-suspenders reload split, not a fix for a reproducing bug.
 
 ### Phase 10 — A2 · projects backend (assignees, progress log, meetings, draft)
 - _(A2: add lines under this heading only)_
