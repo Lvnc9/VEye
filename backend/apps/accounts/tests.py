@@ -298,3 +298,106 @@ class PersonnelDeletionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         author.refresh_from_db()
         self.assertFalse(author.is_active)
+
+
+def make_developer(national_code="7000000001", **extra):
+    """The Phase 10 developer account: stored as صفی/لول ۳, which `is_developer` overrides."""
+    return make_user(national_code, AccessRoll.GUILD, AccessLevel.LEVEL_3, is_developer=True, **extra)
+
+
+class DeveloperAccountTests(TestCase):
+    """ADR-010: the developer runs setup and registers personnel, and can never sign a document."""
+
+    def test_developer_holds_only_the_setup_capabilities(self):
+        developer = make_developer()
+        self.assertEqual(
+            developer.capabilities,
+            frozenset({Capability.MANAGE_ORGANIZATION, Capability.MANAGE_MEMBERSHIP, Capability.MANAGE_PERSONNEL}),
+        )
+        for document_capability in (
+            Capability.CREATE_DOCUMENT,
+            Capability.CONFIRM_DOCUMENT,
+            Capability.APPROVE_DOCUMENT,
+            Capability.PRINT_DOCUMENT,
+            Capability.CREATE_PROJECT,
+        ):
+            self.assertFalse(developer.has_capability(document_capability))
+
+    def test_the_flag_wins_over_a_full_access_position(self):
+        # Even stored as کارفرمایی/لول ۱ (the مدیر عامل position), a developer gets no document capability.
+        developer = User(access_roll=AccessRoll.EMPLOYER, access_level=AccessLevel.LEVEL_1, is_developer=True)
+        self.assertFalse(developer.has_capability(Capability.APPROVE_DOCUMENT))
+
+    def test_title_never_reads_as_a_company_position(self):
+        self.assertEqual(make_developer().title, "توسعه‌دهنده")
+
+    def test_there_is_at_most_one_developer(self):
+        from django.db import IntegrityError, transaction
+
+        make_developer()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            make_developer("7000000002")
+        # Ordinary accounts are unaffected by the constraint.
+        make_user("7000000003", AccessRoll.GUILD, AccessLevel.LEVEL_2)
+        make_user("7000000004", AccessRoll.GUILD, AccessLevel.LEVEL_2)
+
+
+@override_settings(CACHES=LOCMEM_CACHE, RATELIMIT_ENABLE=False)
+class DeveloperProtectionApiTests(TestCase):
+    """Only the developer may change or delete the developer account (ADR-010)."""
+
+    def setUp(self):
+        self.client = APIClient(enforce_csrf_checks=False)
+        self.developer = make_developer()
+        self.ceo = make_user("7100000001", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
+
+    def detail(self, user):
+        return reverse("personnel-detail", args=[user.pk])
+
+    def test_me_exposes_the_flag(self):
+        self.client.force_authenticate(user=self.developer)
+        body = self.client.get(reverse("auth-me")).json()
+        self.assertTrue(body["is_developer"])
+        self.assertEqual(body["title"], "توسعه‌دهنده")
+
+    def test_the_flag_cannot_be_set_through_the_personnel_api(self):
+        self.client.force_authenticate(user=self.ceo)
+        response = self.client.post(
+            reverse("personnel-list"),
+            {
+                "national_code": "7100000002",
+                "full_name": "کسی",
+                "access_roll": AccessRoll.GUILD,
+                "access_level": AccessLevel.LEVEL_2,
+                "password": "a-new-password-1",
+                "is_developer": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(User.objects.get(national_code="7100000002").is_developer)
+
+    def test_a_manager_cannot_reset_the_developers_password_or_deactivate_it(self):
+        self.client.force_authenticate(user=self.ceo)
+        for body in ({"password": "taken-over-123"}, {"is_active": False}):
+            response = self.client.patch(self.detail(self.developer), body, format="json")
+            self.assertEqual(response.status_code, 403, body)
+            self.assertIn("توسعه‌دهنده", response.json()["detail"])
+        self.developer.refresh_from_db()
+        self.assertTrue(self.developer.is_active)
+        self.assertTrue(self.developer.check_password("test-pass-123"))
+
+    def test_a_manager_cannot_delete_the_developer(self):
+        self.client.force_authenticate(user=self.ceo)
+        self.assertEqual(self.client.delete(self.detail(self.developer)).status_code, 403)
+        self.assertTrue(User.objects.filter(pk=self.developer.pk).exists())
+
+    def test_the_developer_may_edit_themselves(self):
+        self.client.force_authenticate(user=self.developer)
+        response = self.client.patch(self.detail(self.developer), {"mobile_phone": "09121112233"}, format="json")
+        self.assertEqual(response.status_code, 200)
+
+    def test_ordinary_personnel_are_unaffected(self):
+        person = make_user("7100000003", AccessRoll.GUILD, AccessLevel.LEVEL_2)
+        self.client.force_authenticate(user=self.ceo)
+        self.assertEqual(self.client.patch(self.detail(person), {"is_active": False}, format="json").status_code, 200)

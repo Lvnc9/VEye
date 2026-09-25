@@ -75,6 +75,15 @@ ROLL_CAPABILITIES = {
 #: steps of one document (docs/09-workflow.md) — and nobody below this position gains anything.
 FULL_ACCESS_POSITIONS = frozenset({(AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)})
 
+#: The developer account (Phase 10, ADR-010, decided with the owner 2026-09-25): the technical account
+#: that runs first-time setup. It shapes the organisation and registers personnel — and nothing else:
+#: no document capability (it can never sign) and no project capability. It is not `is_superuser`,
+#: which would grant everything. There is at most one (a partial unique constraint).
+DEVELOPER_CAPABILITIES = frozenset(
+    {Capability.MANAGE_ORGANIZATION, Capability.MANAGE_MEMBERSHIP, Capability.MANAGE_PERSONNEL}
+)
+DEVELOPER_TITLE = "توسعه‌دهنده"
+
 
 class UserManager(BaseUserManager):
     """Custom manager, required since User is not Django's default
@@ -122,6 +131,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    # The one technical account that runs first-time setup (see DEVELOPER_CAPABILITIES). Never set
+    # through the personnel API; created only by the setup bootstrap.
+    is_developer = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
 
     objects = UserManager()
@@ -145,12 +157,24 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     class Meta:
         ordering = ["national_code"]
+        constraints = [
+            # One developer account: the setup bootstrap relies on this as its race guard.
+            models.UniqueConstraint(
+                fields=["is_developer"],
+                condition=models.Q(is_developer=True),
+                name="uniq_developer_account",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.full_name} ({self.national_code})"
 
     @property
     def title(self) -> str:
+        # Snapshots (actor_title, sender_title, author_title) copy this, so the developer must never
+        # read as whatever its stored roll/level would say.
+        if self.is_developer:
+            return DEVELOPER_TITLE
         return self.TITLE_MATRIX[(self.access_roll, self.access_level)]
 
     @property
@@ -173,6 +197,8 @@ class User(AbstractBaseUser, PermissionsMixin):
         "one person per step" rule still stops him from signing two steps of the
         same document.
         """
+        if self.is_developer:
+            return DEVELOPER_CAPABILITIES
         if self.is_superuser or (self.access_roll, self.access_level) in FULL_ACCESS_POSITIONS:
             return frozenset(Capability.values)
         return ROLL_CAPABILITIES.get(self.access_roll, frozenset())

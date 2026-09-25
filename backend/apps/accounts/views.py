@@ -6,6 +6,7 @@ from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -178,8 +179,24 @@ class PersonnelViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasCapability]
     write_capability = Capability.MANAGE_PERSONNEL
 
+    def _protect_developer(self, person) -> None:
+        """Only the developer may change or delete the developer account. Without this, anyone with
+        manage_personnel (a مدیر عامل) could reset its password or deactivate it and lock the
+        technical account out."""
+        if person.is_developer and person.pk != self.request.user.pk:
+            raise PermissionDenied(
+                "حساب توسعه‌دهنده را فقط خود توسعه‌دهنده می‌تواند تغییر دهد یا حذف کند.",
+                code="developer_protected",
+            )
+
+    def update(self, request, *args, **kwargs):
+        # Before validation, so a refused caller learns nothing from field errors.
+        self._protect_developer(self.get_object())
+        return super().update(request, *args, **kwargs)
+
     def destroy(self, request, *args, **kwargs):
         person = self.get_object()
+        self._protect_developer(person)
         # Memberships (apps/organization) also reference a person with PROTECT. Say so
         # here, with the count, rather than let the handler below blame documents.
         # (`memberships` is that app's reverse accessor; accounts imports nothing from it.)

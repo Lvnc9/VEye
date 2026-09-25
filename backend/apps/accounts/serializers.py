@@ -21,12 +21,14 @@ class UserSerializer(serializers.ModelSerializer):
             "capabilities",
             "is_active",
             "is_staff",
+            "is_developer",
             "date_joined",
             "password",
         ]
         # is_staff grants Django admin access and is deliberately not settable
-        # through the personnel API — grant it via the admin or a shell.
-        read_only_fields = ["id", "title", "capabilities", "is_staff", "date_joined"]
+        # through the personnel API — grant it via the admin or a shell. is_developer is set only by
+        # the first-run setup bootstrap.
+        read_only_fields = ["id", "title", "capabilities", "is_staff", "is_developer", "date_joined"]
 
     def get_capabilities(self, obj) -> list[str]:
         return sorted(obj.capabilities)

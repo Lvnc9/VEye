@@ -85,6 +85,8 @@ export interface User {
   title: string;
   capabilities: Capability[];
   is_active: boolean;
+  /** The one technical account that runs first-time setup (Phase 10): org + personnel only, never signs. */
+  is_developer: boolean;
   date_joined: string;
   /** Only on `GET /auth/me/`: the company (null before setup) and the caller's own places in it. */
   company?: MeCompany | null;
