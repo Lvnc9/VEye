@@ -14,7 +14,13 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 - _(A2: add lines under this heading only)_
 
 ### Phase 10 — A3 · projects frontend (objective tree, timeline, meetings table, drafts)
-- _(A3: add lines under this heading only)_
+- **An objective's assignees render as a tree.** `ObjectiveTree` (replaces `ObjectivesList`) draws each
+  objective as a root card and every assignee as a leaf under it, joined by a plain-CSS connector line (RTL,
+  no drawing library, readable at 375px). A leaf shows that assignee's latest progress report, lets only that
+  assignee write a new one or edit their latest, and expands a paged «سوابق (n)» of older entries. The add
+  form and a new `ObjectiveEditDialog` (title, description, due date, weight) now pick several assignees via
+  checkboxes instead of one `<select>`. Built against ADR-010's A2↔A3 API contract (`assignees[]` replaces
+  `assignee`/`assignee_name`) ahead of the backend landing. Tests: +7 in `lib/projects.test.ts` (179 total).
 
 ### Phase 10 — A4 · personnel placement and کارتابل attachments
 - _(A4: add lines under this heading only)_
