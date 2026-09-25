@@ -11,14 +11,16 @@ from apps.core.text import normalize_search_term
 
 from . import services
 from .access import CanManageProject, can_create_project, can_manage_project, visible_projects
-from .models import Objective, ObjectiveAssignee, ProjectComment, ProjectDocumentLink, ProjectMember
-from .queries import overdue_q, with_progress
+from .models import Objective, ObjectiveAssignee, ObjectiveUpdate, ProjectComment, ProjectDocumentLink, ProjectMember
+from .queries import overdue_q, with_latest_update, with_progress
 from .serializers import (
     CommentCreateSerializer,
     DocumentLinkCreateSerializer,
     MemberCreateSerializer,
     MemberUpdateSerializer,
     ObjectiveInputSerializer,
+    ObjectiveProgressBodySerializer,
+    ObjectiveProgressSerializer,
     ObjectiveSerializer,
     ObjectiveUpdateSerializer,
     ProjectCommentSerializer,
@@ -149,7 +151,9 @@ class ProjectViewSet(
             raise PermissionDenied("شما مدیر این پروژه نیستید.")
 
     def _objective_context(self, request, project):
-        return {"request": request, "manage": can_manage_project(request, project)}
+        return {
+            "request": request, "manage": can_manage_project(request, project), "archived": project.is_archived,
+        }
 
     def _member_for(self, project, user):
         try:
@@ -163,7 +167,10 @@ class ProjectViewSet(
     @staticmethod
     def _with_assignees(queryset):
         return queryset.prefetch_related(
-            Prefetch("assignees", queryset=ObjectiveAssignee.objects.select_related("member__user"))
+            Prefetch(
+                "assignees",
+                queryset=with_latest_update(ObjectiveAssignee.objects.select_related("member__user")),
+            )
         )
 
     def _fetch_objective(self, project, objective_id):
@@ -171,6 +178,9 @@ class ProjectViewSet(
             return self._with_assignees(Objective.objects).get(pk=objective_id, project=project)
         except Objective.DoesNotExist:
             raise NotFound("ریزهدف یافت نشد.")
+
+    def _is_assignee(self, objective, user) -> bool:
+        return any(a.member.user_id == user.pk for a in objective.assignees.all())
 
     @action(detail=True, methods=["get", "post"], url_path="objectives", permission_classes=[IsAuthenticated])
     def objectives(self, request, pk=None):
@@ -220,8 +230,7 @@ class ProjectViewSet(
         serializer.is_valid(raise_exception=True)
         changes = dict(serializer.validated_data)
         only_status = set(changes) <= {"status"}
-        is_assignee = any(a.member.user_id == request.user.pk for a in objective.assignees.all())
-        if not (only_status and is_assignee):
+        if not (only_status and self._is_assignee(objective, request.user)):
             self._manager_only(request, project)
         if "assignees" in changes:
             changes["assignees"] = self._members_for(project, changes["assignees"])
@@ -238,6 +247,68 @@ class ProjectViewSet(
         services.reorder_objectives(project, actor=request.user, ordered_ids=serializer.validated_data["order"])
         rows = self._with_assignees(project.objectives)
         return Response(ObjectiveSerializer(rows, many=True, context=self._objective_context(request, project)).data)
+
+    # -- progress log ---------------------------------------------------------
+
+    def _fetch_progress_update(self, objective, update_id):
+        try:
+            return ObjectiveUpdate.objects.select_related("author").get(pk=update_id, objective=objective)
+        except ObjectiveUpdate.DoesNotExist:
+            raise NotFound("گزارش پیشرفت یافت نشد.")
+
+    def _my_latest_update_id(self, objective, user):
+        return (
+            objective.updates.filter(author=user).order_by("-created_at", "-id").values_list("id", flat=True).first()
+        )
+
+    @action(
+        detail=True, methods=["get", "post"], url_path=r"objectives/(?P<objective_id>\d+)/updates",
+        permission_classes=[IsAuthenticated],
+    )
+    def objective_updates(self, request, pk=None, objective_id=None):
+        """The dated progress log under one objective (`?author=<uid>`, paginated, newest first).
+        Anyone who can read the project reads it; only a *current* assignee may post."""
+        project = self.get_object()
+        objective = self._fetch_objective(project, objective_id)
+
+        if request.method == "GET":
+            rows = objective.updates.select_related("author").order_by("-created_at", "-id")
+            if value := request.query_params.get("author"):
+                who = int(value) if value.isdigit() else None
+                rows = rows.filter(author_id=who) if who is not None else rows.none()
+            page = self.paginate_queryset(rows)
+            context = {"request": request, "my_latest_id": self._my_latest_update_id(objective, request.user)}
+            return self.get_paginated_response(ObjectiveProgressSerializer(page, many=True, context=context).data)
+
+        if not self._is_assignee(objective, request.user):
+            raise PermissionDenied("فقط مسئولان این ریزهدف می‌توانند گزارش پیشرفت ثبت کنند.")
+        serializer = ObjectiveProgressBodySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        update = services.add_objective_update(objective, actor=request.user, body=serializer.validated_data["body"])
+        update = self._fetch_progress_update(objective, update.pk)
+        context = {"request": request, "my_latest_id": update.pk}
+        return Response(ObjectiveProgressSerializer(update, context=context).data, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True, methods=["patch"], url_path=r"objectives/(?P<objective_id>\d+)/updates/(?P<update_id>\d+)",
+        permission_classes=[IsAuthenticated],
+    )
+    def objective_update_entry(self, request, pk=None, objective_id=None, update_id=None):
+        """Edit one's own **latest** entry on this objective. `services.edit_objective_update`
+        re-checks "latest" under the project's row lock (two concurrent posts by the same author
+        must not both think an older row is still current); authorship is checked here, the same
+        split every other author-scoped write in this app follows (e.g. `comment`, below)."""
+        project = self.get_object()
+        objective = self._fetch_objective(project, objective_id)
+        update = self._fetch_progress_update(objective, update_id)
+        if update.author_id != request.user.pk:
+            raise PermissionDenied("فقط نویسندهٔ گزارش می‌تواند آن را ویرایش کند.")
+        serializer = ObjectiveProgressBodySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        update = services.edit_objective_update(update, actor=request.user, body=serializer.validated_data["body"])
+        update = self._fetch_progress_update(objective, update.pk)
+        context = {"request": request, "my_latest_id": update.pk}
+        return Response(ObjectiveProgressSerializer(update, context=context).data)
 
     # -- comments -------------------------------------------------------------
 

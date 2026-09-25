@@ -24,6 +24,7 @@ from .models import (
     Objective,
     ObjectiveAssignee,
     ObjectiveStatus,
+    ObjectiveUpdate,
     Project,
     ProjectComment,
     ProjectDocumentLink,
@@ -38,6 +39,8 @@ COMMENT_MAX_LENGTH = 4000
 #: How much of a comment's body a feed row previews. The comment row itself (never edited) is the
 #: source of truth; this is a cheap, never-stale snippet, not a second copy of the data.
 COMMENT_PREVIEW_LENGTH = 160
+#: A progress entry is a log line, not a report; the same bound as a comment.
+OBJECTIVE_UPDATE_MAX_LENGTH = 4000
 
 User = get_user_model()
 
@@ -484,6 +487,66 @@ def reorder_objectives(project: Project, *, actor, ordered_ids: list[int]) -> No
         )
     for position, pk in enumerate(ordered_ids, start=1):
         Objective.objects.filter(pk=pk).update(position=position, updated_at=timezone.now())
+
+
+# --------------------------------------------------------------------------
+# Progress log
+# --------------------------------------------------------------------------
+
+
+def _clean_update_body(body: str) -> str:
+    body = (body or "").strip()
+    if not body:
+        raise ValidationError({"body": ["متن گزارش نمی‌تواند خالی باشد."]})
+    if len(body) > OBJECTIVE_UPDATE_MAX_LENGTH:
+        raise ValidationError({"body": [f"متن گزارش نباید بیش از {OBJECTIVE_UPDATE_MAX_LENGTH} نویسه باشد."]})
+    return body
+
+
+@transaction.atomic
+def add_objective_update(objective: Objective, *, actor, body: str) -> ObjectiveUpdate:
+    """Append a dated entry. Who may call this (a current assignee) is the view's job, the same
+    "sender only" split every other author-scoped write in this app follows; this only enforces that
+    the project is still writable and records the entry and its event in one transaction."""
+    project, objective = _lock_objective(objective)
+    require_writable(project)
+    body = _clean_update_body(body)
+    update = ObjectiveUpdate.objects.create(
+        objective=objective, author=actor,
+        author_name=actor.full_name if actor else "", author_title=actor.title if actor else "",
+        body=body,
+    )
+    record_event(
+        project, ProjectEventKind.OBJECTIVE_UPDATE_ADDED, actor,
+        objective=objective, subject_title=objective.title, note=body[:COMMENT_PREVIEW_LENGTH],
+    )
+    return update
+
+
+@transaction.atomic
+def edit_objective_update(update: ObjectiveUpdate, *, actor, body: str) -> ObjectiveUpdate:
+    """The author may edit **only their own latest entry on this objective** — the "latest" check
+    needs the project's row lock (two concurrent posts by the same author must not both think the
+    older one is still current), so it lives here, not in the view. Authorship itself is the view's
+    job, the same split `add_objective_update` follows."""
+    project = _lock_project(update.objective.project_id)
+    require_writable(project)
+    try:
+        update = ObjectiveUpdate.objects.get(pk=update.pk)
+    except ObjectiveUpdate.DoesNotExist:
+        raise NotFound("گزارش پیشرفت یافت نشد.")
+    latest_id = (
+        ObjectiveUpdate.objects.filter(objective_id=update.objective_id, author_id=update.author_id)
+        .order_by("-created_at", "-id").values_list("id", flat=True).first()
+    )
+    if latest_id != update.pk:
+        raise ConflictError(
+            "فقط آخرین گزارش شما روی این ریزهدف قابل ویرایش است.", code="not_latest_update"
+        )
+    update.body = _clean_update_body(body)
+    update.edited_at = timezone.now()
+    update.save(update_fields=["body", "edited_at", "updated_at"])
+    return update
 
 
 # --------------------------------------------------------------------------

@@ -47,6 +47,7 @@ class ProjectEventKind(models.TextChoices):
     OBJECTIVE_STATUS_CHANGED = "objective_status_changed", "وضعیت ریزهدف تغییر کرد"
     OBJECTIVE_DUE_CHANGED = "objective_due_changed", "مهلت ریزهدف تغییر کرد"
     OBJECTIVE_REMOVED = "objective_removed", "ریزهدف حذف شد"
+    OBJECTIVE_UPDATE_ADDED = "objective_update_added", "گزارش پیشرفت ثبت شد"
     COMMENT_ADDED = "comment_added", "یادداشت افزوده شد"
     COMMENT_REMOVED = "comment_removed", "یادداشت حذف شد"
     DOCUMENT_LINKED = "document_linked", "مستند پیوست شد"
@@ -169,6 +170,41 @@ class ObjectiveAssignee(TimeStampedModel):
 
     def __str__(self):
         return f"{self.member.user.full_name} → {self.objective.title}"
+
+
+class ObjectiveUpdate(TimeStampedModel):
+    """A dated progress entry under one objective, written by one of its assignees. Every write is a
+    new row — the newest shows under the author's name, older ones expand in «سوابق» — never an edit
+    of an older one; the author may PATCH only **their own latest** entry on this objective
+    (views.py + services.py, the same "no delete, no rewriting history" rule `ProjectComment` half-
+    follows, tightened here to "your latest only" because a progress log is a timeline, not a
+    discussion).
+
+    `author_name`/`author_title` are the usual durable text snapshot, so an entry keeps reading
+    correctly after its author is deactivated or moves بخش.
+    """
+
+    objective = models.ForeignKey(Objective, on_delete=models.CASCADE, related_name="updates")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    author_name = models.CharField(max_length=255)
+    author_title = models.CharField(max_length=255, blank=True)
+    body = models.TextField()
+    edited_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        # Forward, so objective.updates.all() reads as a timeline; the API view orders newest first.
+        ordering = ["created_at", "id"]
+        indexes = [
+            Index(fields=["objective", "created_at"], name="obj_update_obj_time_idx"),
+            #: Backs "this author's latest entry on this objective" (services.py, and the objective
+            #: payload's per-assignee latest_update/update_count, queries.py).
+            Index(fields=["objective", "author"], name="obj_update_obj_author_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.author_name} on {self.objective.title}"
 
 
 class ProjectEvent(TimeStampedModel):

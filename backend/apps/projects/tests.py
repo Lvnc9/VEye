@@ -19,6 +19,7 @@ from . import services
 from .models import (
     Objective,
     ObjectiveStatus,
+    ObjectiveUpdate,
     Project,
     ProjectComment,
     ProjectDocumentLink,
@@ -29,7 +30,7 @@ from .models import (
     ProjectStatus,
 )
 from .queries import progress_percent
-from .services import COMMENT_MAX_LENGTH
+from .services import COMMENT_MAX_LENGTH, OBJECTIVE_UPDATE_MAX_LENGTH
 
 
 def new_project(actor, section, name="پروژه نمونه", **kwargs):
@@ -1027,7 +1028,13 @@ class ObjectiveApiTests(ProjectApiCase):
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(
             (response.data["assignees"], response.data["weight"], response.data["can_edit"], response.data["can_change_status"]),
-            ([{"user": self.member.pk, "name": "عضو پروژه", "title": self.member.title}], 2, True, True),
+            (
+                [{
+                    "user": self.member.pk, "name": "عضو پروژه", "title": self.member.title,
+                    "latest_update": None, "update_count": 0,
+                }],
+                2, True, True,
+            ),
         )
 
     def test_create_accepts_several_assignees(self):
@@ -1656,3 +1663,205 @@ class CommentAndLinkActivityApiTests(ProjectApiCase):
         self.assertTrue({ProjectEventKind.COMMENT_ADDED, ProjectEventKind.DOCUMENT_LINKED} <= kinds)
         cross_project = self.client.get(reverse("projects-activity"), {"project": project.pk}).data["results"]
         self.assertTrue({ProjectEventKind.COMMENT_ADDED, ProjectEventKind.DOCUMENT_LINKED} <= {r["kind"] for r in cross_project})
+
+
+# ---------------------------------------------------------------------------
+# Phase 10, A2 slice 2 — a dated progress log under each assignee
+# ---------------------------------------------------------------------------
+
+
+class ObjectiveUpdateServiceTests(ProjectFixtures, TestCase):
+    def setUp(self):
+        self.build_world()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.mgr_member = self.project.members.get(user=self.mgr)
+        self.member_row = self.project.members.get(user=self.member)
+        self.objective = add_objective(self.project, self.mgr, [self.mgr_member, self.member_row])
+
+    def test_posting_snapshots_the_author_and_is_recorded(self):
+        update = services.add_objective_update(self.objective, actor=self.member, body="  پیشرفت خوب بود  ")
+        self.assertEqual(
+            (update.body, update.author, update.author_name, update.author_title, update.edited_at),
+            ("پیشرفت خوب بود", self.member, "عضو پروژه", self.member.title, None),
+        )
+        event = self.project.events.latest("id")
+        self.assertEqual(
+            (event.kind, event.subject_title, event.note, event.objective_id),
+            (ProjectEventKind.OBJECTIVE_UPDATE_ADDED, self.objective.title, "پیشرفت خوب بود", self.objective.pk),
+        )
+
+    def test_a_blank_or_too_long_body_is_refused(self):
+        with self.assertRaises(ValidationError):
+            services.add_objective_update(self.objective, actor=self.member, body="   ")
+        with self.assertRaises(ValidationError):
+            services.add_objective_update(self.objective, actor=self.member, body="خ" * (OBJECTIVE_UPDATE_MAX_LENGTH + 1))
+        self.assertFalse(ObjectiveUpdate.objects.exists())
+
+    def test_posting_is_refused_on_an_archived_project(self):
+        services.archive_project(self.project, actor=self.mgr)
+        with self.assertRaises(ConflictError) as caught:
+            services.add_objective_update(self.objective, actor=self.member, body="نباید ثبت شود")
+        self.assertEqual(caught.exception.payload["code"], "project_archived")
+
+    def test_editing_the_latest_entry_sets_edited_at(self):
+        update = services.add_objective_update(self.objective, actor=self.member, body="اول")
+        edited = services.edit_objective_update(update, actor=self.member, body="  ویرایش‌شده  ")
+        self.assertEqual(edited.body, "ویرایش‌شده")
+        self.assertIsNotNone(edited.edited_at)
+
+    def test_editing_anything_but_the_latest_entry_is_a_409(self):
+        first = services.add_objective_update(self.objective, actor=self.member, body="اول")
+        services.add_objective_update(self.objective, actor=self.member, body="دوم")
+        with self.assertRaises(ConflictError) as caught:
+            services.edit_objective_update(first, actor=self.member, body="نباید")
+        self.assertEqual(caught.exception.payload["code"], "not_latest_update")
+
+    def test_each_assignees_latest_entry_is_independent_of_the_others(self):
+        services.add_objective_update(self.objective, actor=self.mgr, body="مدیر یک")
+        member_first = services.add_objective_update(self.objective, actor=self.member, body="عضو یک")
+        services.add_objective_update(self.objective, actor=self.mgr, body="مدیر دو")  # a later post, different author
+        edited = services.edit_objective_update(member_first, actor=self.member, body="عضو یک ویرایش‌شده")
+        self.assertEqual(edited.body, "عضو یک ویرایش‌شده")
+
+    def test_editing_is_refused_on_an_archived_project(self):
+        update = services.add_objective_update(self.objective, actor=self.member, body="اول")
+        services.archive_project(self.project, actor=self.mgr)
+        with self.assertRaises(ConflictError) as caught:
+            services.edit_objective_update(update, actor=self.member, body="نباید")
+        self.assertEqual(caught.exception.payload["code"], "project_archived")
+
+
+class ObjectiveProgressApiTests(ProjectApiCase):
+    def setUp(self):
+        super().setUp()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.mgr_member = self.project.members.get(user=self.mgr)
+        self.member_row = self.project.members.get(user=self.member)
+        self.objective = add_objective(self.project, self.mgr, [self.mgr_member, self.member_row])
+        self.list_url = reverse("project-objective-updates", args=[self.project.pk, self.objective.pk])
+
+    def update_url(self, update_id):
+        return reverse("project-objective-update-entry", args=[self.project.pk, self.objective.pk, update_id])
+
+    def test_anyone_who_can_read_the_project_reads_the_log_an_outsider_gets_404(self):
+        services.add_objective_update(self.objective, actor=self.mgr, body="گزارش")
+        for user in (self.mgr, self.member, self.lead_s1, self.lead_d1, self.ceo):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                self.assertEqual(self.client.get(self.list_url).status_code, 200)
+        self.as_(self.outsider)
+        self.assertEqual(self.client.get(self.list_url).status_code, 404)
+
+    def test_only_a_current_assignee_may_post_not_even_a_manager_or_lead_who_is_not_one(self):
+        other = person("9800000031")
+        join(other, self.s1)
+        services.add_member(self.project, actor=self.mgr, user=other)  # a member, not an assignee
+        for user in (self.mgr, self.member):  # both are assignees (setUp)
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                response = self.client.post(self.list_url, {"body": f"از {user.pk}"}, format="json")
+                self.assertEqual(response.status_code, 201, response.data)
+        self.as_(other)
+        denied = self.client.post(self.list_url, {"body": "ممنوع"}, format="json")
+        self.assertEqual(
+            (denied.status_code, denied.data["detail"]),
+            (403, "فقط مسئولان این ریزهدف می‌توانند گزارش پیشرفت ثبت کنند."),
+        )
+        self.as_(self.lead_s1)  # can edit the objective, but is not one of its assignees
+        self.assertEqual(self.client.post(self.list_url, {"body": "ممنوع"}, format="json").status_code, 403)
+
+    def test_create_returns_the_entry_with_the_authors_own_rights(self):
+        self.as_(self.member)
+        response = self.client.post(self.list_url, {"body": "پیشرفت"}, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(
+            (response.data["author"], response.data["author_name"], response.data["body"],
+             response.data["can_edit"], response.data["edited_at"]),
+            (self.member.pk, "عضو پروژه", "پیشرفت", True, None),
+        )
+
+    def test_a_blank_body_is_a_400(self):
+        self.as_(self.mgr)
+        self.assertEqual(self.client.post(self.list_url, {"body": "  "}, format="json").status_code, 400)
+
+    def test_the_list_is_paginated_newest_first_and_filters_by_author(self):
+        self.as_(self.mgr)
+        self.client.post(self.list_url, {"body": "مدیر ۱"}, format="json")
+        self.as_(self.member)
+        self.client.post(self.list_url, {"body": "عضو ۱"}, format="json")
+        self.as_(self.mgr)
+        self.client.post(self.list_url, {"body": "مدیر ۲"}, format="json")
+        body = self.client.get(self.list_url).data
+        self.assertIn("count", body)
+        self.assertEqual([r["body"] for r in body["results"]], ["مدیر ۲", "عضو ۱", "مدیر ۱"])
+        by_member = self.client.get(self.list_url, {"author": self.member.pk}).data["results"]
+        self.assertEqual([r["body"] for r in by_member], ["عضو ۱"])
+
+    def test_only_the_author_may_edit_and_only_their_own_latest_entry(self):
+        self.as_(self.member)
+        first = self.client.post(self.list_url, {"body": "اول"}, format="json").data
+        second = self.client.post(self.list_url, {"body": "دوم"}, format="json").data
+        self.as_(self.mgr)
+        denied = self.client.patch(self.update_url(second["id"]), {"body": "هک"}, format="json")
+        self.assertEqual((denied.status_code, denied.data["detail"]), (403, "فقط نویسندهٔ گزارش می‌تواند آن را ویرایش کند."))
+        self.as_(self.member)
+        stale = self.client.patch(self.update_url(first["id"]), {"body": "نباید"}, format="json")
+        self.assertEqual((stale.status_code, stale.data["code"]), (409, "not_latest_update"))
+        ok = self.client.patch(self.update_url(second["id"]), {"body": "دوم ویرایش‌شده"}, format="json")
+        self.assertEqual((ok.status_code, ok.data["body"]), (200, "دوم ویرایش‌شده"))
+        self.assertIsNotNone(ok.data["edited_at"])
+
+    def test_posting_and_editing_are_refused_on_an_archived_project(self):
+        self.as_(self.member)
+        update = self.client.post(self.list_url, {"body": "قبل از بایگانی"}, format="json").data
+        services.archive_project(self.project, actor=self.mgr)
+        blocked = self.client.post(self.list_url, {"body": "نباید"}, format="json")
+        self.assertEqual((blocked.status_code, blocked.data["code"]), (409, "project_archived"))
+        blocked_edit = self.client.patch(self.update_url(update["id"]), {"body": "نباید"}, format="json")
+        self.assertEqual((blocked_edit.status_code, blocked_edit.data["code"]), (409, "project_archived"))
+
+    def test_an_unknown_update_or_objective_is_a_404(self):
+        self.as_(self.mgr)
+        self.assertEqual(self.client.patch(self.update_url(999999), {"body": "x"}, format="json").status_code, 404)
+        missing_objective_url = reverse("project-objective-updates", args=[self.project.pk, 999999])
+        self.assertEqual(self.client.get(missing_objective_url).status_code, 404)
+
+    def test_anonymous_gets_401(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.list_url).status_code, 401)
+        self.assertEqual(self.client.post(self.list_url, {"body": "x"}, format="json").status_code, 401)
+
+    def test_the_objectives_assignees_carry_latest_update_and_count(self):
+        objectives_url = reverse("project-objectives", args=[self.project.pk])
+        self.as_(self.member)
+        before = self.client.get(objectives_url).data
+        member_row = next(a for o in before for a in o["assignees"] if a["user"] == self.member.pk)
+        self.assertEqual((member_row["latest_update"], member_row["update_count"]), (None, 0))
+
+        self.client.post(self.list_url, {"body": "اول"}, format="json")
+        self.client.post(self.list_url, {"body": "دوم"}, format="json")
+        after = self.client.get(objectives_url).data
+        member_row = next(a for o in after for a in o["assignees"] if a["user"] == self.member.pk)
+        self.assertEqual((member_row["latest_update"]["body"], member_row["update_count"]), ("دوم", 2))
+        self.assertTrue(member_row["latest_update"]["can_edit"])
+
+        self.as_(self.mgr)  # someone else's latest entry is never editable by the viewer
+        as_mgr = self.client.get(objectives_url).data
+        member_row_for_mgr = next(a for o in as_mgr for a in o["assignees"] if a["user"] == self.member.pk)
+        self.assertFalse(member_row_for_mgr["latest_update"]["can_edit"])
+
+    def test_can_post_update_is_true_only_for_a_current_assignee_and_false_once_archived(self):
+        objectives_url = reverse("project-objectives", args=[self.project.pk])
+
+        def can_post(user):
+            self.as_(user)
+            row = next(o for o in self.client.get(objectives_url).data if o["id"] == self.objective.pk)
+            return row["can_post_update"]
+
+        self.assertTrue(can_post(self.member))
+        other = person("9800000032")
+        join(other, self.s1)
+        services.add_member(self.project, actor=self.mgr, user=other)
+        self.assertFalse(can_post(other))
+        services.archive_project(self.project, actor=self.mgr)
+        self.assertFalse(can_post(self.member))

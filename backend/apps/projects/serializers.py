@@ -10,6 +10,7 @@ from .models import (
     CLOSED_OBJECTIVE_STATUSES,
     Objective,
     ObjectiveStatus,
+    ObjectiveUpdate,
     Project,
     ProjectComment,
     ProjectDocumentLink,
@@ -108,30 +109,51 @@ class MemberInputSerializer(serializers.Serializer):
 
 class ObjectiveSerializer(serializers.ModelSerializer):
     """`assignees` are the people's *user ids* (the ProjectMember behind each one is an internal
-    detail), with no levels among them — any of them may write under their own name.
-    `can_change_status` / `can_edit` are the viewer's rights, from the very functions the endpoints
-    enforce; pass `manage` (bool) in the serializer context. Needs `objective.assignees` prefetched
-    with `member__user` (views.py), so this reads no extra query per row."""
+    detail), with no levels among them — any of them may write under their own name, each with
+    their own `latest_update`/`update_count` (their progress log on this one objective — `null`
+    latest_update means they have never posted). `can_change_status` / `can_edit` /
+    `can_post_update` are the viewer's rights, from the very functions the endpoints enforce; pass
+    `manage` (bool) and `archived` (bool) in the serializer context. Needs `objective.assignees`
+    prefetched with `member__user` and `queries.with_latest_update()` (views.py), so this reads no
+    extra query per row."""
 
     assignees = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     is_overdue = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
     can_change_status = serializers.SerializerMethodField()
+    can_post_update = serializers.SerializerMethodField()
 
     class Meta:
         model = Objective
         fields = [
             "id", "position", "title", "description", "assignees", "due_on",
-            "status", "status_label", "weight", "completed_at", "is_overdue", "can_edit", "can_change_status",
+            "status", "status_label", "weight", "completed_at", "is_overdue",
+            "can_edit", "can_change_status", "can_post_update",
         ]
         read_only_fields = fields
 
     def get_assignees(self, objective) -> list[dict]:
-        return [
-            {"user": a.member.user_id, "name": a.member.user.full_name, "title": a.member.user.title}
-            for a in objective.assignees.all()
-        ]
+        viewer_id = self.context["request"].user.pk
+        rows = []
+        for a in objective.assignees.all():
+            latest_update = None
+            if a.latest_update_id is not None:
+                latest_update = {
+                    "id": a.latest_update_id,
+                    "body": a.latest_update_body,
+                    "created_at": a.latest_update_created_at,
+                    "edited_at": a.latest_update_edited_at,
+                    "can_edit": a.member.user_id == viewer_id,
+                }
+            rows.append({
+                "user": a.member.user_id,
+                "name": a.member.user.full_name,
+                "title": a.member.user.title,
+                "latest_update": latest_update,
+                "update_count": a.update_count,
+            })
+        return rows
 
     def get_is_overdue(self, objective) -> bool:
         return objective.due_on < timezone.localdate() and objective.status not in CLOSED_OBJECTIVE_STATUSES
@@ -139,11 +161,15 @@ class ObjectiveSerializer(serializers.ModelSerializer):
     def get_can_edit(self, objective) -> bool:
         return bool(self.context.get("manage"))
 
-    def get_can_change_status(self, objective) -> bool:
-        if self.context.get("manage"):
-            return True
+    def _is_assignee(self, objective) -> bool:
         user_id = self.context["request"].user.pk
         return any(a.member.user_id == user_id for a in objective.assignees.all())
+
+    def get_can_change_status(self, objective) -> bool:
+        return bool(self.context.get("manage")) or self._is_assignee(objective)
+
+    def get_can_post_update(self, objective) -> bool:
+        return not self.context.get("archived") and self._is_assignee(objective)
 
 
 class ObjectiveInputSerializer(serializers.Serializer):
@@ -170,6 +196,31 @@ class ObjectiveUpdateSerializer(serializers.Serializer):
 
 class ReorderSerializer(serializers.Serializer):
     order = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+
+
+class ObjectiveProgressSerializer(serializers.ModelSerializer):
+    """One row of an objective's dated progress log — the paginated `…/updates/` list. `can_edit` is
+    true only for the one row that is both the viewer's own **and** their latest on this objective
+    (an older entry of theirs is frozen); pass `my_latest_id` (the viewer's own latest entry's id on
+    this objective, or `None`) in the serializer context, computed once per request, not per row."""
+
+    can_edit = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ObjectiveUpdate
+        fields = ["id", "author", "author_name", "author_title", "body", "created_at", "edited_at", "can_edit"]
+        read_only_fields = fields
+
+    def get_can_edit(self, update) -> bool:
+        request = self.context["request"]
+        return update.author_id == request.user.pk and update.pk == self.context.get("my_latest_id")
+
+
+class ObjectiveProgressBodySerializer(serializers.Serializer):
+    """POST (a new entry) and PATCH (editing one's own latest) both take just the text; length and
+    blankness are checked in services.py, in Persian, the same split `CommentCreateSerializer` uses."""
+
+    body = serializers.CharField()
 
 
 class ProjectCreateSerializer(serializers.Serializer):
