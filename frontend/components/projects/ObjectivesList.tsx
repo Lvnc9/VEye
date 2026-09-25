@@ -12,6 +12,7 @@ import {
   type ProjectMember,
 } from "@/lib/projects";
 import { ErrorBanner } from "@/components/StatusBanner";
+import { JalaliDatePicker } from "@/components/JalaliDatePicker";
 
 const select = "rounded border border-slate-300 bg-white px-2 py-1 text-xs";
 const input = "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm";
@@ -251,7 +252,7 @@ function AddObjectiveForm({
           <label className="mb-1 block text-xs text-slate-600" htmlFor="new-objective-due">
             مهلت
           </label>
-          <input id="new-objective-due" type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} className={input} />
+          <JalaliDatePicker id="new-objective-due" value={dueOn} onChange={(iso) => setDueOn(iso ?? "")} />
         </div>
         <div className="w-20">
           <label className="mb-1 block text-xs text-slate-600" htmlFor="new-objective-weight">

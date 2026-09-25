@@ -4,7 +4,9 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, apiPost } from "@/lib/api-client";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { JalaliDatePicker } from "@/components/JalaliDatePicker";
 import { MemberPicker } from "@/components/projects/MemberPicker";
+import { formatJalali } from "@/lib/jalali";
 import { nodeOptions, type OrgTreeResponse } from "@/lib/organization";
 import {
   EMPTY_CREATE_FORM,
@@ -134,19 +136,23 @@ export default function NewProjectPage() {
             <label className={label} htmlFor="starts_on">
               تاریخ شروع (اختیاری)
             </label>
-            <input
+            <JalaliDatePicker
               id="starts_on"
-              type="date"
               value={form.starts_on}
-              onChange={(e) => set("starts_on", e.target.value)}
-              className={input}
+              max={form.due_on || undefined}
+              onChange={(iso) => set("starts_on", iso ?? "")}
             />
           </div>
           <div>
             <label className={label} htmlFor="due_on">
               مهلت پروژه (اختیاری)
             </label>
-            <input id="due_on" type="date" value={form.due_on} onChange={(e) => set("due_on", e.target.value)} className={input} />
+            <JalaliDatePicker
+              id="due_on"
+              value={form.due_on}
+              min={form.starts_on || undefined}
+              onChange={(iso) => set("due_on", iso ?? "")}
+            />
             {errors.due_on && <p className="mt-1 text-xs text-red-600">{errors.due_on}</p>}
           </div>
         </div>
@@ -158,7 +164,7 @@ export default function NewProjectPage() {
               {form.objectives.map((objective) => (
                 <li key={objective.key} className="flex items-center justify-between gap-2 rounded border border-slate-100 bg-slate-50 px-3 py-1.5 text-sm">
                   <span className="min-w-0 truncate">
-                    {objective.title} — {objective.assigneeName} — {objective.due_on}
+                    {objective.title} — {objective.assigneeName} — {formatJalali(objective.due_on)}
                   </span>
                   <button
                     type="button"
@@ -211,12 +217,10 @@ export default function NewProjectPage() {
                 <label className="mb-1 block text-xs text-slate-600" htmlFor="objective-due">
                   مهلت
                 </label>
-                <input
+                <JalaliDatePicker
                   id="objective-due"
-                  type="date"
                   value={draft.due_on}
-                  onChange={(e) => setDraft({ ...draft, due_on: e.target.value })}
-                  className={input}
+                  onChange={(iso) => setDraft({ ...draft, due_on: iso ?? "" })}
                 />
               </div>
               <button
