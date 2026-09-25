@@ -5,8 +5,8 @@ import { ApiError, apiPost } from "@/lib/api-client";
 
 /**
  * «شروع راه‌اندازی» for a signed-in مدیر عامل: one press creates the company (named «شرکت من» until
- * the wizard's first step renames it) with them at its root — no setup token, decided with the owner
- * 2026-09-23. The token form (AccountStep) stays for a fresh install, where nobody can sign in yet.
+ * the wizard's first step renames it) with them at its root. On a fresh install, where nobody can
+ * sign in yet, AccountStep's form creates the first مدیر عامل instead.
  */
 export function StartSetupButton({
   onStarted,

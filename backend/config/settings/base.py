@@ -269,11 +269,7 @@ PDF_FONT_NAME = "Vazir"
 # packs files that already exist, so this bounds response size, not render time.
 BULK_PRINT_MAX_FILES = env.int("BULK_PRINT_MAX_FILES", default=200)
 
-# First-run setup (docs/11 §4). The one-time token that lets the first مدیر عامل be created on
-# a fresh database, sent as the X-VEYE-Setup-Token header. Unset or empty = the setup endpoint
-# answers 503 as if it did not exist, so a deployment that forgot to set it cannot be
-# bootstrapped by a stranger. Delete it from .env once setup is done. prod.py insists on 32+ bytes.
-SETUP_TOKEN = env("VEYE_SETUP_TOKEN", default="")
+# First-run setup: no token (removed 2026-09-25). POST /setup/bootstrap/ is rate-limited per IP.
 SETUP_RATELIMIT_RATE = env("SETUP_RATELIMIT_RATE", default="5/m")
 
 # Organisation chart: the most nodes GET /org/tree/ returns in one response. Over

@@ -24,14 +24,16 @@ The manager is کارفرمایی / لول ۱ with no choice offered, so they in
 `FULL_ACCESS_POSITIONS`, present and future. `is_superuser` is deliberately not set: that is a
 Django-admin concept, and the roll already grants everything in-app.
 
-**Starting from a session** (`POST /setup/start/`, decided with the owner 2026-09-23): a signed-in
-active کارفرمایی / لول ۱ needs no setup token — being signed in as that person proves more than the
-token does. They are promoted *themselves* through the very same path below, never anyone else.
+**No setup token** (removed by the owner, 2026-09-25). Two doors instead:
+
+* `POST /setup/bootstrap/` (anonymous) *creates* the first مدیر عامل — only while no active
+  کارفرمایی / لول ۱ exists, else 409 `manager_exists`. Until setup is done on a fresh install,
+  whoever reaches the server first can take that seat; the owner accepted this.
+* `POST /setup/start/` (signed in) promotes the caller *themselves* through the path below.
 
 **Promoting an existing manager** (the importer path, where users exist but no Company) never sets
-or reads a password: an unauthenticated endpoint that could rewrite an account's password would be
-a privilege-escalation hole even behind a token. The view also issues *no session* for that path —
-the setup token plus a national code must not be a login.
+or reads a password, and it is reachable only from that manager's own session (`setup/start/`), so
+it issues no new session either.
 """
 from dataclasses import dataclass
 
@@ -68,6 +70,12 @@ def _already_bootstrapped() -> ConflictError:
     return ConflictError("راه‌اندازی اولیه قبلاً انجام شده است.", code="already_bootstrapped")
 
 
+def _manager_exists() -> ConflictError:
+    return ConflictError(
+        "حساب مدیر عامل از قبل وجود دارد؛ با آن وارد شوید و «شروع راه‌اندازی» را بزنید.", code="manager_exists"
+    )
+
+
 def _national_code_exists() -> ConflictError:
     return ConflictError("کاربری با این کد ملی وجود دارد.", code="national_code_exists")
 
@@ -99,6 +107,8 @@ def _bootstrap(company_name, manager, existing_national_code) -> BootstrapResult
 
     if existing_national_code is not None:
         user = _eligible_manager(existing_national_code)
+    elif User.objects.filter(**_MANAGER).exists():
+        raise _manager_exists()  # an anonymous form must not mint a second مدیر عامل
     elif User.objects.filter(national_code=manager["national_code"]).exists():
         raise _national_code_exists()
 
@@ -151,11 +161,12 @@ def complete_setup() -> None:
 
 
 def setup_status() -> dict:
-    """What the public login page may learn, and nothing more: no counts, no names, no token
-    echo, never whether a given national code exists.
+    """What the public login page may learn, and nothing more: no counts, no names, never whether a
+    given national code exists.
 
-    `has_users` means "an active کارفرمایی / لول ۱ account exists", i.e. the wizard can offer
-    promoting them instead of a password form — the importer's inactive `import_user` does not count.
+    `has_users` means "an active کارفرمایی / لول ۱ account exists": the anonymous form is then closed
+    (409 `manager_exists`) and that person signs in instead — the importer's inactive `import_user`
+    does not count.
     """
     company = Company.objects.only("setup_step").first()
     return {

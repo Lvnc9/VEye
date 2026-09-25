@@ -1,6 +1,4 @@
-"""Slice 7.4: first-run setup — token, bootstrap, complete, status, the wizard's bookmark."""
-import subprocess
-import sys
+"""First-run setup — bootstrap (no token since 2026-09-25), start, complete, status, the wizard's bookmark."""
 from types import SimpleNamespace
 from unittest import mock
 
@@ -19,7 +17,6 @@ from . import bootstrap, memberships, services, tree
 from .models import Company, Membership, OrgNode, OrgNodeKind, SetupStep
 from .tests import Threaded
 
-TOKEN = "t" * 40
 STRONG = "Qz7-vector-maple-93"
 
 MANAGER = {
@@ -36,14 +33,13 @@ def payload(**overrides):
     return body
 
 
-@override_settings(CACHES=LOCMEM_CACHE, RATELIMIT_ENABLE=False, SETUP_TOKEN=TOKEN)
+@override_settings(CACHES=LOCMEM_CACHE, RATELIMIT_ENABLE=False)
 class SetupCase(TestCase):
     def setUp(self):
         self.client = APIClient(enforce_csrf_checks=False)
         self.url = reverse("setup-bootstrap")
 
-    def post(self, body=None, token=TOKEN, client=None):
-        headers = {} if token is None else {"HTTP_X_VEYE_SETUP_TOKEN": token}
+    def post(self, body=None, client=None, **headers):
         return (client or self.client).post(self.url, payload() if body is None else body, format="json", **headers)
 
     def nothing_was_created(self):
@@ -64,10 +60,6 @@ class SetupStatusTests(SetupCase):
     def test_it_is_public_and_ignores_a_bad_session_cookie(self):
         self.client.cookies["access_token"] = "garbage.token.value"
         self.assertEqual(self.status().status_code, 200)
-
-    def test_it_never_needs_or_looks_at_the_setup_token(self):
-        with override_settings(SETUP_TOKEN=""):
-            self.assertEqual(self.status().status_code, 200)
 
     def test_has_users_means_an_active_managing_director_exists(self):
         importer = User.objects.create_user("9100000001", None, full_name="import_user", access_roll="EMPLOYER",
@@ -90,44 +82,22 @@ class SetupStatusTests(SetupCase):
         self.assertEqual(self.status().data, {"needed": False, "has_users": True, "step": SetupStep.DOMAINS})
 
 
-class SetupTokenTests(SetupCase):
-    def test_no_token_configured_is_a_503_however_the_request_looks(self):
-        with override_settings(SETUP_TOKEN=""):
-            for token in (None, "", TOKEN, "anything"):
-                with self.subTest(token=token):
-                    response = self.post(token=token)
-                    self.assertEqual(response.status_code, 503)
-        self.nothing_was_created()
+class NoTokenTests(SetupCase):
+    """The setup token is gone (owner, 2026-09-25): a fresh database is set up from the form alone."""
 
-    def test_a_missing_or_wrong_token_is_a_403_and_nothing_is_created(self):
-        for token in (None, "", "wrong", TOKEN + "x", TOKEN[:-1]):
-            with self.subTest(token=token):
-                self.assertEqual(self.post(token=token).status_code, 403)
-        self.nothing_was_created()
+    def test_a_fresh_database_is_bootstrapped_with_no_token_at_all(self):
+        self.assertEqual(self.post().status_code, 201)
+        self.assertTrue(Company.objects.exists())
 
-    def test_a_non_ascii_token_is_refused_not_a_server_error(self):
-        self.assertEqual(self.post(token="توکن‌نادرست").status_code, 403)
-        with override_settings(SETUP_TOKEN="کلید-فارسی-" + "x" * 32):
-            self.assertEqual(self.post(token="کلید-فارسی-" + "x" * 32).status_code, 201)
-
-    def test_the_token_is_compared_in_constant_time(self):
-        with mock.patch("apps.organization.setup_views.hmac.compare_digest", wraps=__import__("hmac").compare_digest) as spy:
-            self.post()
-        spy.assert_called_once()
-
-    def test_the_token_is_never_read_from_the_query_string_or_body_and_never_echoed(self):
-        query = self.client.post(self.url + f"?token={TOKEN}&setup_token={TOKEN}", payload(setup_token=TOKEN), format="json")
-        self.assertEqual(query.status_code, 403)
-        ok = self.post()
-        self.assertEqual(ok.status_code, 201)
-        self.assertNotIn(TOKEN, ok.content.decode())
-        self.assertNotIn(TOKEN, str(ok.cookies))
+    def test_a_leftover_token_header_or_setting_changes_nothing(self):
+        with override_settings(SETUP_TOKEN="whatever"):
+            response = self.post(HTTP_X_VEYE_SETUP_TOKEN="wrong")
+        self.assertEqual(response.status_code, 201)
 
     @override_settings(RATELIMIT_ENABLE=True, SETUP_RATELIMIT_RATE="3/m")
     def test_every_attempt_counts_against_the_per_ip_limit(self):
-        with override_settings(SETUP_TOKEN=""):
-            codes = [self.post().status_code for _ in range(5)]
-        self.assertEqual(codes, [503, 503, 503, 403, 403])  # the 403s are the limiter, not the token
+        codes = [self.post().status_code for _ in range(5)]
+        self.assertEqual(codes, [201, 409, 409, 403, 403])  # the 403s are the limiter
 
 
 class BootstrapTests(SetupCase):
@@ -163,7 +133,6 @@ class BootstrapTests(SetupCase):
 
     def test_the_new_manager_is_signed_in_and_the_wizard_can_continue_under_that_session(self):
         response = self.post()
-        self.assertTrue(response.data["logged_in"])
         for name in (settings.JWT_ACCESS_COOKIE_NAME, settings.JWT_REFRESH_COOKIE_NAME):
             self.assertTrue(response.cookies[name]["httponly"], name)
         me = self.client.get(reverse("auth-me"))  # the cookie jar carries the session
@@ -227,8 +196,7 @@ class BootstrapTests(SetupCase):
         cases = {
             "no company name": {"manager": MANAGER},
             "blank company name": payload(company_name="   "),
-            "neither manager nor existing": {"company_name": "شرکت"},
-            "both": payload(existing_manager_national_code="1"),
+            "no manager": {"company_name": "شرکت"},
             "manager missing password": payload(manager={k: v for k, v in MANAGER.items() if k != "password"}),
             "manager missing name": payload(manager={k: v for k, v in MANAGER.items() if k != "full_name"}),
             "blank national code": payload(manager={**MANAGER, "national_code": "  "}),
@@ -252,38 +220,52 @@ class BootstrapTests(SetupCase):
         self.assertTrue(User.objects.get().check_password("  " + STRONG + "  "))
 
 
-class PromoteExistingManagerTests(SetupCase):
+class ManagerExistsTests(SetupCase):
+    """Once an active مدیر عامل exists, the anonymous form is closed: they sign in and press start."""
+
     def setUp(self):
         super().setUp()
         self.boss = make_user("2000000001", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1, password="their-own-pass-1")
 
-    def promote(self, code="2000000001", **extra):
-        return self.post({"company_name": "شرکت", "existing_manager_national_code": code, **extra})
+    def test_the_anonymous_form_is_a_persian_409_and_creates_nothing(self):
+        response = self.post()
+        self.assertEqual((response.status_code, response.data["code"]), (409, "manager_exists"))
+        self.assertIn("وارد شوید", str(response.data["detail"]))
+        self.nothing_was_created()
+        self.assertEqual(User.objects.count(), 1)
+        self.assertNotIn(settings.JWT_ACCESS_COOKIE_NAME, response.cookies)
 
-    def test_an_existing_managing_director_is_given_the_root_membership(self):
+    def test_naming_the_existing_manager_anonymously_is_not_a_way_in(self):
+        response = self.post({"company_name": "شرکت", "existing_manager_national_code": "2000000001"})
+        self.assertEqual(response.status_code, 400)  # the promotion field is gone; `manager` is required
+        self.nothing_was_created()
+
+    def test_an_inactive_or_lower_account_does_not_close_the_form(self):
+        self.boss.is_active = False
+        self.boss.save(update_fields=["is_active"])
+        make_user("2000000002", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)
+        make_user("2000000003", AccessRoll.HEADQUARTERS, AccessLevel.LEVEL_1)
+        self.assertEqual(self.post().status_code, 201)
+
+
+class PromoteExistingManagerServiceTests(SetupCase):
+    """The promotion path `setup/start/` uses, at the service level."""
+
+    def setUp(self):
+        super().setUp()
+        self.boss = make_user("2000000001", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1, password="their-own-pass-1")
+
+    def promote(self, code="2000000001"):
+        return bootstrap.bootstrap(company_name="شرکت", existing_manager_national_code=code)
+
+    def test_an_existing_managing_director_is_given_the_root_membership_and_keeps_their_password(self):
         before = self.boss.password
-        response = self.promote()
-        self.assertEqual(response.status_code, 201, response.data)
+        result = self.promote()
+        self.assertFalse(result.created_user)
         membership = Membership.objects.get()
         self.assertEqual((membership.user, membership.is_lead, membership.is_primary), (self.boss, True, True))
-        self.assertEqual(User.objects.count(), 1)  # nobody was created
         self.boss.refresh_from_db()
-        self.assertEqual(self.boss.password, before)  # never set, never rewritten
-        self.assertTrue(self.boss.check_password("their-own-pass-1"))
-
-    def test_promoting_issues_no_session(self):
-        """The setup token plus a national code must never be a login for that account."""
-        response = self.promote()
-        self.assertFalse(response.data["logged_in"])
-        self.assertNotIn(settings.JWT_ACCESS_COOKIE_NAME, response.cookies)
-        self.assertNotIn(settings.JWT_REFRESH_COOKIE_NAME, response.cookies)
-        self.assertEqual(self.client.get(reverse("auth-me")).status_code, 401)
-
-    def test_a_password_sent_along_with_a_promotion_is_ignored_not_applied(self):
-        self.promote(password="attacker-chosen-1")
-        self.boss.refresh_from_db()
-        self.assertTrue(self.boss.check_password("their-own-pass-1"))
-        self.assertFalse(self.boss.check_password("attacker-chosen-1"))
+        self.assertEqual(self.boss.password, before)
 
     def test_only_an_active_managing_director_is_eligible_and_the_answer_is_the_same_for_all(self):
         make_user("2000000002", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)
@@ -293,16 +275,14 @@ class PromoteExistingManagerTests(SetupCase):
                                  access_level="L1", is_active=False)
         for code in ("2000000002", "2000000003", "2000000004", "2000000005", "2999999999"):
             with self.subTest(code=code):
-                response = self.promote(code)
-                self.assertEqual((response.status_code, response.data["code"]), (409, "manager_not_eligible"))
+                with self.assertRaises(ConflictError) as caught:
+                    self.promote(code)
+                self.assertEqual(caught.exception.payload["code"], "manager_not_eligible")
         self.nothing_was_created()
-
-    def test_a_persian_digit_national_code_finds_the_same_person(self):
-        self.assertEqual(self.promote("۲۰۰۰۰۰۰۰۰۱").status_code, 201)
 
 
 class SetupStartTests(SetupCase):
-    """`POST /setup/start/`: the signed-in مدیر عامل's one button — no token (decided 2026-09-23)."""
+    """`POST /setup/start/`: the signed-in مدیر عامل's one button."""
 
     def setUp(self):
         super().setUp()
@@ -313,8 +293,7 @@ class SetupStartTests(SetupCase):
         self.client.force_authenticate(user or self.boss)
         return self.client.post(self.start_url, body or {}, format="json")
 
-    @override_settings(SETUP_TOKEN="")
-    def test_the_manager_starts_setup_with_no_token_even_when_none_is_configured(self):
+    def test_the_manager_starts_setup_with_one_press(self):
         before = self.boss.password
         response = self.start()
         self.assertEqual(response.status_code, 201, response.data)
@@ -356,18 +335,13 @@ class SetupStartTests(SetupCase):
         self.assertEqual(Membership.objects.get().user, self.boss)
         self.assertFalse(User.objects.filter(national_code="1234567890").exists())
 
-    def test_a_second_start_is_a_409_and_the_token_door_stays_shut_too(self):
+    def test_a_second_start_is_a_409_and_the_anonymous_form_stays_shut_too(self):
         self.assertEqual(self.start().status_code, 201)
         again = self.start()
         self.assertEqual((again.status_code, again.data["code"]), (409, "already_bootstrapped"))
         self.client.force_authenticate(None)
         self.assertEqual(self.post().status_code, 409)
         self.assertEqual(Company.objects.count(), 1)
-
-    def test_a_session_is_not_a_way_around_the_token_on_the_bootstrap_endpoint(self):
-        self.client.force_authenticate(self.boss)
-        self.assertEqual(self.post(token=None).status_code, 403)
-        self.nothing_was_created()
 
 
 class CompleteTests(SetupCase):
@@ -411,7 +385,7 @@ class CompleteTests(SetupCase):
         self.client.force_authenticate(User.objects.get())
         self.assertEqual(self.client.post(self.url_complete).status_code, 404)
 
-    def test_bootstrap_stays_dead_after_completion_whatever_the_token_says(self):
+    def test_bootstrap_stays_dead_after_completion(self):
         self.client.post(self.url_complete)
         self.assertEqual(self.post(payload(manager={**MANAGER, "national_code": "5555555555"})).status_code, 409)
 
@@ -469,7 +443,7 @@ class BookmarkTests(SetupCase):
 
 
 @skipUnlessDBFeature("has_select_for_update")
-@override_settings(CACHES=LOCMEM_CACHE, RATELIMIT_ENABLE=False, SETUP_TOKEN=TOKEN)
+@override_settings(CACHES=LOCMEM_CACHE, RATELIMIT_ENABLE=False)
 class SetupConcurrencyTests(Threaded, TransactionTestCase):
     """Real threads: the property the Company(pk=1) guard exists for."""
 
@@ -514,30 +488,3 @@ class SetupConcurrencyTests(Threaded, TransactionTestCase):
         self.assertEqual(len([r for r in results if r[0] == "ok"]), 1, results)
         errors = [r[1] for r in results if r[0] == "err"]
         self.assertTrue(all(isinstance(e, ConflictError) and e.payload["code"] == "already_completed" for e in errors), errors)
-
-
-class ProductionGuardTests(TestCase):
-    """prod.py refuses to start with a guessable setup token — a subprocess, because the guard runs
-    at import time."""
-
-    def run_prod(self, **env):
-        base = {"DJANGO_SETTINGS_MODULE": "config.settings.prod", "DJANGO_SECRET_KEY": "k" * 64,
-                "DATABASE_URL": "postgres://u:p@localhost:5432/d", "PATH": "/usr/local/bin:/usr/bin"}
-        return subprocess.run(
-            [sys.executable, "-c", "import config.settings.prod as s; print('BOOTED', repr(s.SETUP_TOKEN))"],
-            capture_output=True, text=True, env={**base, **env}, timeout=60, cwd=str(settings.BASE_DIR),
-        )
-
-    def test_a_short_token_stops_the_server_from_booting(self):
-        result = self.run_prod(VEYE_SETUP_TOKEN="too-short")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("VEYE_SETUP_TOKEN must be at least 32 bytes", result.stderr)
-
-    def test_a_token_of_exactly_32_bytes_boots_and_no_token_boots_too(self):
-        self.assertIn("BOOTED", self.run_prod(VEYE_SETUP_TOKEN="a" * 32).stdout)
-        self.assertIn("BOOTED", self.run_prod().stdout)  # unset simply disables setup
-
-    def test_the_length_is_counted_in_bytes_not_characters(self):
-        # 16 Persian letters are 32 bytes in UTF-8; 15 are 30.
-        self.assertIn("BOOTED", self.run_prod(VEYE_SETUP_TOKEN="ک" * 16).stdout)
-        self.assertNotEqual(self.run_prod(VEYE_SETUP_TOKEN="ک" * 15).returncode, 0)

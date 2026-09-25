@@ -1,7 +1,7 @@
-"""The first-run endpoints: `setup/status/` (public), `setup/bootstrap/` (setup token — a fresh
-install, where nobody can sign in yet), `setup/start/` (a signed-in مدیر عامل, no token) and
-`setup/complete/` (the مدیر عامل's session). See bootstrap.py for the rules."""
-import hmac
+"""The first-run endpoints: `setup/status/` (public), `setup/bootstrap/` (public, only while no
+مدیر عامل account exists), `setup/start/` (a signed-in مدیر عامل) and `setup/complete/` (the مدیر
+عامل's session). No setup token anywhere — removed by the owner's decision (2026-09-25). See
+bootstrap.py for the rules."""
 
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
@@ -10,7 +10,7 @@ from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import serializers, status
-from rest_framework.exceptions import APIException, PermissionDenied
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,28 +24,6 @@ from apps.core.text import normalize_title, to_latin_digits
 
 from . import bootstrap
 from .serializers import company_payload
-
-SETUP_TOKEN_HEADER = "HTTP_X_VEYE_SETUP_TOKEN"  # X-VEYE-Setup-Token, as Django's META spells it
-
-
-class SetupDisabled(APIException):
-    """503, not 403: a deployment with no token configured has no setup door at all. A 403 would
-    tell an attacker "the door exists, keep guessing"."""
-
-    status_code = 503
-    default_detail = "راه‌اندازی اولیه در این استقرار فعال نیست."
-    default_code = "setup_disabled"
-
-
-def require_setup_token(request) -> None:
-    """The token travels only in a header — never a query string, never echoed, never logged.
-    Both sides are encoded first so a non-ASCII value cannot raise, and compared in constant time."""
-    configured = settings.SETUP_TOKEN
-    if not configured:
-        raise SetupDisabled()
-    supplied = request.META.get(SETUP_TOKEN_HEADER, "")
-    if not hmac.compare_digest(supplied.encode("utf-8"), configured.encode("utf-8")):
-        raise PermissionDenied("توکن راه‌اندازی نادرست است.")
 
 
 class ManagerSerializer(serializers.Serializer):
@@ -83,19 +61,7 @@ class ManagerSerializer(serializers.Serializer):
 
 class BootstrapSerializer(serializers.Serializer):
     company_name = serializers.CharField(max_length=255)
-    manager = ManagerSerializer(required=False)
-    existing_manager_national_code = serializers.CharField(max_length=32, required=False)
-
-    def validate(self, attrs):
-        if ("manager" in attrs) == ("existing_manager_national_code" in attrs):
-            raise serializers.ValidationError(
-                {"manager": ["یا مشخصات مدیر عامل تازه، یا کد ملی یک مدیر عامل موجود را بفرستید (فقط یکی)."]}
-            )
-        if "existing_manager_national_code" in attrs:
-            attrs["existing_manager_national_code"] = "".join(
-                to_latin_digits(attrs["existing_manager_national_code"]).split()
-            )
-        return attrs
+    manager = ManagerSerializer()
 
 
 class SetupStatusView(APIView):
@@ -111,10 +77,11 @@ class SetupStatusView(APIView):
 
 
 class SetupBootstrapView(APIView):
-    """Create the company and its مدیر عامل on a fresh database.
+    """Create the company and its **first** مدیر عامل on a database that has neither — no token.
 
-    Order matters: the rate limit sees every attempt (a wrong token counts), then 503 if setup is
-    off, then 403 for a wrong token, then the payload, and only then the database."""
+    Open to anyone only while no active کارفرمایی / لول ۱ exists (bootstrap refuses otherwise with
+    409 `manager_exists`: that person signs in and uses `setup/start/`). The rate limit sees every
+    attempt; then the payload; only then the database."""
 
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -123,31 +90,17 @@ class SetupBootstrapView(APIView):
         ratelimit(key="ip", rate=lambda group, request: settings.SETUP_RATELIMIT_RATE, method="POST", block=True)
     )
     def post(self, request):
-        require_setup_token(request)
         serializer = BootstrapSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        result = bootstrap.bootstrap(company_name=data["company_name"], manager=dict(data["manager"]))
 
-        manager = data.get("manager")
-        result = bootstrap.bootstrap(
-            company_name=data["company_name"],
-            manager=dict(manager) if manager else None,
-            existing_manager_national_code=data.get("existing_manager_national_code"),
-        )
-
-        body = {
-            "company": company_payload(result.company, request),
-            "user": UserSerializer(result.user).data,
-            "logged_in": result.created_user,
-        }
+        body = {"company": company_payload(result.company, request), "user": UserSerializer(result.user).data}
         response = Response(body, status=status.HTTP_201_CREATED)
-        if result.created_user:
-            # They just proved the token by creating the account, so they are signed in — the wizard
-            # continues under their session. A *promoted* account gets no session: the setup token
-            # plus a national code must never be a login; they sign in with their own password.
-            refresh = RefreshToken.for_user(result.user)
-            set_jwt_cookies(response, str(refresh.access_token), str(refresh))
-            get_token(request)
+        # They just created the account, so they are signed in and the wizard continues under it.
+        refresh = RefreshToken.for_user(result.user)
+        set_jwt_cookies(response, str(refresh.access_token), str(refresh))
+        get_token(request)
         response["Cache-Control"] = "no-store"
         return response
 
@@ -162,12 +115,11 @@ class StartSerializer(serializers.Serializer):
 
 
 class SetupStartView(APIView):
-    """`POST /setup/start/` — the signed-in مدیر عامل starts setup with one button, no token.
+    """`POST /setup/start/` — the signed-in مدیر عامل starts setup with one button.
 
-    Decided with the owner (2026-09-23): the token guards a fresh install, where nobody can sign in;
-    a session of an active کارفرمایی / لول ۱ proves more than it. The caller becomes the root lead
-    *themselves* (the promotion path, so no password is touched and no new session is issued) —
-    there is no way to name somebody else here. Anyone else signed in is a 403."""
+    The caller becomes the root lead *themselves* (the promotion path, so no password is touched and
+    no new session is issued) — there is no way to name somebody else here. Anyone else signed in is
+    a 403."""
 
     permission_classes = [IsAuthenticated]
 

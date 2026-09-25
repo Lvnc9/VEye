@@ -5,7 +5,6 @@ import Link from "next/link";
 import { ApiError, apiPost } from "@/lib/api-client";
 import {
   EMPTY_ACCOUNT_FORM,
-  SETUP_TOKEN_HEADER,
   bootstrapBody,
   validateAccountForm,
   type AccountErrors,
@@ -14,25 +13,17 @@ import {
 import type { SetupStatus } from "@/lib/types";
 import { DarkError, Field, StepCard, darkInput, primaryButton } from "./ui";
 
-interface BootstrapResponse {
-  logged_in: boolean;
-}
-
 /**
- * Step 0 for a visitor with no session (a fresh install): the one-time setup token, the company's
- * name, and the مدیر عامل account. A signed-in مدیر عامل never sees this — SetupWizard's FirstStep
- * gives them StartSetupButton instead.
- *
- * The password fields are for a *new* account only. Where an active مدیر عامل already exists the
- * wizard offers to promote them instead: that never sets a password and never signs anyone in, so
- * they continue from the login page with their own password.
+ * Step 0 for a visitor with no session: the company's name and the first مدیر عامل account — no
+ * setup token (removed by the owner, 2026-09-25). If an active مدیر عامل already exists the server
+ * refuses a second one from this form, so that person is sent to sign in instead; signed in,
+ * SetupWizard's FirstStep gives them StartSetupButton.
  */
 export function AccountStep({ status, onDone }: { status: SetupStatus; onDone: () => void }) {
   const [form, setForm] = useState<AccountForm>(EMPTY_ACCOUNT_FORM);
   const [errors, setErrors] = useState<AccountErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [promoted, setPromoted] = useState(false);
 
   const set = <K extends keyof AccountForm>(key: K, value: AccountForm[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -45,11 +36,8 @@ export function AccountStep({ status, onDone }: { status: SetupStatus; onDone: (
 
     setBusy(true);
     try {
-      const response = await apiPost<BootstrapResponse>("/setup/bootstrap/", bootstrapBody(form), {
-        headers: { [SETUP_TOKEN_HEADER]: form.token.trim() },
-      });
-      if (response.logged_in) onDone();
-      else setPromoted(true);
+      await apiPost("/setup/bootstrap/", bootstrapBody(form));
+      onDone(); // the new account is signed in; the wizard continues under it
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : "راه‌اندازی ممکن نشد. اتصال را بررسی و دوباره تلاش کنید.");
     } finally {
@@ -57,11 +45,11 @@ export function AccountStep({ status, onDone }: { status: SetupStatus; onDone: (
     }
   }
 
-  if (promoted) {
+  if (status.has_users) {
     return (
-      <StepCard title="شرکت ساخته شد" intro="حساب مدیر عامل موجود به ریشهٔ ساختار سازمان افزوده شد.">
+      <StepCard title="ورود با حساب مدیر عامل" intro="حساب مدیر عامل از قبل در سامانه هست.">
         <p className="text-sm leading-7 text-slate-300">
-          به دلایل امنیتی با این راه‌اندازی وارد حساب نشدید. با رمز عبور خودتان وارد شوید تا ساختار سازمان را ادامه دهید.
+          با همان حساب وارد شوید تا با یک کلیک «شروع راه‌اندازی» شرکت را بسازید.
         </p>
         <Link href="/login?next=%2Fsetup" className={`${primaryButton} inline-block`}>
           رفتن به صفحهٔ ورود
@@ -73,31 +61,10 @@ export function AccountStep({ status, onDone }: { status: SetupStatus; onDone: (
   return (
     <StepCard
       title="ایجاد حساب مدیر عامل"
-      intro="توکن راه‌اندازی را از فایل تنظیمات سرور (VEYE_SETUP_TOKEN) بردارید. پس از پایان کار، آن را از سرور حذف کنید."
+      intro="نام شرکت و حساب مدیر عامل را بسازید. پس از آن، ساختار سازمان را گام‌به‌گام تعریف می‌کنید."
     >
-      {status.has_users && (
-        <p className="rounded-lg border border-line px-3.5 py-2.5 text-sm leading-7 text-slate-300">
-          حساب مدیر عامل دارید؟{" "}
-          <Link href="/login?next=%2Fsetup" className="font-medium text-accent hover:underline">
-            وارد شوید
-          </Link>{" "}
-          تا بدون توکن راه‌اندازی کنید.
-        </p>
-      )}
-
       <form onSubmit={submit} className="space-y-5" noValidate>
         {serverError && <DarkError message={serverError} />}
-
-        <Field id="setup-token" label="توکن راه‌اندازی" error={errors.token}>
-          <input
-            id="setup-token"
-            type="password"
-            autoComplete="off"
-            value={form.token}
-            onChange={(e) => set("token", e.target.value)}
-            className={`${darkInput} latn text-left`}
-          />
-        </Field>
 
         <Field id="company-name" label="نام شرکت" error={errors.companyName}>
           <input
@@ -109,40 +76,17 @@ export function AccountStep({ status, onDone }: { status: SetupStatus; onDone: (
           />
         </Field>
 
-        {status.has_users && (
-          <fieldset className="space-y-2 rounded-lg border border-line p-4">
-            <legend className="px-2 text-sm text-slate-300">مدیر عامل</legend>
-            <label className="flex items-center gap-2 text-sm text-slate-200">
-              <input type="radio" checked={form.mode === "new"} onChange={() => set("mode", "new")} />
-              ساختن حساب تازه
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-200">
-              <input type="radio" checked={form.mode === "existing"} onChange={() => set("mode", "existing")} />
-              استفاده از حساب مدیر عامل موجود
-            </label>
-          </fieldset>
-        )}
+        <Field id="full-name" label="نام و نام خانوادگی" error={errors.fullName}>
+          <input
+            id="full-name"
+            value={form.fullName}
+            onChange={(e) => set("fullName", e.target.value)}
+            maxLength={255}
+            className={darkInput}
+          />
+        </Field>
 
-        {form.mode === "new" && (
-          <>
-            <Field id="full-name" label="نام و نام خانوادگی" error={errors.fullName}>
-              <input
-                id="full-name"
-                value={form.fullName}
-                onChange={(e) => set("fullName", e.target.value)}
-                maxLength={255}
-                className={darkInput}
-              />
-            </Field>
-          </>
-        )}
-
-        <Field
-          id="national-code"
-          label="کد ملی"
-          error={errors.nationalCode}
-          hint={form.mode === "existing" ? "کد ملی مدیر عاملِ فعالی که از قبل در سامانه هست." : undefined}
-        >
+        <Field id="national-code" label="کد ملی" error={errors.nationalCode}>
           <input
             id="national-code"
             inputMode="numeric"
@@ -153,39 +97,37 @@ export function AccountStep({ status, onDone }: { status: SetupStatus; onDone: (
           />
         </Field>
 
-        {form.mode === "new" && (
-          <>
-            <Field id="mobile" label="تلفن همراه (اختیاری)">
-              <input
-                id="mobile"
-                inputMode="tel"
-                value={form.mobilePhone}
-                onChange={(e) => set("mobilePhone", e.target.value)}
-                className={`${darkInput} latn text-left`}
-              />
-            </Field>
-            <Field id="password" label="رمز عبور" error={errors.password} hint="دست‌کم ۸ نویسه؛ رایج یا فقط عدد نباشد.">
-              <input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                value={form.password}
-                onChange={(e) => set("password", e.target.value)}
-                className={`${darkInput} latn text-left`}
-              />
-            </Field>
-            <Field id="password-confirm" label="تکرار رمز عبور" error={errors.passwordConfirm}>
-              <input
-                id="password-confirm"
-                type="password"
-                autoComplete="new-password"
-                value={form.passwordConfirm}
-                onChange={(e) => set("passwordConfirm", e.target.value)}
-                className={`${darkInput} latn text-left`}
-              />
-            </Field>
-          </>
-        )}
+        <Field id="mobile" label="تلفن همراه (اختیاری)">
+          <input
+            id="mobile"
+            inputMode="tel"
+            value={form.mobilePhone}
+            onChange={(e) => set("mobilePhone", e.target.value)}
+            className={`${darkInput} latn text-left`}
+          />
+        </Field>
+
+        <Field id="password" label="رمز عبور" error={errors.password} hint="دست‌کم ۸ نویسه؛ رایج یا فقط عدد نباشد.">
+          <input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={(e) => set("password", e.target.value)}
+            className={`${darkInput} latn text-left`}
+          />
+        </Field>
+
+        <Field id="password-confirm" label="تکرار رمز عبور" error={errors.passwordConfirm}>
+          <input
+            id="password-confirm"
+            type="password"
+            autoComplete="new-password"
+            value={form.passwordConfirm}
+            onChange={(e) => set("passwordConfirm", e.target.value)}
+            className={`${darkInput} latn text-left`}
+          />
+        </Field>
 
         <button type="submit" disabled={busy} className={`${primaryButton} w-full`}>
           {busy ? "در حال ساخت..." : "ایجاد حساب و ادامه"}

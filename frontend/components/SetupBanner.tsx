@@ -28,7 +28,7 @@ export function SetupBanner() {
           : "راه‌اندازی ساختار سازمان هنوز به پایان نرسیده است."}
       </span>
       {data.needed ? (
-        // Already signed in as the مدیر عامل: no setup token, straight into the wizard.
+        // Already signed in as the مدیر عامل: one press, straight into the wizard.
         <StartSetupButton
           onStarted={() => router.push("/setup")}
           className={`${BUTTON} disabled:opacity-50`}

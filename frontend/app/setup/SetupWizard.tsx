@@ -56,9 +56,9 @@ export function SetupWizard() {
 }
 
 /**
- * No company yet. A signed-in مدیر عامل gets one button and no setup token (decided with the owner
- * 2026-09-23); a visitor with no session — a fresh install, where nobody can sign in yet — gets the
- * token form. The session check must not bounce that visitor to /login, hence apiGetIfSignedIn.
+ * No company yet. A signed-in مدیر عامل gets one button; a visitor with no session gets the form
+ * that creates the first مدیر عامل (or, if one exists, a pointer to sign in). No setup token anywhere.
+ * The session check must not bounce that visitor to /login, hence apiGetIfSignedIn.
  */
 function FirstStep({ status, onDone }: { status: SetupStatus; onDone: () => void }) {
   const [me, setMe] = useState<User | null | undefined>(undefined);

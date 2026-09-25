@@ -615,7 +615,7 @@ export type SetupStep = "COMPANY" | "DOMAINS" | "UNITS" | "SECTIONS" | "PEOPLE" 
 export interface SetupStatus {
   /** No company exists yet: the database is fresh and bootstrap is possible. */
   needed: boolean;
-  /** An active کارفرمایی لول ۱ account exists, so the wizard can offer to promote it. */
+  /** An active کارفرمایی لول ۱ account exists: the anonymous form is closed, that person signs in and starts. */
   has_users: boolean;
   /** Where the wizard last was; null before a company exists. */
   step: SetupStep | null;

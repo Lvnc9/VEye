@@ -22,7 +22,7 @@ const inputClass =
  *
  * On a database with no company yet (`/setup/status/` says `needed`) the card offers «شروع راه‌اندازی».
  * If an active مدیر عامل account already exists (an install that predates setup, or the importer),
- * the sign-in form stays — otherwise that install would be locked out — and setup is a quiet link.
+ * the sign-in form stays and a quiet line says to sign in as them: setup then starts from one button.
  */
 export function LoginScreen() {
   const router = useRouter();
@@ -193,11 +193,8 @@ export function LoginScreen() {
               </button>
 
               {setupAvailable && (
-                <p className="border-t border-line pt-5 text-center text-sm text-slate-400">
-                  ساختار سازمان هنوز تعریف نشده است.{" "}
-                  <Link href="/setup" className="font-medium text-accent hover:underline">
-                    راه‌اندازی شرکت
-                  </Link>
+                <p className="border-t border-line pt-5 text-center text-sm leading-7 text-slate-400">
+                  ساختار سازمان هنوز تعریف نشده است. با حساب مدیر عامل وارد شوید و «شروع راه‌اندازی» را بزنید.
                 </p>
               )}
             </form>

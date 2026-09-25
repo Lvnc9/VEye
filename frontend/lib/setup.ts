@@ -39,11 +39,9 @@ export function wizardStepFor(status: SetupStatus, signedIn: boolean): WizardSte
   }
 }
 
+/** The first مدیر عامل, created from the form on a fresh install (no token — removed 2026-09-25). */
 export interface AccountForm {
-  token: string;
   companyName: string;
-  /** Create a new مدیر عامل, or promote an active one that already exists. */
-  mode: "new" | "existing";
   fullName: string;
   nationalCode: string;
   mobilePhone: string;
@@ -52,9 +50,7 @@ export interface AccountForm {
 }
 
 export const EMPTY_ACCOUNT_FORM: AccountForm = {
-  token: "",
   companyName: "",
-  mode: "new",
   fullName: "",
   nationalCode: "",
   mobilePhone: "",
@@ -69,38 +65,26 @@ export type AccountErrors = Partial<Record<keyof AccountForm, string>>;
 /** Client-side checks, in the order the form reads. An empty object means "send it". */
 export function validateAccountForm(form: AccountForm): AccountErrors {
   const errors: AccountErrors = {};
-  if (!form.token.trim()) errors.token = "توکن راه‌اندازی را وارد کنید.";
   if (!form.companyName.trim()) errors.companyName = "نام شرکت را وارد کنید.";
+  if (!form.fullName.trim()) errors.fullName = "نام و نام خانوادگی را وارد کنید.";
   if (!normalizeNationalCode(form.nationalCode)) errors.nationalCode = "کد ملی را وارد کنید.";
-
-  if (form.mode === "new") {
-    if (!form.fullName.trim()) errors.fullName = "نام و نام خانوادگی را وارد کنید.";
-    if (form.password.length < PASSWORD_MIN_LENGTH) {
-      errors.password = `رمز عبور باید دست‌کم ${PASSWORD_MIN_LENGTH} نویسه باشد.`;
-    } else if (form.passwordConfirm !== form.password) {
-      errors.passwordConfirm = "تکرار رمز عبور با رمز عبور یکسان نیست.";
-    }
+  if (form.password.length < PASSWORD_MIN_LENGTH) {
+    errors.password = `رمز عبور باید دست‌کم ${PASSWORD_MIN_LENGTH} نویسه باشد.`;
+  } else if (form.passwordConfirm !== form.password) {
+    errors.passwordConfirm = "تکرار رمز عبور با رمز عبور یکسان نیست.";
   }
   return errors;
 }
 
-/** The `POST /setup/bootstrap/` body. The token travels in a header, never here. */
+/** The `POST /setup/bootstrap/` body. */
 export function bootstrapBody(form: AccountForm): Record<string, unknown> {
-  const companyName = form.companyName.trim();
-  const nationalCode = normalizeNationalCode(form.nationalCode);
-  if (form.mode === "existing") {
-    return { company_name: companyName, existing_manager_national_code: nationalCode };
-  }
   return {
-    company_name: companyName,
+    company_name: form.companyName.trim(),
     manager: {
       full_name: form.fullName.trim(),
-      national_code: nationalCode,
+      national_code: normalizeNationalCode(form.nationalCode),
       mobile_phone: form.mobilePhone.trim(),
       password: form.password,
     },
   };
 }
-
-/** The header the backend reads the one-time setup token from (see backend setup_views.py). */
-export const SETUP_TOKEN_HEADER = "X-VEYE-Setup-Token";

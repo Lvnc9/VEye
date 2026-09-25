@@ -3,8 +3,8 @@ import { extractErrorMessage, flattenErrorMessages } from "./api-errors";
 
 describe("extractErrorMessage", () => {
   it("prefers the server's detail", () => {
-    expect(extractErrorMessage({ detail: "توکن راه‌اندازی نادرست است.", code: "x" }, 403)).toBe(
-      "توکن راه‌اندازی نادرست است.",
+    expect(extractErrorMessage({ detail: "راه‌اندازی اولیه قبلاً انجام شده است.", code: "x" }, 403)).toBe(
+      "راه‌اندازی اولیه قبلاً انجام شده است.",
     );
   });
 
