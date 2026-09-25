@@ -21,6 +21,15 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   form and a new `ObjectiveEditDialog` (title, description, due date, weight) now pick several assignees via
   checkboxes instead of one `<select>`. Built against ADR-010's A2↔A3 API contract (`assignees[]` replaces
   `assignee`/`assignee_name`) ahead of the backend landing. Tests: +7 in `lib/projects.test.ts` (179 total).
+- **`/projects/new`'s ریزهدف rows take several assignees too**, and a server-side draft (`GET`/`PUT`/`DELETE
+  /projects/draft/`, one per user) autosaves the whole form 1.5s after the last change and once on unmount.
+  Opening the page with a saved draft offers «ادامهٔ پیش‌نویس» / «شروع از نو» before anything autosaves over
+  it; `/projects` shows a «پیش‌نویس پروژه» card when one exists. The payload is `{version: 1, form}` — an
+  unrecognised version is ignored, not treated as corrupt. Two bugs fixed: changing the بخش or removing a
+  member in `MemberPicker` used to leave a draft ریزهدف pointing at someone no longer selectable (now pruned
+  at the point `members` changes, not via a reactive effect); the project's creator was missing from the
+  assignee choices even though the backend always adds them as مدیر پروژه regardless of `members` (now
+  seeded in automatically when a بخش is picked). Tests: +8 in `lib/projects.test.ts` (187 total).
 
 ### Phase 10 — A4 · personnel placement and کارتابل attachments
 - _(A4: add lines under this heading only)_

@@ -6,9 +6,13 @@ import {
   editObjectiveBody,
   objectiveAssigneeRows,
   olderUpdates,
+  parseDraftPayload,
   progressBarTone,
   progressLabel,
+  pruneOrphanAssignees,
+  serializeDraft,
   validateCreateForm,
+  type DraftObjective,
   type Objective,
   type ObjectiveUpdate,
   type ProjectCreateForm,
@@ -75,7 +79,7 @@ describe("createProjectBody", () => {
       goal: "  هدف  ",
       starts_on: "2026-01-01",
       members: [{ user: 5, name: "علی", title: "کارشناس", role: "MEMBER" }],
-      objectives: [{ key: "a", title: "  ریزهدف  ", assignee: 5, assigneeName: "علی", due_on: "2026-02-01", weight: 2 }],
+      objectives: [{ key: "a", title: "  ریزهدف  ", assignees: [5, 9], due_on: "2026-02-01", weight: 2 }],
     });
     expect(createProjectBody(form)).toEqual({
       section: 7,
@@ -84,7 +88,7 @@ describe("createProjectBody", () => {
       starts_on: "2026-01-01",
       due_on: null,
       members: [{ user: 5, role: "MEMBER" }],
-      objectives: [{ title: "ریزهدف", assignee: 5, due_on: "2026-02-01", weight: 2 }],
+      objectives: [{ title: "ریزهدف", assignees: [5, 9], due_on: "2026-02-01", weight: 2 }],
     });
   });
 
@@ -102,12 +106,66 @@ describe("createProjectBody", () => {
 });
 
 describe("canAddDraftObjective", () => {
-  it("needs a title, an assignee and a deadline — no unassigned backlog", () => {
-    const base = { title: "کار", assignee: 1, due_on: "2026-01-01" };
+  it("needs a title, at least one assignee and a deadline — no unassigned backlog", () => {
+    const base = { title: "کار", assignees: [1], due_on: "2026-01-01" };
     expect(canAddDraftObjective(base)).toBe(true);
     expect(canAddDraftObjective({ ...base, title: "  " })).toBe(false);
-    expect(canAddDraftObjective({ ...base, assignee: null })).toBe(false);
+    expect(canAddDraftObjective({ ...base, assignees: [] })).toBe(false);
     expect(canAddDraftObjective({ ...base, due_on: "" })).toBe(false);
+  });
+
+  it("accepts several assignees", () => {
+    expect(canAddDraftObjective({ title: "کار", assignees: [1, 2, 3], due_on: "2026-01-01" })).toBe(true);
+  });
+});
+
+const draftObjective = (over: Partial<DraftObjective> = {}): DraftObjective => ({
+  key: "a",
+  title: "کار",
+  assignees: [1, 2],
+  due_on: "2026-01-01",
+  weight: 1,
+  ...over,
+});
+
+describe("pruneOrphanAssignees", () => {
+  it("drops assignees who are no longer candidate members", () => {
+    const pruned = pruneOrphanAssignees([draftObjective({ assignees: [1, 2, 3] })], new Set([1, 3]));
+    expect(pruned[0].assignees).toEqual([1, 3]);
+  });
+
+  it("leaves an objective with no valid assignee left empty, not dropped", () => {
+    const pruned = pruneOrphanAssignees([draftObjective({ assignees: [2] })], new Set([1]));
+    expect(pruned).toHaveLength(1);
+    expect(pruned[0].assignees).toEqual([]);
+  });
+
+  it("changes nothing when every assignee is still a candidate", () => {
+    const objectives = [draftObjective({ assignees: [1, 2] })];
+    expect(pruneOrphanAssignees(objectives, new Set([1, 2, 3]))).toEqual(objectives);
+  });
+});
+
+describe("serializeDraft / parseDraftPayload", () => {
+  it("round-trips a form through the current version", () => {
+    const form = filled({ objectives: [draftObjective()] });
+    expect(parseDraftPayload(serializeDraft(form))).toEqual(form);
+  });
+
+  it("ignores an unknown version rather than treating it as corrupt", () => {
+    expect(parseDraftPayload({ version: 2, form: filled() })).toBeNull();
+  });
+
+  it("ignores null, non-objects and malformed payloads", () => {
+    expect(parseDraftPayload(null)).toBeNull();
+    expect(parseDraftPayload("not an object")).toBeNull();
+    expect(parseDraftPayload({ version: 1 })).toBeNull();
+    expect(parseDraftPayload({ version: 1, form: { members: "not an array", objectives: [] } })).toBeNull();
+  });
+
+  it("fills in missing scalar fields from the empty form (forward compatibility)", () => {
+    const parsed = parseDraftPayload({ version: 1, form: { members: [], objectives: [] } });
+    expect(parsed).toEqual(EMPTY_CREATE_FORM);
   });
 });
 

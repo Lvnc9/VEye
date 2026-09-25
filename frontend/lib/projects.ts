@@ -233,8 +233,7 @@ export interface DraftObjective {
   /** A client-side key for React's list rendering — real ids do not exist until submission. */
   key: string;
   title: string;
-  assignee: number | null;
-  assigneeName: string;
+  assignees: number[];
   due_on: string;
   weight: number;
 }
@@ -282,17 +281,24 @@ export function createProjectBody(form: ProjectCreateForm) {
     members: form.members.map((m) => ({ user: m.user, role: m.role })),
     objectives: form.objectives.map((o) => ({
       title: o.title.trim(),
-      assignee: o.assignee,
+      assignees: o.assignees,
       due_on: o.due_on,
       weight: o.weight,
     })),
   };
 }
 
-/** A ریز هدف draft is addable once it has a title, an assignee and a deadline — both required,
- *  no unassigned backlog (docs/11 §2.4). */
-export function canAddDraftObjective(draft: { title: string; assignee: number | null; due_on: string }): boolean {
-  return draft.title.trim().length > 0 && draft.assignee !== null && draft.due_on.length > 0;
+/** A ریزهدف draft is addable once it has a title, at least one assignee and a deadline — all
+ *  required, no unassigned backlog (docs/11 §2.4). */
+export function canAddDraftObjective(draft: { title: string; assignees: number[]; due_on: string }): boolean {
+  return draft.title.trim().length > 0 && draft.assignees.length > 0 && draft.due_on.length > 0;
+}
+
+/** Bug fix (docs/12 §D): changing the بخش, or removing a member in `MemberPicker`, must not leave a
+ *  draft objective pointing at someone who is no longer a candidate member. Pure so the page's effect
+ *  can call it without re-deriving the rule. */
+export function pruneOrphanAssignees(objectives: DraftObjective[], memberIds: ReadonlySet<number>): DraftObjective[] {
+  return objectives.map((o) => ({ ...o, assignees: o.assignees.filter((id) => memberIds.has(id)) }));
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +342,38 @@ export function objectiveAssigneeRows(objective: Objective, currentUserId: numbe
  *  the row that duplicates what the leaf already shows above the expander. */
 export function olderUpdates(rows: ObjectiveUpdate[], latestId: number | undefined): ObjectiveUpdate[] {
   return rows.filter((row) => row.id !== latestId);
+}
+
+// ---------------------------------------------------------------------------
+// Server-side project draft (docs/12 §D): one per user, autosaved from
+// /projects/new. The payload is opaque to the server, so its shape and
+// versioning live entirely here.
+// ---------------------------------------------------------------------------
+
+export const PROJECT_DRAFT_VERSION = 1;
+
+export interface ProjectDraftPayload {
+  version: number;
+  form: ProjectCreateForm;
+}
+
+/** The `PUT /projects/draft/` body. */
+export function serializeDraft(form: ProjectCreateForm): ProjectDraftPayload {
+  return { version: PROJECT_DRAFT_VERSION, form };
+}
+
+/** `null` for anything that isn't a recognised, well-shaped draft: no draft saved yet, a version this
+ *  build doesn't know (ignored per the contract, not shown as broken), or a payload that doesn't even
+ *  look like a `ProjectCreateForm`. Scalar fields default from `EMPTY_CREATE_FORM` so a payload that
+ *  predates a field addition still loads. */
+export function parseDraftPayload(payload: unknown): ProjectCreateForm | null {
+  if (!payload || typeof payload !== "object") return null;
+  const { version, form } = payload as { version?: unknown; form?: unknown };
+  if (version !== PROJECT_DRAFT_VERSION) return null;
+  if (!form || typeof form !== "object") return null;
+  const candidate = form as Partial<ProjectCreateForm>;
+  if (!Array.isArray(candidate.members) || !Array.isArray(candidate.objectives)) return null;
+  return { ...EMPTY_CREATE_FORM, ...candidate };
 }
 
 /** The `PATCH …/objectives/{oid}/` body for the edit dialog: `assignees` always replaces the set. */
