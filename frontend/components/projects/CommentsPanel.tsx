@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { ApiError, apiDelete, apiPost } from "@/lib/api-client";
 import { formatJalaliDateTime } from "@/lib/jalali";
+import { useCurrentUser } from "@/lib/current-user";
+import { draftKey, useLocalDraft } from "@/lib/local-draft";
 import type { ProjectComment } from "@/lib/projects";
 import type { Paginated } from "@/lib/types";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -10,27 +12,40 @@ import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 
 /** یادداشت‌های پروژه: anyone who can read the project may post; only a comment's own author may
  *  ever delete it (backend enforces this — `can_delete` here only decides whether to show the
- *  button). Append-only: no editing. */
+ *  button). Append-only: no editing. Rendered as a vertical timeline — a dot per note, joined by a
+ *  continuous line on the start (right) side, plain CSS. */
 export function CommentsPanel({ projectId }: { projectId: number }) {
+  const { user } = useCurrentUser();
   const [reload, setReload] = useState(0);
   const comments = useApiQuery<Paginated<ProjectComment>>(`/projects/${projectId}/comments/?page_size=50`, reload);
-  const [body, setBody] = useState("");
+  const [body, setBody, clearBody] = useLocalDraft(user ? draftKey(user.id, projectId, "note") : null);
   const [error, setError] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     if (!body.trim()) return;
     setPosting(true);
     setError(null);
     try {
       await apiPost(`/projects/${projectId}/comments/`, { body: body.trim() });
-      setBody("");
+      clearBody();
       setReload((n) => n + 1);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "ثبت یادداشت ممکن نشد.");
     } finally {
       setPosting(false);
+    }
+  }
+
+  function onFormSubmit(event: FormEvent) {
+    event.preventDefault();
+    submit();
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      submit();
     }
   }
 
@@ -50,18 +65,22 @@ export function CommentsPanel({ projectId }: { projectId: number }) {
     <section aria-label="یادداشت‌ها" className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="mb-3 text-base font-semibold text-slate-900">یادداشت‌ها</h2>
       {error && <ErrorBanner message={error} />}
-      <form onSubmit={submit} className="mb-4 flex gap-2">
-        <input
+      <form onSubmit={onFormSubmit} className="mb-4 space-y-2">
+        <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="یادداشتی بنویسید…"
+          onKeyDown={onKeyDown}
+          placeholder="یادداشتی بنویسید… (Ctrl+Enter برای ارسال)"
           aria-label="متن یادداشت"
           maxLength={4000}
-          className="flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+          rows={2}
+          className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm"
         />
-        <button type="submit" disabled={posting || !body.trim()} className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
-          ثبت
-        </button>
+        <div className="flex justify-end">
+          <button type="submit" disabled={posting || !body.trim()} className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+            ثبت
+          </button>
+        </div>
       </form>
       {comments.loading ? (
         <LoadingBanner />
@@ -70,9 +89,10 @@ export function CommentsPanel({ projectId }: { projectId: number }) {
       ) : rows.length === 0 ? (
         <p className="text-sm text-slate-500">هنوز یادداشتی ثبت نشده است.</p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="relative space-y-4 border-s-2 border-slate-200 ps-4">
           {rows.map((comment) => (
-            <li key={comment.id} className="flex items-start justify-between gap-2 text-sm">
+            <li key={comment.id} className="relative flex items-start justify-between gap-2 text-sm">
+              <span aria-hidden className="absolute -start-[1.15rem] top-1 h-2.5 w-2.5 rounded-full bg-slate-400 ring-4 ring-white" />
               <div className="min-w-0">
                 <p className="font-medium text-slate-900">
                   {comment.author_name}

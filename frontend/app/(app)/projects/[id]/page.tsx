@@ -18,6 +18,7 @@ import { useApiQuery } from "@/lib/use-api-query";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { CommentsPanel } from "@/components/projects/CommentsPanel";
 import { DocumentLinksPanel } from "@/components/projects/DocumentLinksPanel";
+import { MeetingsPanel } from "@/components/projects/MeetingsPanel";
 import { ObjectiveTree } from "@/components/projects/ObjectiveTree";
 import { ProjectActivityFeed } from "@/components/projects/ProjectActivityFeed";
 
@@ -172,6 +173,7 @@ export default function ProjectDetailPage() {
           ) : (
             <ObjectiveTree project={data} objectives={objectives.data ?? []} onChanged={refresh} />
           )}
+          <MeetingsPanel projectId={projectId} members={data.members} canManageMeetings={data.can_manage_meetings} />
           <CommentsPanel projectId={projectId} />
           <DocumentLinksPanel projectId={projectId} canEdit={data.can_edit} />
         </div>

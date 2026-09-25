@@ -4,6 +4,7 @@ import {
   canAddDraftObjective,
   createProjectBody,
   editObjectiveBody,
+  meetingBody,
   objectiveAssigneeRows,
   olderUpdates,
   parseDraftPayload,
@@ -11,8 +12,10 @@ import {
   progressLabel,
   pruneOrphanAssignees,
   serializeDraft,
+  splitAcknowledgement,
   validateCreateForm,
   type DraftObjective,
+  type MeetingAttendee,
   type Objective,
   type ObjectiveUpdate,
   type ProjectCreateForm,
@@ -279,5 +282,53 @@ describe("editObjectiveBody", () => {
     expect(
       editObjectiveBody({ title: "  عنوان  ", description: "  شرح  ", assignees: [7, 9], due_on: "2026-05-01", weight: 3 }),
     ).toEqual({ title: "عنوان", description: "شرح", assignees: [7, 9], due_on: "2026-05-01", weight: 3 });
+  });
+});
+
+describe("meetingBody", () => {
+  it("trims text, sends null for an empty time, and keeps blank text fields blank", () => {
+    expect(
+      meetingBody({
+        title: "  جلسهٔ هفتگی  ",
+        held_on: "2026-05-01",
+        start_time: "",
+        location: "  ",
+        description: "  ",
+        attendees: [1, 2],
+      }),
+    ).toEqual({ title: "جلسهٔ هفتگی", held_on: "2026-05-01", start_time: null, location: "", description: "", attendees: [1, 2] });
+  });
+
+  it("keeps a given time and location as-is (trimmed)", () => {
+    expect(
+      meetingBody({ title: "جلسه", held_on: "2026-05-01", start_time: "10:30", location: "  اتاق ۱  ", description: "", attendees: [] }),
+    ).toMatchObject({ start_time: "10:30", location: "اتاق ۱" });
+  });
+});
+
+const attendee = (over: Partial<MeetingAttendee> = {}): MeetingAttendee => ({
+  member: 1,
+  user: 1,
+  name: "علی",
+  acknowledged_at: null,
+  ...over,
+});
+
+describe("splitAcknowledgement", () => {
+  it("splits attendees into acknowledged and pending, keeping the server's order within each", () => {
+    const attendees = [
+      attendee({ member: 1, acknowledged_at: "2026-05-02T00:00:00Z" }),
+      attendee({ member: 2, acknowledged_at: null }),
+      attendee({ member: 3, acknowledged_at: "2026-05-03T00:00:00Z" }),
+    ];
+    const { acknowledged, pending } = splitAcknowledgement(attendees);
+    expect(acknowledged.map((a) => a.member)).toEqual([1, 3]);
+    expect(pending.map((a) => a.member)).toEqual([2]);
+  });
+
+  it("handles every attendee already acknowledged, or none at all", () => {
+    expect(splitAcknowledgement([attendee({ acknowledged_at: "2026-05-02T00:00:00Z" })]).pending).toEqual([]);
+    expect(splitAcknowledgement([attendee({ acknowledged_at: null })]).acknowledged).toEqual([]);
+    expect(splitAcknowledgement([])).toEqual({ acknowledged: [], pending: [] });
   });
 });

@@ -30,6 +30,18 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   at the point `members` changes, not via a reactive effect); the project's creator was missing from the
   assignee choices even though the backend always adds them as مدیر پروژه regardless of `members` (now
   seeded in automatically when a بخش is picked). Tests: +8 in `lib/projects.test.ts` (187 total).
+- **Notes render as a vertical timeline** (`CommentsPanel`: a dot per note, a continuous line on the start/
+  right side joining them) with a multi-line composer (Ctrl/⌘+Enter sends). **New «جدول جلسات»**
+  (`MeetingsPanel`): a real `<table>` from `md` up, stacked cards below — تاریخ/ساعت/عنوان/مکان/اعضا per
+  meeting, plus «اعضای متوجه‌شده»/«هنوز ندیده‌اند» lists and «مشاهده شد» for an attendee who hasn't
+  acknowledged yet. The create/edit form (role MANAGER only) warns that changing the date, time or place
+  clears every acknowledgement. **New `lib/local-draft.ts`** (`useLocalDraft`, keys
+  `veye:draft:<userId>:<projectId>:<purpose>[:<objectiveId>]`, every access in try/catch): backs the note
+  composer, the progress-update textarea and the new-meeting form, cleared on a successful submit. The
+  activity feed now shows the four new event kinds with their own tones, and `objective_due_changed` shows
+  its دیرکرد dates (`formatJalali(from_status)` ← `formatJalali(to_status)` — that kind overloads those two
+  fields with raw ISO dates rather than a status enum, so it never had `..._label`s to show). Tests: +6 in
+  `lib/projects.test.ts`, +4 in the new `lib/local-draft.test.ts` (195 total).
 
 ### Phase 10 — A4 · personnel placement and کارتابل attachments
 - _(A4: add lines under this heading only)_

@@ -62,6 +62,10 @@ export const PROJECT_EVENT_TONE: Record<string, string> = {
   comment_removed: "bg-red-500",
   document_linked: "bg-green-600",
   document_unlinked: "bg-red-500",
+  objective_update_added: "bg-sky-500",
+  meeting_scheduled: "bg-indigo-500",
+  meeting_changed: "bg-amber-500",
+  meeting_cancelled: "bg-red-500",
 };
 
 export interface ProjectMemberPreview {
@@ -107,6 +111,8 @@ export interface Project {
 
 export interface ProjectDetail extends Project {
   members: ProjectMember[];
+  /** Role MANAGER, and the project is not archived — gates the meeting create/edit/delete form. */
+  can_manage_meetings: boolean;
 }
 
 /** The one entry shown inline on an assignee leaf, or a row of the paged «سوابق». `can_edit` here is
@@ -179,6 +185,33 @@ export interface ProjectDocumentLink {
   caption: string;
   linked_by_name: string;
   created_at: string;
+}
+
+export interface MeetingAttendee {
+  member: number;
+  user: number;
+  name: string;
+  acknowledged_at: string | null;
+}
+
+export interface ProjectMeeting {
+  id: number;
+  title: string;
+  held_on: string;
+  start_time: string | null;
+  location: string;
+  description: string;
+  created_by_name: string;
+  created_at: string;
+  attendees: MeetingAttendee[];
+  attendee_count: number;
+  acknowledged_count: number;
+  /** `null` while the viewer hasn't pressed «مشاهده شد» — also `null` for someone who isn't an attendee. */
+  my_acknowledged_at: string | null;
+  /** The viewer is an invited attendee who hasn't acknowledged yet. */
+  can_acknowledge: boolean;
+  /** This particular meeting may still be edited/deleted — role MANAGER and the project not archived. */
+  can_edit: boolean;
 }
 
 export interface ProjectActivityEvent {
@@ -390,5 +423,41 @@ export function editObjectiveBody(form: {
     assignees: form.assignees,
     due_on: form.due_on,
     weight: form.weight,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Meetings (Phase 10 §D): «جدول جلسات» and acknowledgement.
+// ---------------------------------------------------------------------------
+
+/** The `POST`/`PATCH …/meetings/…` body. `start_time`/`location`/`description` are optional on the
+ *  wire — an empty string becomes `null` for the time (the API's `TimeField`) and stays `""` for the
+ *  two text fields (the API's `blank=True` `CharField`s). */
+export function meetingBody(form: {
+  title: string;
+  held_on: string;
+  start_time: string;
+  location: string;
+  description: string;
+  attendees: number[];
+}) {
+  return {
+    title: form.title.trim(),
+    held_on: form.held_on,
+    start_time: form.start_time || null,
+    location: form.location.trim(),
+    description: form.description.trim(),
+    attendees: form.attendees,
+  };
+}
+
+/** «اعضای متوجه‌شده» / «هنوز ندیده‌اند», in the order the server sent the attendees. */
+export function splitAcknowledgement(attendees: MeetingAttendee[]): {
+  acknowledged: MeetingAttendee[];
+  pending: MeetingAttendee[];
+} {
+  return {
+    acknowledged: attendees.filter((a) => a.acknowledged_at !== null),
+    pending: attendees.filter((a) => a.acknowledged_at === null),
   };
 }

@@ -17,6 +17,7 @@ import {
 } from "@/lib/projects";
 import type { Paginated } from "@/lib/types";
 import { useCurrentUser } from "@/lib/current-user";
+import { draftKey, useLocalDraft } from "@/lib/local-draft";
 import { ErrorBanner } from "@/components/StatusBanner";
 import { JalaliDatePicker } from "@/components/JalaliDatePicker";
 import { ObjectiveEditDialog } from "@/components/projects/ObjectiveEditDialog";
@@ -321,7 +322,8 @@ function UpdateComposer({
   onCancel: () => void;
   onError: (message: string) => void;
 }) {
-  const [body, setBody] = useState("");
+  const { user } = useCurrentUser();
+  const [body, setBody, clearBody] = useLocalDraft(user ? draftKey(user.id, projectId, "objective-update", objectiveId) : null);
   const [saving, setSaving] = useState(false);
 
   async function submit() {
@@ -329,6 +331,7 @@ function UpdateComposer({
     setSaving(true);
     try {
       await apiPost(`/projects/${projectId}/objectives/${objectiveId}/updates/`, { body: body.trim() });
+      clearBody();
       onPosted();
     } catch (err) {
       onError(err instanceof ApiError ? err.message : "ثبت گزارش ممکن نشد.");

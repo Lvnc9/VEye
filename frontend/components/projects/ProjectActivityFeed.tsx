@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api-client";
-import { formatJalaliDateTime } from "@/lib/jalali";
+import { formatJalali, formatJalaliDateTime } from "@/lib/jalali";
 import { PROJECT_EVENT_TONE, type ProjectActivityEvent } from "@/lib/projects";
 
 /**
@@ -51,10 +51,20 @@ export function ProjectActivityFeed({ projectId, version }: { projectId: number;
                     {event.actor_title ? ` (${event.actor_title})` : ""} · {formatJalaliDateTime(event.created_at)}
                   </span>
                 </p>
-                {event.from_status_label && event.to_status_label && (
+                {event.kind === "objective_due_changed" ? (
+                  // objective_due_changed reuses from_status/to_status to carry raw ISO dates, not a
+                  // status enum, so it has no from_status_label/to_status_label to fall back on — the
+                  // labels are always blank for this kind (backend history.py's _STATUS_ENUM_BY_KIND).
                   <p className="mt-0.5 text-xs text-slate-500">
-                    {event.from_status_label} ← {event.to_status_label}
+                    {formatJalali(event.from_status)} ← {formatJalali(event.to_status)}
                   </p>
+                ) : (
+                  event.from_status_label &&
+                  event.to_status_label && (
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {event.from_status_label} ← {event.to_status_label}
+                    </p>
+                  )
                 )}
                 {event.note && <p className="mt-0.5 text-slate-600">{event.note}</p>}
               </div>
