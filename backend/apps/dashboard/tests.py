@@ -146,7 +146,7 @@ class InboxBadgeTests(TestCase):
             actor=self.w.s1a, section=section or self.w.s1, name=f"پروژه {Objective.objects.count()}",
             members=[{"user": assignee}],
             objectives=[
-                {"title": f"ریزهدف {i}", "assignee": assignee, "due_on": self.today + timedelta(days=30)}
+                {"title": f"ریزهدف {i}", "assignees": [assignee], "due_on": self.today + timedelta(days=30)}
                 for i, _ in enumerate(days_from_today)
             ],
         )

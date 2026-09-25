@@ -11,7 +11,20 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 - _(A1: add lines under this heading only)_
 
 ### Phase 10 — A2 · projects backend (assignees, progress log, meetings, draft)
-- _(A2: add lines under this heading only)_
+- **An objective can have several assignees, with no levels among them (Phase 10, ADR-010 §D, slice 1 — backend
+  only)**: new `ObjectiveAssignee(objective, member→ProjectMember)`, `unique(objective, member)`, replacing the
+  old single `Objective.assignee` FK (migration `projects/0004`, `RunPython`-copies the existing data before
+  dropping the column). "At least one assignee" is enforced in `services.py`, not the database (a `CHECK`
+  constraint cannot count sibling rows); a `PATCH .../objectives/{id}/` with `assignees` **replaces** the whole
+  set. Any current assignee, not just one, may change an objective's status
+  (`ObjectiveSerializer.can_change_status`) and post under their own name (progress updates land in slice 2).
+  Removing a project member is now a 409 `member_has_objectives` **only when they are the sole assignee of some
+  objective** — being one of several is fine. `GET .../objectives/?assignee=me|<uid>` and the dashboard's
+  «منتظر اقدام» due-objectives query both follow the new relation; `/dashboard/inbox/`'s response shape is
+  unchanged. Also (ADR-010 §A): a project's member/objective-assignee endpoints now refuse the developer
+  account (`User.is_developer`) with a Persian 400 — it is never a project member. Tests: **+11 → 915**,
+  including a case that pins a real bug the new tests caught (a `Count()` over the same relation a preceding
+  `filter()` had already joined silently restricted the count instead of totalling every assignee).
 
 ### Phase 10 — A3 · projects frontend (objective tree, timeline, meetings table, drafts)
 - _(A3: add lines under this heading only)_
