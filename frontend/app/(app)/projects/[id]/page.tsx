@@ -18,7 +18,7 @@ import { useApiQuery } from "@/lib/use-api-query";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { CommentsPanel } from "@/components/projects/CommentsPanel";
 import { DocumentLinksPanel } from "@/components/projects/DocumentLinksPanel";
-import { ObjectivesList } from "@/components/projects/ObjectivesList";
+import { ObjectiveTree } from "@/components/projects/ObjectiveTree";
 import { ProjectActivityFeed } from "@/components/projects/ProjectActivityFeed";
 
 const select = "rounded border border-slate-300 bg-white px-2 py-1.5 text-sm";
@@ -170,7 +170,7 @@ export default function ProjectDetailPage() {
           ) : objectives.error ? (
             <ErrorBanner message={objectives.error} />
           ) : (
-            <ObjectivesList project={data} objectives={objectives.data ?? []} onChanged={refresh} />
+            <ObjectiveTree project={data} objectives={objectives.data ?? []} onChanged={refresh} />
           )}
           <CommentsPanel projectId={projectId} />
           <DocumentLinksPanel projectId={projectId} canEdit={data.can_edit} />

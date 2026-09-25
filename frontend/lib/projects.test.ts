@@ -3,9 +3,14 @@ import {
   EMPTY_CREATE_FORM,
   canAddDraftObjective,
   createProjectBody,
+  editObjectiveBody,
+  objectiveAssigneeRows,
+  olderUpdates,
   progressBarTone,
   progressLabel,
   validateCreateForm,
+  type Objective,
+  type ObjectiveUpdate,
   type ProjectCreateForm,
 } from "./projects";
 
@@ -103,5 +108,118 @@ describe("canAddDraftObjective", () => {
     expect(canAddDraftObjective({ ...base, title: "  " })).toBe(false);
     expect(canAddDraftObjective({ ...base, assignee: null })).toBe(false);
     expect(canAddDraftObjective({ ...base, due_on: "" })).toBe(false);
+  });
+});
+
+const objective = (over: Partial<Objective> = {}): Objective => ({
+  id: 1,
+  position: 0,
+  title: "ریزهدف",
+  description: "",
+  assignees: [],
+  due_on: "2026-05-01",
+  status: "TODO",
+  status_label: "انجام نشده",
+  weight: 1,
+  completed_at: null,
+  is_overdue: false,
+  can_edit: false,
+  can_change_status: false,
+  can_post_update: false,
+  ...over,
+});
+
+describe("objectiveAssigneeRows", () => {
+  it("shapes each assignee into a leaf row, in the server's order", () => {
+    const rows = objectiveAssigneeRows(
+      objective({
+        can_post_update: true,
+        assignees: [
+          { user: 7, name: "علی", title: "کارشناس", latest_update: null, update_count: 0 },
+          {
+            user: 9,
+            name: "رضا",
+            title: "مدیر",
+            latest_update: { id: 3, body: "شروع شد", created_at: "2026-05-01T10:00:00Z", edited_at: null, can_edit: true },
+            update_count: 4,
+          },
+        ],
+      }),
+      7,
+    );
+    expect(rows.map((r) => r.user)).toEqual([7, 9]);
+    expect(rows[0]).toMatchObject({ isSelf: true, latestUpdate: null, historyCount: 0, canPostUpdate: true, canEditLatest: false });
+    expect(rows[1]).toMatchObject({ isSelf: false, historyCount: 3, canPostUpdate: false, canEditLatest: false });
+  });
+
+  it("only offers edit/post to the assignee who is the signed-in user, and only for their own latest entry", () => {
+    const rows = objectiveAssigneeRows(
+      objective({
+        can_post_update: true,
+        assignees: [
+          {
+            user: 7,
+            name: "علی",
+            title: "کارشناس",
+            latest_update: { id: 3, body: "شروع شد", created_at: "2026-05-01T10:00:00Z", edited_at: null, can_edit: true },
+            update_count: 1,
+          },
+        ],
+      }),
+      7,
+    );
+    expect(rows[0].canPostUpdate).toBe(true);
+    expect(rows[0].canEditLatest).toBe(true);
+  });
+
+  it("never offers edit/post when can_post_update is false, even for the viewer's own leaf", () => {
+    const rows = objectiveAssigneeRows(
+      objective({
+        can_post_update: false,
+        assignees: [{ user: 7, name: "علی", title: "کارشناس", latest_update: null, update_count: 0 }],
+      }),
+      7,
+    );
+    expect(rows[0].canPostUpdate).toBe(false);
+  });
+
+  it("treats a null current user as nobody's leaf", () => {
+    const rows = objectiveAssigneeRows(
+      objective({ assignees: [{ user: 7, name: "علی", title: "کارشناس", latest_update: null, update_count: 0 }] }),
+      null,
+    );
+    expect(rows[0].isSelf).toBe(false);
+  });
+});
+
+const update = (over: Partial<ObjectiveUpdate> = {}): ObjectiveUpdate => ({
+  id: 1,
+  author: 7,
+  author_name: "علی",
+  author_title: "کارشناس",
+  body: "متن",
+  created_at: "2026-05-01T10:00:00Z",
+  edited_at: null,
+  can_edit: false,
+  ...over,
+});
+
+describe("olderUpdates", () => {
+  it("drops the row already shown as the leaf's latest update", () => {
+    const rows = [update({ id: 3 }), update({ id: 2 }), update({ id: 1 })];
+    expect(olderUpdates(rows, 3).map((r) => r.id)).toEqual([2, 1]);
+  });
+
+  it("keeps every row when nothing matches (e.g. the leaf had no latest update)", () => {
+    const rows = [update({ id: 2 }), update({ id: 1 })];
+    expect(olderUpdates(rows, undefined).map((r) => r.id)).toEqual([2, 1]);
+  });
+});
+
+describe("editObjectiveBody", () => {
+  it("trims text and sends the assignee id set as-is", () => {
+    expect(
+      editObjectiveBody({ title: "  عنوان  ", description: "  شرح  ", assignees: [7, 9], due_on: "2026-05-01", weight: 3 }),
+    ).toEqual({ title: "عنوان", description: "شرح", assignees: [7, 9], due_on: "2026-05-01", weight: 3 });
   });
 });

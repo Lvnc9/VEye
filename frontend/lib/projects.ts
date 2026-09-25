@@ -109,21 +109,55 @@ export interface ProjectDetail extends Project {
   members: ProjectMember[];
 }
 
+/** The one entry shown inline on an assignee leaf, or a row of the paged «سوابق». `can_edit` here is
+ *  per-update — true only for its own author, and only on their latest entry on the objective. */
+export interface ObjectiveUpdateSummary {
+  id: number;
+  body: string;
+  created_at: string;
+  edited_at: string | null;
+  can_edit: boolean;
+}
+
+/** A row of `GET …/objectives/{oid}/updates/` — the same shape plus who wrote it, since that
+ *  endpoint is not scoped to one assignee's leaf the way `Objective.assignees[].latest_update` is. */
+export interface ObjectiveUpdate {
+  id: number;
+  author: number | null;
+  author_name: string;
+  author_title: string;
+  body: string;
+  created_at: string;
+  edited_at: string | null;
+  can_edit: boolean;
+}
+
+export interface ObjectiveAssignee {
+  user: number;
+  name: string;
+  title: string;
+  latest_update: ObjectiveUpdateSummary | null;
+  update_count: number;
+}
+
 export interface Objective {
   id: number;
   position: number;
   title: string;
   description: string;
-  assignee: number;
-  assignee_name: string;
+  assignees: ObjectiveAssignee[];
   due_on: string;
   status: ObjectiveStatus;
   status_label: string;
   weight: number;
   completed_at: string | null;
   is_overdue: boolean;
+  /** Manager or lead. Covers title, description, due date, weight, assignees, delete and reorder. */
   can_edit: boolean;
+  /** `can_edit`, or the viewer is one of the assignees. */
   can_change_status: boolean;
+  /** The viewer is an assignee and the project is not archived. */
+  can_post_update: boolean;
 }
 
 export interface ProjectComment {
@@ -259,4 +293,64 @@ export function createProjectBody(form: ProjectCreateForm) {
  *  no unassigned backlog (docs/11 §2.4). */
 export function canAddDraftObjective(draft: { title: string; assignee: number | null; due_on: string }): boolean {
   return draft.title.trim().length > 0 && draft.assignee !== null && draft.due_on.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Objective tree (Phase 10 §D): shaping an Objective's assignees into the leaf
+// view-models ObjectiveTree.tsx renders — kept pure so it is testable without React.
+// ---------------------------------------------------------------------------
+
+export interface ObjectiveAssigneeRow {
+  user: number;
+  name: string;
+  title: string;
+  /** The signed-in user is this assignee. */
+  isSelf: boolean;
+  latestUpdate: ObjectiveUpdateSummary | null;
+  /** Entries besides the one already shown as `latestUpdate` — the count on «سوابق (n)». */
+  historyCount: number;
+  /** Show «نوشتن گزارش»: it's you, and the objective/project allow it right now. */
+  canPostUpdate: boolean;
+  /** Show «ویرایش» on the latest entry: it's you, and it is still your latest one. */
+  canEditLatest: boolean;
+}
+
+/** One row per assignee, in the order the server sent them. */
+export function objectiveAssigneeRows(objective: Objective, currentUserId: number | null): ObjectiveAssigneeRow[] {
+  return objective.assignees.map((assignee) => {
+    const isSelf = currentUserId !== null && assignee.user === currentUserId;
+    return {
+      user: assignee.user,
+      name: assignee.name,
+      title: assignee.title,
+      isSelf,
+      latestUpdate: assignee.latest_update,
+      historyCount: Math.max(0, assignee.update_count - (assignee.latest_update ? 1 : 0)),
+      canPostUpdate: isSelf && objective.can_post_update,
+      canEditLatest: isSelf && Boolean(assignee.latest_update?.can_edit),
+    };
+  });
+}
+
+/** «سوابق» loads every one of an assignee's updates (newest first, same as `latest_update`) — drop
+ *  the row that duplicates what the leaf already shows above the expander. */
+export function olderUpdates(rows: ObjectiveUpdate[], latestId: number | undefined): ObjectiveUpdate[] {
+  return rows.filter((row) => row.id !== latestId);
+}
+
+/** The `PATCH …/objectives/{oid}/` body for the edit dialog: `assignees` always replaces the set. */
+export function editObjectiveBody(form: {
+  title: string;
+  description: string;
+  assignees: number[];
+  due_on: string;
+  weight: number;
+}) {
+  return {
+    title: form.title.trim(),
+    description: form.description.trim(),
+    assignees: form.assignees,
+    due_on: form.due_on,
+    weight: form.weight,
+  };
 }
