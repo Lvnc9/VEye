@@ -11,7 +11,7 @@ from apps.core.text import normalize_search_term
 
 from . import services
 from .access import CanManageProject, can_create_project, can_manage_project, visible_projects
-from .models import Objective, ProjectComment, ProjectDocumentLink, ProjectMember
+from .models import Objective, ObjectiveAssignee, ProjectComment, ProjectDocumentLink, ProjectMember
 from .queries import overdue_q, with_progress
 from .serializers import (
     CommentCreateSerializer,
@@ -155,7 +155,22 @@ class ProjectViewSet(
         try:
             return project.members.get(user=user)
         except ProjectMember.DoesNotExist:
-            raise ValidationError({"assignee": ["مسئول ریزهدف باید یکی از اعضای پروژه باشد."]})
+            raise ValidationError({"assignees": ["مسئول ریزهدف باید یکی از اعضای پروژه باشد."]})
+
+    def _members_for(self, project, users):
+        return [self._member_for(project, user) for user in users]
+
+    @staticmethod
+    def _with_assignees(queryset):
+        return queryset.prefetch_related(
+            Prefetch("assignees", queryset=ObjectiveAssignee.objects.select_related("member__user"))
+        )
+
+    def _fetch_objective(self, project, objective_id):
+        try:
+            return self._with_assignees(Objective.objects).get(pk=objective_id, project=project)
+        except Objective.DoesNotExist:
+            raise NotFound("ریزهدف یافت نشد.")
 
     @action(detail=True, methods=["get", "post"], url_path="objectives", permission_classes=[IsAuthenticated])
     def objectives(self, request, pk=None):
@@ -164,13 +179,13 @@ class ProjectViewSet(
         project = self.get_object()  # scoped: an invisible project is a 404
         context = self._objective_context(request, project)
         if request.method == "GET":
-            rows = project.objectives.select_related("assignee__user")
+            rows = self._with_assignees(project.objectives)
             params = request.query_params
             if value := params.get("status"):
                 rows = rows.filter(status=value)
             if value := params.get("assignee"):
                 who = request.user.pk if value == "me" else (int(value) if value.isdigit() else None)
-                rows = rows.filter(assignee__user_id=who) if who is not None else rows.none()
+                rows = rows.filter(assignees__member__user_id=who) if who is not None else rows.none()
             if params.get("overdue") in ("1", "true"):
                 rows = rows.filter(overdue_q())
             return Response(ObjectiveSerializer(rows, many=True, context=context).data)
@@ -179,9 +194,9 @@ class ProjectViewSet(
         serializer = ObjectiveInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
-        assignee = self._member_for(project, data.pop("assignee"))
-        objective = services.add_objective(project, actor=request.user, assignee=assignee, **data)
-        objective = Objective.objects.select_related("assignee__user").get(pk=objective.pk)
+        assignees = self._members_for(project, data.pop("assignees"))
+        objective = services.add_objective(project, actor=request.user, assignees=assignees, **data)
+        objective = self._fetch_objective(project, objective.pk)
         return Response(ObjectiveSerializer(objective, context=context).data, status=status.HTTP_201_CREATED)
 
     @action(
@@ -189,14 +204,11 @@ class ProjectViewSet(
         permission_classes=[IsAuthenticated],
     )
     def objective(self, request, pk=None, objective_id=None):
-        """Edit or remove one objective. Its assignee may change **its status** (an assignee who cannot
-        mark their own work done is a dead feature); everything else — title, deadline, weight,
-        reassigning, deleting — is for the project's مدیر or a lead."""
+        """Edit or remove one objective. Any current assignee may change **its status** (an assignee
+        who cannot mark their own work done is a dead feature); everything else — title, deadline,
+        weight, the assignee set, deleting — is for the project's مدیر or a lead."""
         project = self.get_object()
-        try:
-            objective = Objective.objects.select_related("assignee__user").get(pk=objective_id, project=project)
-        except Objective.DoesNotExist:
-            raise NotFound("ریزهدف یافت نشد.")
+        objective = self._fetch_objective(project, objective_id)
         context = self._objective_context(request, project)
 
         if request.method == "DELETE":
@@ -208,12 +220,13 @@ class ProjectViewSet(
         serializer.is_valid(raise_exception=True)
         changes = dict(serializer.validated_data)
         only_status = set(changes) <= {"status"}
-        if not (only_status and objective.assignee.user_id == request.user.pk):
+        is_assignee = any(a.member.user_id == request.user.pk for a in objective.assignees.all())
+        if not (only_status and is_assignee):
             self._manager_only(request, project)
-        if "assignee" in changes:
-            changes["assignee"] = self._member_for(project, changes["assignee"])
+        if "assignees" in changes:
+            changes["assignees"] = self._members_for(project, changes["assignees"])
         objective = services.update_objective(objective, actor=request.user, changes=changes)
-        objective = Objective.objects.select_related("assignee__user").get(pk=objective.pk)
+        objective = self._fetch_objective(project, objective.pk)
         return Response(ObjectiveSerializer(objective, context=context).data)
 
     @action(detail=True, methods=["post"], url_path="objectives/reorder", permission_classes=[IsAuthenticated])
@@ -223,7 +236,7 @@ class ProjectViewSet(
         serializer = ReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         services.reorder_objectives(project, actor=request.user, ordered_ids=serializer.validated_data["order"])
-        rows = project.objectives.select_related("assignee__user")
+        rows = self._with_assignees(project.objectives)
         return Response(ObjectiveSerializer(rows, many=True, context=self._objective_context(request, project)).data)
 
     # -- comments -------------------------------------------------------------

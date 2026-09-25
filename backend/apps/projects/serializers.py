@@ -92,18 +92,28 @@ class ProjectDetailSerializer(ProjectSerializer):
         read_only_fields = fields
 
 
+def _reject_developer(user):
+    if user.is_developer:
+        raise serializers.ValidationError("حساب توسعه‌دهنده را نمی‌توان عضو پروژه کرد.")
+    return user
+
+
 class MemberInputSerializer(serializers.Serializer):
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     role = serializers.ChoiceField(choices=ProjectRole.choices, required=False, default=ProjectRole.MEMBER)
 
+    def validate_user(self, user):
+        return _reject_developer(user)
+
 
 class ObjectiveSerializer(serializers.ModelSerializer):
-    """`assignee` is the person's *user id* (the ProjectMember behind it is an internal detail).
+    """`assignees` are the people's *user ids* (the ProjectMember behind each one is an internal
+    detail), with no levels among them — any of them may write under their own name.
     `can_change_status` / `can_edit` are the viewer's rights, from the very functions the endpoints
-    enforce; pass `manage` (bool) in the serializer context."""
+    enforce; pass `manage` (bool) in the serializer context. Needs `objective.assignees` prefetched
+    with `member__user` (views.py), so this reads no extra query per row."""
 
-    assignee = serializers.IntegerField(source="assignee.user_id", read_only=True)
-    assignee_name = serializers.CharField(source="assignee.user.full_name", read_only=True)
+    assignees = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     is_overdue = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
@@ -112,10 +122,16 @@ class ObjectiveSerializer(serializers.ModelSerializer):
     class Meta:
         model = Objective
         fields = [
-            "id", "position", "title", "description", "assignee", "assignee_name", "due_on",
+            "id", "position", "title", "description", "assignees", "due_on",
             "status", "status_label", "weight", "completed_at", "is_overdue", "can_edit", "can_change_status",
         ]
         read_only_fields = fields
+
+    def get_assignees(self, objective) -> list[dict]:
+        return [
+            {"user": a.member.user_id, "name": a.member.user.full_name, "title": a.member.user.title}
+            for a in objective.assignees.all()
+        ]
 
     def get_is_overdue(self, objective) -> bool:
         return objective.due_on < timezone.localdate() and objective.status not in CLOSED_OBJECTIVE_STATUSES
@@ -124,15 +140,18 @@ class ObjectiveSerializer(serializers.ModelSerializer):
         return bool(self.context.get("manage"))
 
     def get_can_change_status(self, objective) -> bool:
-        return bool(self.context.get("manage")) or objective.assignee.user_id == self.context["request"].user.pk
+        if self.context.get("manage"):
+            return True
+        user_id = self.context["request"].user.pk
+        return any(a.member.user_id == user_id for a in objective.assignees.all())
 
 
 class ObjectiveInputSerializer(serializers.Serializer):
-    """One objective to create. Assignee and deadline are both required: no unassigned backlog."""
+    """One objective to create. Assignees and deadline are both required: no unassigned backlog."""
 
     title = serializers.CharField(max_length=255)
     description = serializers.CharField(required=False, allow_blank=True, default="")
-    assignee = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    assignees = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, allow_empty=False)
     due_on = serializers.DateField()
     weight = serializers.IntegerField(min_value=1, max_value=100, required=False, default=1)
 
@@ -140,7 +159,10 @@ class ObjectiveInputSerializer(serializers.Serializer):
 class ObjectiveUpdateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
-    assignee = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
+    #: When given, replaces the whole assignee set — never a partial add/remove.
+    assignees = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), many=True, required=False, allow_empty=False
+    )
     due_on = serializers.DateField(required=False)
     status = serializers.ChoiceField(choices=ObjectiveStatus.choices, required=False)
     weight = serializers.IntegerField(min_value=1, max_value=100, required=False)
@@ -171,6 +193,9 @@ class ProjectUpdateSerializer(serializers.Serializer):
 class MemberCreateSerializer(serializers.Serializer):
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     role = serializers.ChoiceField(choices=ProjectRole.choices, required=False, default=ProjectRole.MEMBER)
+
+    def validate_user(self, user):
+        return _reject_developer(user)
 
 
 class MemberUpdateSerializer(serializers.Serializer):

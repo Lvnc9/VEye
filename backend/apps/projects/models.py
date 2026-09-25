@@ -118,13 +118,10 @@ class ProjectMember(TimeStampedModel):
 
 
 class Objective(TimeStampedModel):
-    """A ریز هدف: one piece of a project's plan, with **one assignee and one deadline, both required**
-    — there is no unassigned backlog.
-
-    `assignee` points at the *ProjectMember*, not the User. That is the model's most valuable detail:
-    the database itself then refuses an objective assigned to a non-member, and removing a member who
-    still owns work is a 409 instead of a silent orphan. «هر ریز هدف باید متعلق به یکی از اعضای پروژه
-    باشد» lives in the schema, not in a validator that can be forgotten.
+    """A ریز هدف: one piece of a project's plan, with **several assignees (at least one) and one
+    deadline, both required** — there is no unassigned backlog. Who owns it lives in
+    `ObjectiveAssignee`, below; there are no levels among assignees, and any of them may write
+    under their own name and change the status.
 
     Progress and overdue-ness are **derived, never stored** (queries.py): a stored percentage is a
     cache that goes stale the moment anyone edits a weight.
@@ -135,7 +132,6 @@ class Objective(TimeStampedModel):
     position = models.PositiveSmallIntegerField()
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    assignee = models.ForeignKey(ProjectMember, on_delete=models.PROTECT, related_name="objectives")
     due_on = models.DateField()
     status = models.CharField(max_length=16, choices=ObjectiveStatus.choices, default=ObjectiveStatus.TODO)
     #: How much it counts towards the project's progress.
@@ -150,12 +146,29 @@ class Objective(TimeStampedModel):
         constraints = [CheckConstraint(check=Q(weight__gte=1), name="objective_weight_positive")]
         indexes = [
             Index(fields=["project", "position"], name="objective_project_position_idx"),
-            Index(fields=["assignee", "status"], name="objective_assignee_status_idx"),
             Index(fields=["status", "due_on"], name="objective_status_due_idx"),
         ]
 
     def __str__(self):
         return self.title
+
+
+class ObjectiveAssignee(TimeStampedModel):
+    """One person responsible for a ریز هدف. `member` points at the *ProjectMember*, not the User —
+    the model's most valuable detail, kept from the single-assignee design: the database itself
+    refuses an objective assigned to a non-member, and removing a member who still owns work is a
+    409 instead of a silent orphan. "At least one assignee" cannot be a CHECK constraint (it cannot
+    count sibling rows), so services.py enforces it."""
+
+    objective = models.ForeignKey(Objective, on_delete=models.CASCADE, related_name="assignees")
+    member = models.ForeignKey(ProjectMember, on_delete=models.PROTECT, related_name="objective_assignments")
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [UniqueConstraint(fields=["objective", "member"], name="uniq_objective_assignee")]
+
+    def __str__(self):
+        return f"{self.member.user.full_name} → {self.objective.title}"
 
 
 class ProjectEvent(TimeStampedModel):

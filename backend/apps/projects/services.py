@@ -11,6 +11,7 @@ is read-only (un-archive it first).
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, ValidationError
 
@@ -21,6 +22,7 @@ from apps.organization.tree import lock_node
 
 from .models import (
     Objective,
+    ObjectiveAssignee,
     ObjectiveStatus,
     Project,
     ProjectComment,
@@ -44,8 +46,8 @@ UNSET = object()
 
 #: Fields update_project accepts.
 UPDATABLE = ("name", "goal", "starts_on", "due_on", "status")
-#: Fields update_objective accepts. Only `status` may be changed by the assignee (views.py).
-OBJECTIVE_UPDATABLE = ("title", "description", "assignee", "due_on", "status", "weight")
+#: Fields update_objective accepts. Only `status` may be changed by an assignee (views.py).
+OBJECTIVE_UPDATABLE = ("title", "description", "assignees", "due_on", "status", "weight")
 
 
 def record_event(project: Project, kind: str, actor, **extra) -> ProjectEvent:
@@ -178,13 +180,25 @@ def remove_member(member: ProjectMember, *, actor) -> None:
         raise ConflictError(
             "هر پروژه باید دست‌کم یک مدیر داشته باشد. ابتدا مدیر دیگری تعیین کنید.", code="last_manager"
         )
-    owned = member.objectives.count()
-    if owned:
+    # A 409 only when removing them would leave some objective with zero assignees — being one of
+    # several assignees is fine, the others keep it staffed. The base queryset is this member's own
+    # rows (a plain field filter, no join yet), so the annotate's own join to the objective's full
+    # assignee list is independent of it and counts every assignee, not just this one
+    # (filtering and Count()-ing the *same* relation in one query would silently restrict the count
+    # to the filtered join instead).
+    sole_owned = (
+        ObjectiveAssignee.objects.filter(member=member)
+        .annotate(assignee_count=Count("objective__assignees"))
+        .filter(assignee_count=1)
+        .count()
+    )
+    if sole_owned:
         raise ConflictError(
-            "این عضو هنوز ریزهدف دارد. ابتدا آن‌ها را به عضو دیگری واگذار کنید.",
+            "این عضو تنها مسئول یک یا چند ریزهدف است. ابتدا آن‌ها را به عضو دیگری واگذار کنید.",
             code="member_has_objectives",
-            objectives=owned,
+            objectives=sole_owned,
         )
+    member.objective_assignments.all().delete()
     name = member.user.full_name
     member.delete()
     record_event(project, ProjectEventKind.MEMBER_REMOVED, actor, subject_title=name)
@@ -233,12 +247,14 @@ def create_project(
 
     for index, entry in enumerate(objectives):
         try:
-            assignee = project.members.get(user=entry["assignee"])
+            assignee_members = [project.members.get(user=user) for user in entry["assignees"]]
         except ProjectMember.DoesNotExist:
             raise ValidationError(
-                {"objectives": {index: {"assignee": ["مسئول ریزهدف باید یکی از اعضای پروژه باشد."]}}}
+                {"objectives": {index: {"assignees": ["مسئول ریزهدف باید یکی از اعضای پروژه باشد."]}}}
             )
-        _add_objective(project, actor, assignee=assignee, **{k: v for k, v in entry.items() if k != "assignee"})
+        _add_objective(
+            project, actor, assignees=assignee_members, **{k: v for k, v in entry.items() if k != "assignees"}
+        )
     return project
 
 
@@ -313,10 +329,28 @@ def _clean_title(title: str) -> str:
     return title
 
 
+def _dedupe_members(members: list[ProjectMember]) -> list[ProjectMember]:
+    """First occurrence wins; every entry is (or is about to be checked as) the same project's
+    member, so any duplicate is interchangeable with the one already kept."""
+    return list({member.pk: member for member in members}.values())
+
+
+def _require_assignees(members: list[ProjectMember]) -> list[ProjectMember]:
+    members = _dedupe_members(members)
+    if not members:
+        raise ValidationError({"assignees": ["ریزهدف باید دست‌کم یک مسئول داشته باشد."]})
+    return members
+
+
+def _assignee_names(members: list[ProjectMember]) -> str:
+    return "، ".join(member.user.full_name for member in members)
+
+
 def _add_objective(
-    project: Project, actor, *, title, assignee: ProjectMember, due_on, description="", weight=1,
+    project: Project, actor, *, title, assignees: list[ProjectMember], due_on, description="", weight=1,
     status=ObjectiveStatus.TODO,
 ) -> Objective:
+    assignees = _require_assignees(assignees)
     if project.objectives.count() >= settings.PROJECT_MAX_OBJECTIVES:
         raise ConflictError(
             f"یک پروژه حداکثر {settings.PROJECT_MAX_OBJECTIVES} ریزهدف می‌تواند داشته باشد.",
@@ -328,53 +362,57 @@ def _add_objective(
         position=last + 1,
         title=_clean_title(title),
         description=(description or "").strip(),
-        assignee=assignee,
         due_on=due_on,
         weight=weight,
         status=status,
         completed_at=timezone.now() if status == ObjectiveStatus.DONE else None,
         created_by=actor,
     )
+    ObjectiveAssignee.objects.bulk_create(
+        ObjectiveAssignee(objective=objective, member=member) for member in assignees
+    )
     record_event(
         project, ProjectEventKind.OBJECTIVE_ADDED, actor,
-        objective=objective, subject_title=objective.title, note=assignee.user.full_name,
+        objective=objective, subject_title=objective.title, note=_assignee_names(assignees),
     )
     return objective
 
 
 def _member_of(project: Project, member) -> ProjectMember:
     if member.project_id != project.pk:
-        raise ValidationError({"assignee": ["مسئول ریزهدف باید یکی از اعضای همین پروژه باشد."]})
+        raise ValidationError({"assignees": ["مسئول ریزهدف باید یکی از اعضای همین پروژه باشد."]})
     return member
 
 
 @transaction.atomic
-def add_objective(project: Project, *, actor, assignee: ProjectMember, **fields) -> Objective:
+def add_objective(project: Project, *, actor, assignees: list[ProjectMember], **fields) -> Objective:
     project = _lock_project(project.pk)
     require_writable(project)
-    return _add_objective(project, actor, assignee=_member_of(project, assignee), **fields)
+    return _add_objective(project, actor, assignees=[_member_of(project, m) for m in assignees], **fields)
 
 
 def _lock_objective(objective: Objective) -> tuple[Project, Objective]:
     project = _lock_project(objective.project_id)
     try:
-        return project, Objective.objects.select_related("assignee__user").get(pk=objective.pk, project=project)
+        return project, Objective.objects.get(pk=objective.pk, project=project)
     except Objective.DoesNotExist:
         raise NotFound("ریزهدف یافت نشد.")
 
 
 @transaction.atomic
 def update_objective(objective: Objective, *, actor, changes: dict) -> Objective:
-    """Apply any subset of `OBJECTIVE_UPDATABLE`. Status, deadline and assignee changes are each
+    """Apply any subset of `OBJECTIVE_UPDATABLE`. Status, deadline and assignee-set changes are each
     written to the feed (with the old and the new value); edits to the title, description and
-    weight are not events. `completed_at` follows the status: set on DONE, cleared when it leaves."""
+    weight are not events. `completed_at` follows the status: set on DONE, cleared when it leaves.
+    `assignees`, when given, **replaces** the whole set — never a partial add/remove."""
     project, objective = _lock_objective(objective)
     require_writable(project)
     unknown = set(changes) - set(OBJECTIVE_UPDATABLE)
     if unknown:
         raise ValueError(f"not updatable: {sorted(unknown)}")
 
-    old_status, old_due, old_assignee = objective.status, objective.due_on, objective.assignee
+    old_status, old_due = objective.status, objective.due_on
+    old_member_ids = set(objective.assignees.values_list("member_id", flat=True))
     if "title" in changes:
         objective.title = _clean_title(changes["title"])
     if "description" in changes:
@@ -383,8 +421,6 @@ def update_objective(objective: Objective, *, actor, changes: dict) -> Objective
         objective.weight = changes["weight"]
     if "due_on" in changes:
         objective.due_on = changes["due_on"]
-    if "assignee" in changes:
-        objective.assignee = _member_of(project, changes["assignee"])
     if "status" in changes:
         objective.status = changes["status"]
         if objective.status == ObjectiveStatus.DONE and old_status != ObjectiveStatus.DONE:
@@ -393,6 +429,20 @@ def update_objective(objective: Objective, *, actor, changes: dict) -> Objective
             objective.completed_at = None
 
     objective.save()
+
+    new_members = None
+    if "assignees" in changes:
+        new_members = _require_assignees([_member_of(project, m) for m in changes["assignees"]])
+        new_member_ids = {m.pk for m in new_members}
+        if new_member_ids != old_member_ids:
+            objective.assignees.exclude(member_id__in=new_member_ids).delete()
+            kept_ids = set(objective.assignees.values_list("member_id", flat=True))
+            ObjectiveAssignee.objects.bulk_create(
+                ObjectiveAssignee(objective=objective, member=m) for m in new_members if m.pk not in kept_ids
+            )
+        else:
+            new_members = None  # unchanged: no event, no note needed below
+
     common = {"objective": objective, "subject_title": objective.title}
     if objective.status != old_status:
         record_event(
@@ -404,9 +454,9 @@ def update_objective(objective: Objective, *, actor, changes: dict) -> Objective
             project, ProjectEventKind.OBJECTIVE_DUE_CHANGED, actor,
             from_status=old_due.isoformat(), to_status=objective.due_on.isoformat(), **common,
         )
-    if objective.assignee_id != old_assignee.pk:
+    if new_members is not None:
         record_event(
-            project, ProjectEventKind.OBJECTIVE_ASSIGNED, actor, note=objective.assignee.user.full_name, **common
+            project, ProjectEventKind.OBJECTIVE_ASSIGNED, actor, note=_assignee_names(new_members), **common
         )
     return objective
 
