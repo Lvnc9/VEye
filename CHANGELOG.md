@@ -25,6 +25,18 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   account (`User.is_developer`) with a Persian 400 — it is never a project member. Tests: **+11 → 915**,
   including a case that pins a real bug the new tests caught (a `Count()` over the same relation a preceding
   `filter()` had already joined silently restricted the count instead of totalling every assignee).
+- **A dated progress log under each assignee (Phase 10, ADR-010 §D, slice 2 — backend only)**: new
+  `ObjectiveUpdate(objective, author, author_name/author_title snapshots, body ≤4000, edited_at)` — every write
+  is a new row, the newest shows under the author's name, older ones expand; **the author may edit only their
+  own latest entry on that objective**, no delete. `GET/POST /projects/{id}/objectives/{oid}/updates/`
+  (paginated, newest first, `?author=<uid>`) and `PATCH …/updates/{uid}/`; only a *current* assignee may post
+  (not even the project's manager, if they are not one), only the author may edit, and editing anything but
+  their own latest entry is a 409 `not_latest_update` (checked under the project's row lock, so two concurrent
+  posts by the same author can't both think an older row is current). New event kind `objective_update_added`.
+  The objective payload's `assignees[]` now carries `latest_update` (`{id, body, created_at, edited_at,
+  can_edit}` or `null`) and `update_count` per assignee, plus a top-level `can_post_update` — all computed with
+  correlated subqueries (`queries.with_latest_update`), so a whole objective list costs no query per row. Tests:
+  **+18 → 933**.
 
 ### Phase 10 — A3 · projects frontend (objective tree, timeline, meetings table, drafts)
 - _(A3: add lines under this heading only)_
