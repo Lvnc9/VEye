@@ -20,8 +20,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fa" dir="rtl" className={`${vazir.variable} h-full`}>
-      <body className="min-h-full bg-slate-100 text-slate-900 antialiased">{children}</body>
+    // suppressHydrationWarning: browser extensions (Grammarly's `data-gr-*`, translators, dark-mode
+    // add-ons) write attributes onto <html>/<body> before React hydrates. It only silences attribute
+    // mismatches on these two elements — anything inside {children} still warns.
+    <html lang="fa" dir="rtl" className={`${vazir.variable} h-full`} suppressHydrationWarning>
+      <body className="min-h-full bg-slate-100 text-slate-900 antialiased" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }
