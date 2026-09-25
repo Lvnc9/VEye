@@ -278,7 +278,8 @@ class PeopleView(generics.ListAPIView):
 
     Filters: `?q=` (name; Arabic/Persian letters and digits are treated alike), `?node=<id>`
     (people directly in that node), `?unassigned=1` (people with no membership yet — the
-    setup wizard's and personnel screen's "who still needs a place")."""
+    setup wizard's and personnel screen's "who still needs a place"). The developer account is
+    never listed here: it has no membership, so `?unassigned=1` would otherwise show it too."""
 
     serializer_class = PersonSerializer
     pagination_class = DefaultPagination
@@ -286,7 +287,7 @@ class PeopleView(generics.ListAPIView):
 
     def get_queryset(self):
         params = self.request.query_params
-        queryset = User.objects.all()
+        queryset = User.objects.exclude(is_developer=True)
         if not _flag(self.request, "include_inactive"):
             queryset = queryset.filter(is_active=True)
         if node := params.get("node"):

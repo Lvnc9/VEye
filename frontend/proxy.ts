@@ -12,12 +12,14 @@ import { NextRequest, NextResponse } from "next/server";
  * blocks JS access in the browser. So presence of access_token/refresh_token
  * is checked here, redirecting to /login when neither is set.
  *
- * /login, /setup (the first-run wizard: on a fresh deployment nobody can sign in yet, and its
- * one dangerous call is protected by the setup token on the server) and /verify/* (the public
- * QR-scan landing page, Phase 5) bypass the guard entirely.
+ * /login, /setup (the first-run wizard — its two dangerous calls are guarded server-side: an
+ * anonymous bootstrap only while no developer account exists, everything else needs that
+ * account's own session), / (Phase 10: a public landing page that offers «شروع راه‌اندازی» /
+ * «ادامهٔ راه‌اندازی» / a sign-in link depending on `GET /setup/status/`) and /verify/* (the
+ * public QR-scan landing page, Phase 5) bypass the guard entirely.
  */
 
-const PUBLIC_EXACT_PATHS = new Set(["/login", "/setup"]);
+const PUBLIC_EXACT_PATHS = new Set(["/", "/login", "/setup"]);
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_EXACT_PATHS.has(pathname)) return true;
@@ -38,10 +40,9 @@ export function proxy(request: NextRequest) {
   if (!accessToken && !refreshToken) {
     const loginUrl = new URL("/login", request.url);
     // Keep the query too: on /inbox?c=42 it is the open conversation, and the login page's
-    // safeNextPath decides whether the whole thing is a safe place to return to.
-    if (pathname !== "/") {
-      loginUrl.searchParams.set("next", pathname + search);
-    }
+    // safeNextPath decides whether the whole thing is a safe place to return to. (The root is
+    // public now, so pathname is never "/" here.)
+    loginUrl.searchParams.set("next", pathname + search);
     return NextResponse.redirect(loginUrl);
   }
 

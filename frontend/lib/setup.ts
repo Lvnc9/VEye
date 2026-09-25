@@ -1,5 +1,5 @@
 /**
- * The first-run wizard's logic (Phase 7.6): which screen to show, and what to check before sending.
+ * The first-run wizard's logic (Phase 7.6, reshaped for Phase 10's developer account — ADR-010 §A).
  * Pure functions — relative imports only (vitest has no `@/` alias).
  *
  * The server is the authority (it validates everything again, including Django's password rules);
@@ -8,9 +8,17 @@
 import { normalizeNationalCode } from "./login";
 import type { SetupStatus } from "./types";
 
-export type WizardStep = "account" | "login" | "company" | "units" | "sections" | "ready" | "done";
+/**
+ * Which screen `SignedInWizard` shows, once `Company` exists. "account" (no developer yet) and the
+ * "press «شروع راه‌اندازی»" screen (a developer signed in, no company yet) are decided directly by
+ * `SetupWizard` from `status.developer_exists` / `status.company_exists`, before this ever runs —
+ * this only maps the chart's own bookmark (`Company.setup_step`) to a step once there is a chart.
+ */
+export type WizardStep = "login" | "company" | "units" | "sections" | "people" | "ready" | "done";
 
-/** The screens in order; `login` and `done` are not steps of the chart, only doors. */
+/** The screens in order. `login` is not a step of the chart, only a door; «پرسنل» is added to this
+ *  nav once the wizard embeds it (A4's `PersonnelForm`, the next slice) — `wizardStepFor` already
+ *  resumes there from the `PEOPLE` bookmark, but nothing points a visitor at it until then. */
 export const CHART_STEPS: { key: "company" | "units" | "sections" | "ready"; title: string }[] = [
   { key: "company", title: "شرکت و حوزه‌ها" },
   { key: "units", title: "واحدها" },
@@ -24,7 +32,6 @@ export const CHART_STEPS: { key: "company" | "units" | "sections" | "ready"; tit
  * bookmark, so a refresh, a crash or a different browser all land back here.
  */
 export function wizardStepFor(status: SetupStatus, signedIn: boolean): WizardStep {
-  if (status.needed) return "account";
   if (status.step === "DONE") return "done";
   if (!signedIn) return "login";
   switch (status.step) {
@@ -33,15 +40,15 @@ export function wizardStepFor(status: SetupStatus, signedIn: boolean): WizardSte
     case "SECTIONS":
       return "sections";
     case "PEOPLE":
-      return "ready";
+      return "people";
     default:
       return "company"; // COMPANY, DOMAINS, or a bookmark we do not know yet
   }
 }
 
-/** The first مدیر عامل, created from the form on a fresh install (no token — removed 2026-09-25). */
+/** The developer account, created from the form on a fresh install (no token — removed 2026-09-25,
+ *  no company name either — Phase 10 moves that to the wizard's own «شرکت و حوزه‌ها» step). */
 export interface AccountForm {
-  companyName: string;
   fullName: string;
   nationalCode: string;
   mobilePhone: string;
@@ -50,7 +57,6 @@ export interface AccountForm {
 }
 
 export const EMPTY_ACCOUNT_FORM: AccountForm = {
-  companyName: "",
   fullName: "",
   nationalCode: "",
   mobilePhone: "",
@@ -65,7 +71,6 @@ export type AccountErrors = Partial<Record<keyof AccountForm, string>>;
 /** Client-side checks, in the order the form reads. An empty object means "send it". */
 export function validateAccountForm(form: AccountForm): AccountErrors {
   const errors: AccountErrors = {};
-  if (!form.companyName.trim()) errors.companyName = "نام شرکت را وارد کنید.";
   if (!form.fullName.trim()) errors.fullName = "نام و نام خانوادگی را وارد کنید.";
   if (!normalizeNationalCode(form.nationalCode)) errors.nationalCode = "کد ملی را وارد کنید.";
   if (form.password.length < PASSWORD_MIN_LENGTH) {
@@ -79,12 +84,9 @@ export function validateAccountForm(form: AccountForm): AccountErrors {
 /** The `POST /setup/bootstrap/` body. */
 export function bootstrapBody(form: AccountForm): Record<string, unknown> {
   return {
-    company_name: form.companyName.trim(),
-    manager: {
-      full_name: form.fullName.trim(),
-      national_code: normalizeNationalCode(form.nationalCode),
-      mobile_phone: form.mobilePhone.trim(),
-      password: form.password,
-    },
+    full_name: form.fullName.trim(),
+    national_code: normalizeNationalCode(form.nationalCode),
+    mobile_phone: form.mobilePhone.trim(),
+    password: form.password,
   };
 }
