@@ -1,3 +1,6 @@
+# Host ports come from *_HOST_PORT (defaults 5432/6379/8000/3000) so several stacks can run side
+# by side, each as its own compose project (`docker compose -p veye_a1 …`) — docs/01-run-and-test.md.
+# (Not POSTGRES_PORT: .env already uses that name for the database connection.)
 services:
   postgres:
     image: postgres:16
@@ -7,7 +10,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,7 +22,7 @@ services:
   redis:
     image: redis:7
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -35,7 +38,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     ports:
-      - "8000:8000"
+      - "${BACKEND_HOST_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
       - media:/app/media
@@ -71,7 +74,7 @@ services:
     command: npm run dev
     env_file: .env
     ports:
-      - "3000:3000"
+      - "${FRONTEND_HOST_PORT:-3000}:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules

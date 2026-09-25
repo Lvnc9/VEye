@@ -281,11 +281,18 @@ ORG_TREE_MAX_NODES = env.int("ORG_TREE_MAX_NODES", default=2000)
 # (PROJECT_MAX_OBJECTIVES, slice 8.2) is bounded the same way, mirroring `revision_limit`.
 PROJECT_MAX_MEMBERS = env.int("PROJECT_MAX_MEMBERS", default=100)
 PROJECT_MAX_OBJECTIVES = env.int("PROJECT_MAX_OBJECTIVES", default=200)
+# Phase 10: the largest server-side draft of a new project (the form as JSON), per user.
+PROJECT_DRAFT_MAX_BYTES = env.int("PROJECT_DRAFT_MAX_BYTES", default=64 * 1024)
 
 # Chat (Phase 9): per-user limit on opening DMs (a rate-limited request is a 403, like login/verify).
 CHAT_OPEN_DIRECT_RATELIMIT_RATE = env("CHAT_OPEN_DIRECT_RATELIMIT_RATE", default="30/m")
 CHAT_SEND_RATELIMIT_RATE = env("CHAT_SEND_RATELIMIT_RATE", default="60/m")
 CHAT_PAGE_SIZE = env.int("CHAT_PAGE_SIZE", default=50)
 CHAT_MAX_PAGE_SIZE = env.int("CHAT_MAX_PAGE_SIZE", default=200)
+# Phase 10: کارتابل attachments — per file, per message, and a per-user rate for sends that carry
+# files (on top of CHAT_SEND_RATELIMIT_RATE). Allowed extensions are the designer's FILE_EXTENSIONS.
+CHAT_ATTACHMENT_MAX_BYTES = env.int("CHAT_ATTACHMENT_MAX_BYTES", default=20 * 1024 * 1024)
+CHAT_ATTACHMENT_MAX_FILES = env.int("CHAT_ATTACHMENT_MAX_FILES", default=5)
+CHAT_ATTACHMENT_RATELIMIT_RATE = env("CHAT_ATTACHMENT_RATELIMIT_RATE", default="20/m")
 # کارتابل «منتظر اقدام»: an open ریزهدف counts from this many days before its deadline.
 INBOX_DUE_SOON_DAYS = env.int("INBOX_DUE_SOON_DAYS", default=3)
