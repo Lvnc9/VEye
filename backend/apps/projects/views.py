@@ -10,12 +10,24 @@ from apps.core.pagination import DefaultPagination
 from apps.core.text import normalize_search_term
 
 from . import services
-from .access import CanManageProject, can_create_project, can_manage_project, visible_projects
-from .models import Objective, ObjectiveAssignee, ObjectiveUpdate, ProjectComment, ProjectDocumentLink, ProjectMember
+from .access import CanManageProject, can_create_project, can_manage_meetings, can_manage_project, visible_projects
+from .models import (
+    MeetingAttendee,
+    Objective,
+    ObjectiveAssignee,
+    ObjectiveUpdate,
+    ProjectComment,
+    ProjectDocumentLink,
+    ProjectMeeting,
+    ProjectMember,
+)
 from .queries import overdue_q, with_latest_update, with_progress
 from .serializers import (
     CommentCreateSerializer,
     DocumentLinkCreateSerializer,
+    MeetingInputSerializer,
+    MeetingSerializer,
+    MeetingUpdateSerializer,
     MemberCreateSerializer,
     MemberUpdateSerializer,
     ObjectiveInputSerializer,
@@ -393,3 +405,87 @@ class ProjectViewSet(
             raise NotFound("پیوند مستند یافت نشد.")
         services.unlink_document(link, actor=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # -- meetings -------------------------------------------------------------
+
+    #: «جدول جلسات» is one unpaginated list (the contract); a project past this many meetings shows
+    #: the newest.
+    MEETINGS_LIST_LIMIT = 200
+
+    def _meeting_context(self, request, project):
+        return {"request": request, "manage": can_manage_meetings(request, project), "archived": project.is_archived}
+
+    @staticmethod
+    def _with_attendees(queryset):
+        return queryset.prefetch_related(
+            Prefetch("attendees", queryset=MeetingAttendee.objects.select_related("member__user"))
+        )
+
+    def _fetch_meeting(self, project, meeting_id):
+        try:
+            return self._with_attendees(ProjectMeeting.objects).get(pk=meeting_id, project=project)
+        except ProjectMeeting.DoesNotExist:
+            raise NotFound("جلسه یافت نشد.")
+
+    def _meetings_manager_only(self, request, project):
+        if not can_manage_meetings(request, project):
+            if project.is_archived:
+                services.require_writable(project)  # the archived 409 says why better than a 403
+            raise PermissionDenied("فقط مدیر پروژه می‌تواند جلسه تعیین یا ویرایش کند.")
+
+    def _attendee_members(self, project, users):
+        members = {m.user_id: m for m in project.members.filter(user__in=users)}
+        missing = [u for u in users if u.pk not in members]
+        if missing:
+            raise ValidationError({"attendees": ["شرکت‌کنندگان باید از اعضای همین پروژه باشند."]})
+        return [members[u.pk] for u in users]
+
+    @action(detail=True, methods=["get", "post"], url_path="meetings", permission_classes=[IsAuthenticated])
+    def meetings(self, request, pk=None):
+        """Every reader of the project sees every meeting (newest first, unpaginated, at most
+        `MEETINGS_LIST_LIMIT`); scheduling one needs `can_manage_meetings`."""
+        project = self.get_object()
+        context = self._meeting_context(request, project)
+        if request.method == "GET":
+            rows = self._with_attendees(project.meetings.all())[: self.MEETINGS_LIST_LIMIT]
+            return Response(MeetingSerializer(rows, many=True, context=context).data)
+        self._meetings_manager_only(request, project)
+        serializer = MeetingInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        attendees = self._attendee_members(project, data.pop("attendees"))
+        meeting = services.create_meeting(project, actor=request.user, attendees=attendees, **data)
+        meeting = self._fetch_meeting(project, meeting.pk)
+        return Response(MeetingSerializer(meeting, context=context).data, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True, methods=["patch", "delete"], url_path=r"meetings/(?P<meeting_id>\d+)",
+        permission_classes=[IsAuthenticated],
+    )
+    def meeting(self, request, pk=None, meeting_id=None):
+        project = self.get_object()
+        meeting = self._fetch_meeting(project, meeting_id)
+        self._meetings_manager_only(request, project)
+        if request.method == "DELETE":
+            services.cancel_meeting(meeting, actor=request.user)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = MeetingUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        changes = dict(serializer.validated_data)
+        if "attendees" in changes:
+            changes["attendees"] = self._attendee_members(project, changes["attendees"])
+        services.update_meeting(meeting, actor=request.user, changes=changes)
+        meeting = self._fetch_meeting(project, meeting.pk)
+        return Response(MeetingSerializer(meeting, context=self._meeting_context(request, project)).data)
+
+    @action(
+        detail=True, methods=["post"], url_path=r"meetings/(?P<meeting_id>\d+)/acknowledge",
+        permission_classes=[IsAuthenticated],
+    )
+    def acknowledge_meeting(self, request, pk=None, meeting_id=None):
+        """«مشاهده شد» — invited attendees only; idempotent (the first time is kept)."""
+        project = self.get_object()
+        meeting = self._fetch_meeting(project, meeting_id)
+        services.acknowledge_meeting(meeting, user=request.user)
+        meeting = self._fetch_meeting(project, meeting.pk)
+        return Response(MeetingSerializer(meeting, context=self._meeting_context(request, project)).data)

@@ -17,6 +17,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from . import services
 from .models import (
+    MeetingAttendee,
     Objective,
     ObjectiveStatus,
     ObjectiveUpdate,
@@ -25,6 +26,7 @@ from .models import (
     ProjectDocumentLink,
     ProjectEvent,
     ProjectEventKind,
+    ProjectMeeting,
     ProjectMember,
     ProjectRole,
     ProjectStatus,
@@ -1868,3 +1870,211 @@ class ObjectiveProgressApiTests(ProjectApiCase):
         self.assertFalse(can_post(other))
         services.archive_project(self.project, actor=self.mgr)
         self.assertFalse(can_post(self.member))
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 §D (slice 3): meetings
+# ---------------------------------------------------------------------------
+
+
+class MeetingServiceTests(ProjectFixtures, TestCase):
+    def setUp(self):
+        self.build_world()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.mgr_m = self.project.members.get(user=self.mgr)
+        self.member_m = self.project.members.get(user=self.member)
+
+    def meeting(self, **kwargs):
+        fields = {"title": "جلسهٔ آغاز", "held_on": date(2026, 10, 2), "attendees": [self.member_m], **kwargs}
+        return services.create_meeting(self.project, actor=self.mgr, **fields)
+
+    def test_scheduling_writes_the_attendees_and_one_event_with_the_day(self):
+        meeting = self.meeting(start_time=None, location=" اتاق ۲ ", attendees=[self.member_m, self.member_m])
+        self.assertEqual(meeting.attendees.count(), 1)  # duplicates collapse
+        self.assertEqual(meeting.location, "اتاق ۲")
+        self.assertEqual(meeting.created_by_name, self.mgr.full_name)
+        event = self.project.events.get(kind=ProjectEventKind.MEETING_SCHEDULED)
+        self.assertEqual((event.subject_title, event.to_status, event.note), ("جلسهٔ آغاز", "2026-10-02", "اتاق ۲"))
+
+    def test_attendees_are_required_and_must_be_members_of_this_project(self):
+        with self.assertRaises(ValidationError):
+            self.meeting(attendees=[])
+        other = new_project(self.mgr, self.s1, name="دیگر", members=[{"user": self.outsider}])
+        with self.assertRaises(ValidationError):
+            self.meeting(attendees=[other.members.get(user=self.outsider)])
+        with self.assertRaises(ValidationError):
+            self.meeting(title="   ")
+        self.assertFalse(ProjectMeeting.objects.exists())
+
+    def test_acknowledging_is_for_attendees_only_and_keeps_the_first_time(self):
+        meeting = self.meeting()
+        with self.assertRaises(PermissionDenied):
+            services.acknowledge_meeting(meeting, user=self.mgr)  # the manager was not invited
+        services.acknowledge_meeting(meeting, user=self.member)
+        first = MeetingAttendee.objects.get().acknowledged_at
+        self.assertIsNotNone(first)
+        services.acknowledge_meeting(meeting, user=self.member)
+        self.assertEqual(MeetingAttendee.objects.get().acknowledged_at, first)
+        self.assertFalse(self.project.events.filter(kind__startswith="meeting_").exclude(
+            kind=ProjectEventKind.MEETING_SCHEDULED).exists())  # a read receipt is not a feed event
+
+    def test_changing_the_day_time_or_place_clears_every_acknowledgement(self):
+        for field, value in (("held_on", date(2026, 10, 3)), ("start_time", timezone.now().time().replace(microsecond=0)),
+                             ("location", "جای دیگر")):
+            with self.subTest(field=field):
+                meeting = self.meeting(attendees=[self.member_m, self.mgr_m])
+                services.acknowledge_meeting(meeting, user=self.member)
+                services.update_meeting(meeting, actor=self.mgr, changes={field: value})
+                self.assertFalse(meeting.attendees.filter(acknowledged_at__isnull=False).exists())
+
+    def test_editing_the_title_or_description_keeps_acknowledgements(self):
+        meeting = self.meeting()
+        services.acknowledge_meeting(meeting, user=self.member)
+        services.update_meeting(meeting, actor=self.mgr, changes={"title": "عنوان تازه", "description": "شرح"})
+        self.assertIsNotNone(MeetingAttendee.objects.get().acknowledged_at)
+        self.assertEqual(self.project.events.filter(kind=ProjectEventKind.MEETING_CHANGED).count(), 1)
+
+    def test_replacing_attendees_keeps_those_who_stay_and_an_unchanged_edit_writes_no_event(self):
+        meeting = self.meeting(attendees=[self.member_m])
+        services.acknowledge_meeting(meeting, user=self.member)
+        services.update_meeting(meeting, actor=self.mgr, changes={"attendees": [self.member_m, self.mgr_m]})
+        rows = {a.member_id: a.acknowledged_at for a in meeting.attendees.all()}
+        self.assertIsNotNone(rows[self.member_m.pk])
+        self.assertIsNone(rows[self.mgr_m.pk])
+        before = self.project.events.count()
+        services.update_meeting(meeting, actor=self.mgr, changes={"title": meeting.title, "attendees": [self.mgr_m, self.member_m]})
+        self.assertEqual(self.project.events.count(), before)
+
+    def test_removing_a_member_removes_them_as_an_attendee(self):
+        meeting = self.meeting(attendees=[self.member_m, self.mgr_m])
+        services.remove_member(self.member_m, actor=self.mgr)
+        self.assertEqual(list(meeting.attendees.values_list("member_id", flat=True)), [self.mgr_m.pk])
+
+    def test_cancelling_deletes_it_and_keeps_the_history(self):
+        meeting = self.meeting()
+        services.cancel_meeting(meeting, actor=self.mgr)
+        self.assertFalse(ProjectMeeting.objects.exists())
+        self.assertFalse(MeetingAttendee.objects.exists())
+        self.assertEqual(self.project.events.get(kind=ProjectEventKind.MEETING_CANCELLED).subject_title, "جلسهٔ آغاز")
+
+    def test_an_archived_project_refuses_every_meeting_write(self):
+        meeting = self.meeting()
+        services.archive_project(self.project, actor=self.mgr)
+        for call in (
+            lambda: self.meeting(),
+            lambda: services.update_meeting(meeting, actor=self.mgr, changes={"title": "x"}),
+            lambda: services.cancel_meeting(meeting, actor=self.mgr),
+            lambda: services.acknowledge_meeting(meeting, user=self.member),
+        ):
+            with self.assertRaises(ConflictError) as caught:
+                call()
+            self.assertEqual(caught.exception.payload["code"], "project_archived")
+
+
+class MeetingApiTests(ProjectApiCase):
+    def setUp(self):
+        super().setUp()
+        self.project = new_project(self.mgr, self.s1, members=[{"user": self.member}])
+        self.url = reverse("project-meetings", args=[self.project.pk])
+
+    def meeting_url(self, meeting, suffix=""):
+        name = "project-acknowledge-meeting" if suffix else "project-meeting"
+        return reverse(name, args=[self.project.pk, meeting if isinstance(meeting, int) else meeting.pk])
+
+    def post(self, **body):
+        body = {"title": "جلسهٔ هفتگی", "held_on": "2026-10-02", "attendees": [self.member.pk], **body}
+        return self.client.post(self.url, body, format="json")
+
+    def test_every_reader_sees_every_meeting_an_outsider_gets_404(self):
+        self.as_(self.mgr)
+        self.post()
+        for user in (self.mgr, self.member, self.lead_s1, self.lead_d1, self.ceo):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                response = self.client.get(self.url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(len(response.data), 1)
+        self.as_(self.outsider)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_the_manager_role_and_any_employer_schedule_meetings_a_lead_or_member_may_not(self):
+        board = person("9800000031", "عضو هیئت مدیره", roll=AccessRoll.EMPLOYER, level=AccessLevel.LEVEL_3)
+        for user in (self.mgr, self.ceo, board):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                self.assertEqual(self.post(title=f"از {user.pk}").status_code, 201)
+        for user in (self.lead_s1, self.lead_d1, self.member):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                denied = self.post(title="ممنوع")
+                self.assertEqual(denied.status_code, 403)
+                self.assertEqual(denied.data["detail"], "فقط مدیر پروژه می‌تواند جلسه تعیین یا ویرایش کند.")
+        self.assertFalse(ProjectMeeting.objects.filter(title="ممنوع").exists())
+
+    def test_can_manage_meetings_on_the_detail_follows_the_same_rule(self):
+        detail = reverse("project-detail", args=[self.project.pk])
+        for user, expected in ((self.mgr, True), (self.ceo, True), (self.lead_s1, False), (self.member, False)):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                self.assertEqual(self.client.get(detail).data["can_manage_meetings"], expected)
+        self.as_(self.mgr)
+        self.client.post(reverse("project-archive", args=[self.project.pk]))
+        self.assertFalse(self.client.get(detail).data["can_manage_meetings"])
+
+    def test_the_payload_matches_the_contract(self):
+        self.as_(self.mgr)
+        response = self.post(start_time="10:30", location="اتاق جلسات")
+        self.assertEqual(response.status_code, 201, response.data)
+        data = response.data
+        self.assertEqual((data["start_time"], data["location"], data["attendee_count"], data["acknowledged_count"]),
+                         ("10:30", "اتاق جلسات", 1, 0))
+        self.assertEqual(data["attendees"][0]["user"], self.member.pk)
+        self.assertEqual((data["can_edit"], data["can_acknowledge"], data["my_acknowledged_at"]), (True, False, None))
+        self.as_(self.member)
+        row = self.client.get(self.url).data[0]
+        self.assertEqual((row["can_edit"], row["can_acknowledge"]), (False, True))
+
+    def test_acknowledge_is_attendee_only_idempotent_and_moves_them_to_the_seen_list(self):
+        self.as_(self.mgr)
+        meeting_id = self.post().data["id"]
+        ack = reverse("project-acknowledge-meeting", args=[self.project.pk, meeting_id])
+        self.as_(self.lead_s1)
+        self.assertEqual(self.client.post(ack).status_code, 403)
+        self.as_(self.member)
+        first = self.client.post(ack)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual((first.data["acknowledged_count"], first.data["can_acknowledge"]), (1, False))
+        self.assertIsNotNone(first.data["my_acknowledged_at"])
+        again = self.client.post(ack)
+        self.assertEqual(again.data["my_acknowledged_at"], first.data["my_acknowledged_at"])
+
+    def test_patch_clears_acknowledgements_on_a_new_day_and_delete_cancels(self):
+        self.as_(self.mgr)
+        meeting_id = self.post().data["id"]
+        self.as_(self.member)
+        self.client.post(reverse("project-acknowledge-meeting", args=[self.project.pk, meeting_id]))
+        self.as_(self.mgr)
+        url = reverse("project-meeting", args=[self.project.pk, meeting_id])
+        moved = self.client.patch(url, {"held_on": "2026-10-09"}, format="json")
+        self.assertEqual((moved.status_code, moved.data["acknowledged_count"]), (200, 0))
+        self.as_(self.member)
+        self.assertEqual(self.client.patch(url, {"title": "x"}, format="json").status_code, 403)
+        self.assertEqual(self.client.delete(url).status_code, 403)
+        self.as_(self.ceo)
+        self.assertEqual(self.client.delete(url).status_code, 204)
+        self.assertEqual(self.client.delete(url).status_code, 404)
+
+    def test_bad_attendees_and_archived_projects_are_refused_in_persian(self):
+        self.as_(self.mgr)
+        self.assertEqual(self.post(attendees=[]).status_code, 400)
+        outsider = self.post(attendees=[self.outsider.pk])
+        self.assertEqual(outsider.status_code, 400)
+        self.assertEqual(outsider.data["attendees"], ["شرکت‌کنندگان باید از اعضای همین پروژه باشند."])
+        meeting_id = self.post().data["id"]
+        self.client.post(reverse("project-archive", args=[self.project.pk]))
+        blocked = self.post()
+        self.assertEqual((blocked.status_code, blocked.data["code"]), (409, "project_archived"))
+        self.as_(self.member)
+        ack = self.client.post(reverse("project-acknowledge-meeting", args=[self.project.pk, meeting_id]))
+        self.assertEqual((ack.status_code, ack.data["code"]), (409, "project_archived"))
+        self.assertEqual(self.client.get(self.url).data[0]["can_acknowledge"], False)

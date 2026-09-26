@@ -5,7 +5,7 @@ from rest_framework import serializers
 from apps.documents.models import Document
 from apps.organization.models import OrgNode
 
-from .access import can_manage_project
+from .access import can_manage_meetings, can_manage_project
 from .models import (
     CLOSED_OBJECTIVE_STATUSES,
     Objective,
@@ -14,6 +14,7 @@ from .models import (
     Project,
     ProjectComment,
     ProjectDocumentLink,
+    ProjectMeeting,
     ProjectMember,
     ProjectRole,
     ProjectStatus,
@@ -87,10 +88,14 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 class ProjectDetailSerializer(ProjectSerializer):
     members = ProjectMemberSerializer(many=True, read_only=True)
+    can_manage_meetings = serializers.SerializerMethodField()
 
     class Meta(ProjectSerializer.Meta):
-        fields = [*ProjectSerializer.Meta.fields, "members"]
+        fields = [*ProjectSerializer.Meta.fields, "members", "can_manage_meetings"]
         read_only_fields = fields
+
+    def get_can_manage_meetings(self, project) -> bool:
+        return can_manage_meetings(self.context["request"], project)
 
 
 def _reject_developer(user):
@@ -300,3 +305,75 @@ class ProjectDocumentLinkSerializer(serializers.ModelSerializer):
 class DocumentLinkCreateSerializer(serializers.Serializer):
     document = serializers.PrimaryKeyRelatedField(queryset=Document.objects.all())
     caption = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class MeetingSerializer(serializers.ModelSerializer):
+    """A row of «جدول جلسات». Needs `attendees` prefetched with `member__user` (views.py), and
+    `manage` (the viewer's `can_manage_meetings` answer) and `archived` in the context."""
+
+    start_time = serializers.TimeField(format="%H:%M", read_only=True)
+    attendees = serializers.SerializerMethodField()
+    attendee_count = serializers.SerializerMethodField()
+    acknowledged_count = serializers.SerializerMethodField()
+    my_acknowledged_at = serializers.SerializerMethodField()
+    can_acknowledge = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectMeeting
+        fields = [
+            "id", "title", "held_on", "start_time", "location", "description", "created_by_name", "created_at",
+            "attendees", "attendee_count", "acknowledged_count", "my_acknowledged_at", "can_acknowledge", "can_edit",
+        ]
+        read_only_fields = fields
+
+    def _mine(self, meeting):
+        user_id = self.context["request"].user.pk
+        return next((a for a in meeting.attendees.all() if a.member.user_id == user_id), None)
+
+    def get_attendees(self, meeting) -> list[dict]:
+        return [
+            {"member": a.member_id, "user": a.member.user_id, "name": a.member.user.full_name,
+             "acknowledged_at": a.acknowledged_at}
+            for a in meeting.attendees.all()
+        ]
+
+    def get_attendee_count(self, meeting) -> int:
+        return len(meeting.attendees.all())
+
+    def get_acknowledged_count(self, meeting) -> int:
+        return sum(1 for a in meeting.attendees.all() if a.acknowledged_at is not None)
+
+    def get_my_acknowledged_at(self, meeting):
+        mine = self._mine(meeting)
+        return mine.acknowledged_at if mine else None
+
+    def get_can_acknowledge(self, meeting) -> bool:
+        """An invited attendee who has not pressed «مشاهده شد» yet, on a project that is not archived."""
+        mine = self._mine(meeting)
+        return mine is not None and mine.acknowledged_at is None and not self.context.get("archived")
+
+    def get_can_edit(self, meeting) -> bool:
+        return bool(self.context.get("manage"))
+
+
+class MeetingInputSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255)
+    held_on = serializers.DateField()
+    start_time = serializers.TimeField(required=False, allow_null=True, default=None)
+    location = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    #: User ids of project members; the view maps them to ProjectMember rows.
+    attendees = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, allow_empty=False)
+
+
+class MeetingUpdateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255, required=False)
+    held_on = serializers.DateField(required=False)
+    start_time = serializers.TimeField(required=False, allow_null=True)
+    location = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True)
+    #: When given, replaces the whole attendee set.
+    attendees = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), many=True, required=False, allow_empty=False
+    )

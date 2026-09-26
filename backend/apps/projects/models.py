@@ -52,6 +52,9 @@ class ProjectEventKind(models.TextChoices):
     COMMENT_REMOVED = "comment_removed", "یادداشت حذف شد"
     DOCUMENT_LINKED = "document_linked", "مستند پیوست شد"
     DOCUMENT_UNLINKED = "document_unlinked", "پیوند مستند حذف شد"
+    MEETING_SCHEDULED = "meeting_scheduled", "جلسه تعیین شد"
+    MEETING_CHANGED = "meeting_changed", "جلسه تغییر کرد"
+    MEETING_CANCELLED = "meeting_cancelled", "جلسه لغو شد"
 
 
 class Project(TimeStampedModel):
@@ -295,3 +298,48 @@ class ProjectDocumentLink(TimeStampedModel):
 
     def __str__(self):
         return f"{self.project.name} → {self.document.full_code}"
+
+
+class ProjectMeeting(TimeStampedModel):
+    """A meeting on the project's «جدول جلسات». Every project reader sees every meeting; only the
+    invited attendees acknowledge it («مشاهده شد»). Who may create, edit or cancel one is narrower
+    than `can_manage_project` on purpose (access.can_manage_meetings): the project's MANAGER role, or
+    a کارفرمایی account — not a بخش lead (ADR-010, and the owner's 2026-09-26 addition)."""
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="meetings")
+    title = models.CharField(max_length=255)
+    held_on = models.DateField()
+    #: Optional: a meeting may be fixed to a day before its hour is.
+    start_time = models.TimeField(null=True, blank=True)
+    location = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    #: Snapshot, like every other actor name in this app.
+    created_by_name = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-held_on", models.F("start_time").desc(nulls_last=True), "-id"]
+        indexes = [Index(fields=["project", "held_on"], name="meeting_project_day_idx")]
+
+    def __str__(self):
+        return f"{self.title} ({self.held_on})"
+
+
+class MeetingAttendee(TimeStampedModel):
+    """One invited project member. CASCADE on the member: someone removed from the project stops
+    being an attendee (ADR-010's default). `acknowledged_at` is set once, the first time they press
+    «مشاهده شد», and cleared for everyone when the date, time or place changes."""
+
+    meeting = models.ForeignKey(ProjectMeeting, on_delete=models.CASCADE, related_name="attendees")
+    member = models.ForeignKey(ProjectMember, on_delete=models.CASCADE, related_name="meeting_invitations")
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [UniqueConstraint(fields=["meeting", "member"], name="uniq_meeting_attendee")]
+
+    def __str__(self):
+        return f"{self.member.user.full_name} → {self.meeting.title}"
+

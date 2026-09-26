@@ -3,6 +3,7 @@
   Create a project      `create_project`, or lead of the target بخش (or an ancestor)
   Read a project        a ProjectMember, or lead of its بخش (or an ancestor), or `manage_organization`
   Edit / manage         its مدیر پروژه, or lead of its بخش (or an ancestor), or any کارفرمایی account
+  Meetings (write)      its مدیر پروژه, or any کارفرمایی account — not a بخش lead; never while archived
 
 Reading is decided by **queryset scoping** (`visible_projects`), so an invisible project is a 404
 and no list route can forget the rule; `can_manage` is for writes on a project that is already
@@ -45,6 +46,16 @@ def can_manage_project(request, project) -> bool:
     if request.user.access_roll == AccessRoll.EMPLOYER:
         return True
     return project.my_role == ProjectRole.MANAGER or access_for(request).leads(project.section)
+
+
+def can_manage_meetings(request, project) -> bool:
+    """Create, edit or cancel a meeting. Narrower than `can_manage_project` on purpose: ADR-010 gave
+    meetings to the project's MANAGER role only (not a بخش lead), and the owner added every
+    کارفرمایی account on 2026-09-26. False while the project is archived, since the flag also drives
+    whether the frontend shows the form at all. `project` must come from `visible_projects`."""
+    if project.is_archived:
+        return False
+    return project.my_role == ProjectRole.MANAGER or request.user.access_roll == AccessRoll.EMPLOYER
 
 
 class CanManageProject(BasePermission):

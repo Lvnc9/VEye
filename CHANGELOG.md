@@ -42,7 +42,20 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   archive, members and objectives. Previously they could only *read* every project (through
   `manage_organization`) and edited only as a lead of the company root. Checked on the roll, not as a new
   capability, so the per-roll capability sets are unchanged; the developer (صفی/لول ۳) never gets it. Creating
-  meetings still needs the project's MANAGER role (ADR-010).
+  meetings is covered by the next entry.
+- **Meetings that invited members acknowledge (ADR-010 §D, slice 3 — backend).** New `ProjectMeeting(title,
+  held_on, start_time?, location?, description, created_by_name snapshot)` and `MeetingAttendee(member →
+  ProjectMember CASCADE, acknowledged_at)` (migration `projects/0006`). `GET/POST /projects/{id}/meetings/`
+  (every reader sees every meeting, newest first, unpaginated, at most 200), `PATCH/DELETE …/meetings/{mid}/`,
+  `POST …/meetings/{mid}/acknowledge/`. **Who may schedule, edit or cancel: the project's MANAGER role or any
+  کارفرمایی account** (owner, 2026-09-26, on top of ADR-010's MANAGER-only) — not a بخش lead; exposed as
+  `can_manage_meetings` on the project detail (false once archived). Attendees must be project members; a
+  member removed from the project stops being an attendee. «مشاهده شد» is invited-attendees-only and idempotent
+  (the first time is kept); changing the day, time or place clears every acknowledgement, a title/description
+  edit does not. Events `meeting_scheduled` / `meeting_changed` / `meeting_cancelled` carry the day as an ISO date
+  in `to_status` (like `objective_due_changed`) and time · place in the note. Archived projects refuse every
+  meeting write, acknowledgements included. Tests: +16 (projects+dashboard 225); the کارفرمایی rule and the
+  acknowledgement clearing were each mutation-checked.
 
 ### Phase 10 — A3 · projects frontend (objective tree, timeline, meetings table, drafts)
 - _(A3: add lines under this heading only)_
