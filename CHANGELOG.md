@@ -79,7 +79,45 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   956 overall; the delete-on-create was mutation-checked.
 
 ### Phase 10 — A3 · projects frontend (objective tree, timeline, meetings table, drafts)
-- _(A3: add lines under this heading only)_
+- **An objective's assignees render as a tree.** `ObjectiveTree` (replaces `ObjectivesList`) draws each
+  objective as a root card and every assignee as a leaf under it, joined by a plain-CSS connector line (RTL,
+  no drawing library, readable at 375px). A leaf shows that assignee's latest progress report, lets only that
+  assignee write a new one or edit their latest, and expands a paged «سوابق (n)» of older entries. The add
+  form and a new `ObjectiveEditDialog` (title, description, due date, weight) now pick several assignees via
+  checkboxes instead of one `<select>`. Built against ADR-010's A2↔A3 API contract (`assignees[]` replaces
+  `assignee`/`assignee_name`) ahead of the backend landing. Tests: +7 in `lib/projects.test.ts` (179 total).
+- **`/projects/new`'s ریزهدف rows take several assignees too**, and a server-side draft (`GET`/`PUT`/`DELETE
+  /projects/draft/`, one per user) autosaves the whole form 1.5s after the last change and once on unmount.
+  Opening the page with a saved draft offers «ادامهٔ پیش‌نویس» / «شروع از نو» before anything autosaves over
+  it; `/projects` shows a «پیش‌نویس پروژه» card when one exists. The payload is `{version: 1, form}` — an
+  unrecognised version is ignored, not treated as corrupt. Two bugs fixed: changing the بخش or removing a
+  member in `MemberPicker` used to leave a draft ریزهدف pointing at someone no longer selectable (now pruned
+  at the point `members` changes, not via a reactive effect); the project's creator was missing from the
+  assignee choices even though the backend always adds them as مدیر پروژه regardless of `members` (now
+  seeded in automatically when a بخش is picked). Tests: +8 in `lib/projects.test.ts` (187 total).
+- **Notes render as a vertical timeline** (`CommentsPanel`: a dot per note, a continuous line on the start/
+  right side joining them) with a multi-line composer (Ctrl/⌘+Enter sends). **New «جدول جلسات»**
+  (`MeetingsPanel`): a real `<table>` from `md` up, stacked cards below — تاریخ/ساعت/عنوان/مکان/اعضا per
+  meeting, plus «اعضای متوجه‌شده»/«هنوز ندیده‌اند» lists and «مشاهده شد» for an attendee who hasn't
+  acknowledged yet. The create/edit form (role MANAGER only) warns that changing the date, time or place
+  clears every acknowledgement. **New `lib/local-draft.ts`** (`useLocalDraft`, keys
+  `veye:draft:<userId>:<projectId>:<purpose>[:<objectiveId>]`, every access in try/catch): backs the note
+  composer, the progress-update textarea and the new-meeting form, cleared on a successful submit. The
+  activity feed now shows the four new event kinds with their own tones, and `objective_due_changed` shows
+  its دیرکرد dates (`formatJalali(from_status)` ← `formatJalali(to_status)` — that kind overloads those two
+  fields with raw ISO dates rather than a status enum, so it never had `..._label`s to show). Tests: +6 in
+  `lib/projects.test.ts`, +4 in the new `lib/local-draft.test.ts` (195 total).
+- **A one-line hint under «وزن»** in the inline «افزودن ریز هدف» form and in the objective edit dialog: the
+  weight is this objective's share of the project's progress percentage (1–100; all 1 = all equal). Linked
+  with `aria-describedby`. Owner request, 2026-09-26.
+
+- **Projects frontend wired to the real A2 endpoints (after merging A2's meetings and draft).** Three
+  mismatches with the contract, found by using the page against the live backend: the meeting form sent
+  ProjectMember ids as `attendees` (the contract, like objective assignees, takes user ids — every save was a
+  400); the new-project autosave sent the draft bare instead of `{payload: …}` (every PUT was a 400, so no draft
+  was ever kept); and after a successful create, the page's save-on-unmount put the draft straight back. Also:
+  the activity feed now reloads when a meeting is scheduled, changed or cancelled, and shows a meeting event's
+  day in Jalali (`MEETING_EVENT_KINDS`, the day travels in `to_status`). Tests: +1 vitest → 196.
 
 ### Phase 10 — A4 · personnel placement and کارتابل attachments
 - **Personnel registration places the person in the chart in the same request.** Decided with the owner

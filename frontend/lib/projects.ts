@@ -44,6 +44,9 @@ export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
 
 /** Tailwind classes per project-activity-event kind — the direct analogue of
  *  `lib/history.ts`'s `EVENT_KIND_TONE` for the document register. */
+/** Feed kinds whose `to_status` carries the meeting's day as an ISO date (backend `_meeting_event`). */
+export const MEETING_EVENT_KINDS: ReadonlySet<string> = new Set(["meeting_scheduled", "meeting_changed", "meeting_cancelled"]);
+
 export const PROJECT_EVENT_TONE: Record<string, string> = {
   project_created: "bg-blue-500",
   project_status_changed: "bg-amber-500",
@@ -62,6 +65,10 @@ export const PROJECT_EVENT_TONE: Record<string, string> = {
   comment_removed: "bg-red-500",
   document_linked: "bg-green-600",
   document_unlinked: "bg-red-500",
+  objective_update_added: "bg-sky-500",
+  meeting_scheduled: "bg-indigo-500",
+  meeting_changed: "bg-amber-500",
+  meeting_cancelled: "bg-red-500",
 };
 
 export interface ProjectMemberPreview {
@@ -107,6 +114,39 @@ export interface Project {
 
 export interface ProjectDetail extends Project {
   members: ProjectMember[];
+  /** Role MANAGER, and the project is not archived — gates the meeting create/edit/delete form. */
+  can_manage_meetings: boolean;
+}
+
+/** The one entry shown inline on an assignee leaf, or a row of the paged «سوابق». `can_edit` here is
+ *  per-update — true only for its own author, and only on their latest entry on the objective. */
+export interface ObjectiveUpdateSummary {
+  id: number;
+  body: string;
+  created_at: string;
+  edited_at: string | null;
+  can_edit: boolean;
+}
+
+/** A row of `GET …/objectives/{oid}/updates/` — the same shape plus who wrote it, since that
+ *  endpoint is not scoped to one assignee's leaf the way `Objective.assignees[].latest_update` is. */
+export interface ObjectiveUpdate {
+  id: number;
+  author: number | null;
+  author_name: string;
+  author_title: string;
+  body: string;
+  created_at: string;
+  edited_at: string | null;
+  can_edit: boolean;
+}
+
+export interface ObjectiveAssignee {
+  user: number;
+  name: string;
+  title: string;
+  latest_update: ObjectiveUpdateSummary | null;
+  update_count: number;
 }
 
 export interface Objective {
@@ -114,16 +154,19 @@ export interface Objective {
   position: number;
   title: string;
   description: string;
-  assignee: number;
-  assignee_name: string;
+  assignees: ObjectiveAssignee[];
   due_on: string;
   status: ObjectiveStatus;
   status_label: string;
   weight: number;
   completed_at: string | null;
   is_overdue: boolean;
+  /** Manager or lead. Covers title, description, due date, weight, assignees, delete and reorder. */
   can_edit: boolean;
+  /** `can_edit`, or the viewer is one of the assignees. */
   can_change_status: boolean;
+  /** The viewer is an assignee and the project is not archived. */
+  can_post_update: boolean;
 }
 
 export interface ProjectComment {
@@ -145,6 +188,33 @@ export interface ProjectDocumentLink {
   caption: string;
   linked_by_name: string;
   created_at: string;
+}
+
+export interface MeetingAttendee {
+  member: number;
+  user: number;
+  name: string;
+  acknowledged_at: string | null;
+}
+
+export interface ProjectMeeting {
+  id: number;
+  title: string;
+  held_on: string;
+  start_time: string | null;
+  location: string;
+  description: string;
+  created_by_name: string;
+  created_at: string;
+  attendees: MeetingAttendee[];
+  attendee_count: number;
+  acknowledged_count: number;
+  /** `null` while the viewer hasn't pressed «مشاهده شد» — also `null` for someone who isn't an attendee. */
+  my_acknowledged_at: string | null;
+  /** The viewer is an invited attendee who hasn't acknowledged yet. */
+  can_acknowledge: boolean;
+  /** This particular meeting may still be edited/deleted — role MANAGER and the project not archived. */
+  can_edit: boolean;
 }
 
 export interface ProjectActivityEvent {
@@ -199,8 +269,7 @@ export interface DraftObjective {
   /** A client-side key for React's list rendering — real ids do not exist until submission. */
   key: string;
   title: string;
-  assignee: number | null;
-  assigneeName: string;
+  assignees: number[];
   due_on: string;
   weight: number;
 }
@@ -248,15 +317,152 @@ export function createProjectBody(form: ProjectCreateForm) {
     members: form.members.map((m) => ({ user: m.user, role: m.role })),
     objectives: form.objectives.map((o) => ({
       title: o.title.trim(),
-      assignee: o.assignee,
+      assignees: o.assignees,
       due_on: o.due_on,
       weight: o.weight,
     })),
   };
 }
 
-/** A ریز هدف draft is addable once it has a title, an assignee and a deadline — both required,
- *  no unassigned backlog (docs/11 §2.4). */
-export function canAddDraftObjective(draft: { title: string; assignee: number | null; due_on: string }): boolean {
-  return draft.title.trim().length > 0 && draft.assignee !== null && draft.due_on.length > 0;
+/** A ریزهدف draft is addable once it has a title, at least one assignee and a deadline — all
+ *  required, no unassigned backlog (docs/11 §2.4). */
+export function canAddDraftObjective(draft: { title: string; assignees: number[]; due_on: string }): boolean {
+  return draft.title.trim().length > 0 && draft.assignees.length > 0 && draft.due_on.length > 0;
+}
+
+/** Bug fix (docs/12 §D): changing the بخش, or removing a member in `MemberPicker`, must not leave a
+ *  draft objective pointing at someone who is no longer a candidate member. Pure so the page's effect
+ *  can call it without re-deriving the rule. */
+export function pruneOrphanAssignees(objectives: DraftObjective[], memberIds: ReadonlySet<number>): DraftObjective[] {
+  return objectives.map((o) => ({ ...o, assignees: o.assignees.filter((id) => memberIds.has(id)) }));
+}
+
+// ---------------------------------------------------------------------------
+// Objective tree (Phase 10 §D): shaping an Objective's assignees into the leaf
+// view-models ObjectiveTree.tsx renders — kept pure so it is testable without React.
+// ---------------------------------------------------------------------------
+
+export interface ObjectiveAssigneeRow {
+  user: number;
+  name: string;
+  title: string;
+  /** The signed-in user is this assignee. */
+  isSelf: boolean;
+  latestUpdate: ObjectiveUpdateSummary | null;
+  /** Entries besides the one already shown as `latestUpdate` — the count on «سوابق (n)». */
+  historyCount: number;
+  /** Show «نوشتن گزارش»: it's you, and the objective/project allow it right now. */
+  canPostUpdate: boolean;
+  /** Show «ویرایش» on the latest entry: it's you, and it is still your latest one. */
+  canEditLatest: boolean;
+}
+
+/** One row per assignee, in the order the server sent them. */
+export function objectiveAssigneeRows(objective: Objective, currentUserId: number | null): ObjectiveAssigneeRow[] {
+  return objective.assignees.map((assignee) => {
+    const isSelf = currentUserId !== null && assignee.user === currentUserId;
+    return {
+      user: assignee.user,
+      name: assignee.name,
+      title: assignee.title,
+      isSelf,
+      latestUpdate: assignee.latest_update,
+      historyCount: Math.max(0, assignee.update_count - (assignee.latest_update ? 1 : 0)),
+      canPostUpdate: isSelf && objective.can_post_update,
+      canEditLatest: isSelf && Boolean(assignee.latest_update?.can_edit),
+    };
+  });
+}
+
+/** «سوابق» loads every one of an assignee's updates (newest first, same as `latest_update`) — drop
+ *  the row that duplicates what the leaf already shows above the expander. */
+export function olderUpdates(rows: ObjectiveUpdate[], latestId: number | undefined): ObjectiveUpdate[] {
+  return rows.filter((row) => row.id !== latestId);
+}
+
+// ---------------------------------------------------------------------------
+// Server-side project draft (docs/12 §D): one per user, autosaved from
+// /projects/new. The payload is opaque to the server, so its shape and
+// versioning live entirely here.
+// ---------------------------------------------------------------------------
+
+export const PROJECT_DRAFT_VERSION = 1;
+
+export interface ProjectDraftPayload {
+  version: number;
+  form: ProjectCreateForm;
+}
+
+/** The `PUT /projects/draft/` body: the contract wraps the opaque payload as `{payload: …}` (a bare
+ *  `{version, form}` is a 400). `GET` answers `{payload, updated_at}`; feed its `payload` to
+ *  `parseDraftPayload`. */
+export function serializeDraft(form: ProjectCreateForm): { payload: ProjectDraftPayload } {
+  return { payload: { version: PROJECT_DRAFT_VERSION, form } };
+}
+
+/** `null` for anything that isn't a recognised, well-shaped draft: no draft saved yet, a version this
+ *  build doesn't know (ignored per the contract, not shown as broken), or a payload that doesn't even
+ *  look like a `ProjectCreateForm`. Scalar fields default from `EMPTY_CREATE_FORM` so a payload that
+ *  predates a field addition still loads. */
+export function parseDraftPayload(payload: unknown): ProjectCreateForm | null {
+  if (!payload || typeof payload !== "object") return null;
+  const { version, form } = payload as { version?: unknown; form?: unknown };
+  if (version !== PROJECT_DRAFT_VERSION) return null;
+  if (!form || typeof form !== "object") return null;
+  const candidate = form as Partial<ProjectCreateForm>;
+  if (!Array.isArray(candidate.members) || !Array.isArray(candidate.objectives)) return null;
+  return { ...EMPTY_CREATE_FORM, ...candidate };
+}
+
+/** The `PATCH …/objectives/{oid}/` body for the edit dialog: `assignees` always replaces the set. */
+export function editObjectiveBody(form: {
+  title: string;
+  description: string;
+  assignees: number[];
+  due_on: string;
+  weight: number;
+}) {
+  return {
+    title: form.title.trim(),
+    description: form.description.trim(),
+    assignees: form.assignees,
+    due_on: form.due_on,
+    weight: form.weight,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Meetings (Phase 10 §D): «جدول جلسات» and acknowledgement.
+// ---------------------------------------------------------------------------
+
+/** The `POST`/`PATCH …/meetings/…` body. `start_time`/`location`/`description` are optional on the
+ *  wire — an empty string becomes `null` for the time (the API's `TimeField`) and stays `""` for the
+ *  two text fields (the API's `blank=True` `CharField`s). */
+export function meetingBody(form: {
+  title: string;
+  held_on: string;
+  start_time: string;
+  location: string;
+  description: string;
+  attendees: number[];
+}) {
+  return {
+    title: form.title.trim(),
+    held_on: form.held_on,
+    start_time: form.start_time || null,
+    location: form.location.trim(),
+    description: form.description.trim(),
+    attendees: form.attendees,
+  };
+}
+
+/** «اعضای متوجه‌شده» / «هنوز ندیده‌اند», in the order the server sent the attendees. */
+export function splitAcknowledgement(attendees: MeetingAttendee[]): {
+  acknowledged: MeetingAttendee[];
+  pending: MeetingAttendee[];
+} {
+  return {
+    acknowledged: attendees.filter((a) => a.acknowledged_at !== null),
+    pending: attendees.filter((a) => a.acknowledged_at === null),
+  };
 }
