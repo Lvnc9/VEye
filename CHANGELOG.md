@@ -7,6 +7,9 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 > git history is per-slice from Phase 6 on.
 
 ## [Unreleased]
+### Phase 11 — form designer for فرم (FR) documents (ADR-011, branch `phase11/forms`)
+- **Refactor: the designer page is split into parts a second editor can reuse.** No behaviour change. `app/(app)/documents/[id]/edit/page.tsx` now only loads the body and hands it to `components/designer/ClassicDesigner.tsx`. The load / save / conflict / preview life cycle moved into `useDesignerDocument` (generic over the editor's state, given an adapter: `fromResponse` / `toPayload` / `snapshot` / `validate`). The header card, banners, timeline and sticky save bar moved into `DesignerShell`; the logo and footnote editors into `LogoSection` and `FootnoteFields`.
+
 ### Phase 10 — A1 · setup and first run (developer account)
 - _(A1: add lines under this heading only)_
 
