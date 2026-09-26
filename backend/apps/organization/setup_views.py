@@ -1,6 +1,6 @@
 """The first-run endpoints: `setup/status/` (public), `setup/bootstrap/` (public, only while no
-مدیر عامل account exists), `setup/start/` (a signed-in مدیر عامل) and `setup/complete/` (the مدیر
-عامل's session). No setup token anywhere — removed by the owner's decision (2026-09-25). See
+developer account exists), `setup/start/` (the developer's session) and `setup/complete/` (the
+developer's session). No setup token anywhere — removed by the owner's decision (2026-09-25). See
 bootstrap.py for the rules."""
 
 from django.conf import settings
@@ -16,17 +16,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.accounts.models import Capability
 from apps.accounts.serializers import UserSerializer
 from apps.accounts.views import set_jwt_cookies
-from apps.core.permissions import capability_required
 from apps.core.text import normalize_title, to_latin_digits
 
 from . import bootstrap
 from .serializers import company_payload
 
 
-class ManagerSerializer(serializers.Serializer):
+class BootstrapSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=255)
     national_code = serializers.CharField(max_length=32)
     mobile_phone = serializers.CharField(max_length=32, required=False, allow_blank=True, default="")
@@ -59,13 +57,8 @@ class ManagerSerializer(serializers.Serializer):
         return attrs
 
 
-class BootstrapSerializer(serializers.Serializer):
-    company_name = serializers.CharField(max_length=255)
-    manager = ManagerSerializer()
-
-
 class SetupStatusView(APIView):
-    """Public: the login page asks this to decide between the sign-in form and «شروع راه‌اندازی»."""
+    """Public: the landing page and the login page ask this to decide what to show."""
 
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -77,11 +70,10 @@ class SetupStatusView(APIView):
 
 
 class SetupBootstrapView(APIView):
-    """Create the company and its **first** مدیر عامل on a database that has neither — no token.
-
-    Open to anyone only while no active کارفرمایی / لول ۱ exists (bootstrap refuses otherwise with
-    409 `manager_exists`: that person signs in and uses `setup/start/`). The rate limit sees every
-    attempt; then the payload; only then the database."""
+    """Create the **one** developer account on a database that has none — no token, no company, no
+    مدیر عامل. Open to anyone only while no developer exists (409 `developer_exists` otherwise: that
+    person signs in and continues under `setup/start/`). The rate limit sees every attempt; then the
+    payload; only then the database."""
 
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -93,19 +85,22 @@ class SetupBootstrapView(APIView):
         serializer = BootstrapSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        result = bootstrap.bootstrap(company_name=data["company_name"], manager=dict(data["manager"]))
-
-        body = {"company": company_payload(result.company, request), "user": UserSerializer(result.user).data}
-        response = Response(body, status=status.HTTP_201_CREATED)
+        user = bootstrap.bootstrap_developer(
+            full_name=data["full_name"],
+            national_code=data["national_code"],
+            mobile_phone=data["mobile_phone"],
+            password=data["password"],
+        )
+        response = Response({"user": UserSerializer(user).data}, status=status.HTTP_201_CREATED)
         # They just created the account, so they are signed in and the wizard continues under it.
-        refresh = RefreshToken.for_user(result.user)
+        refresh = RefreshToken.for_user(user)
         set_jwt_cookies(response, str(refresh.access_token), str(refresh))
         get_token(request)
         response["Cache-Control"] = "no-store"
         return response
 
 
-#: The root's name when the مدیر عامل just presses «شروع راه‌اندازی»; the wizard's first step
+#: The root's name when the developer just presses «شروع راه‌اندازی»; the wizard's first step
 #: («شرکت و حوزه‌ها») opens on it for editing.
 DEFAULT_COMPANY_NAME = "شرکت من"
 
@@ -115,35 +110,33 @@ class StartSerializer(serializers.Serializer):
 
 
 class SetupStartView(APIView):
-    """`POST /setup/start/` — the signed-in مدیر عامل starts setup with one button.
-
-    The caller becomes the root lead *themselves* (the promotion path, so no password is touched and
-    no new session is issued) — there is no way to name somebody else here. Anyone else signed in is
-    a 403."""
+    """`POST /setup/start/` — the developer's one button. Creates the company, the root node and its
+    channel; no membership is written here (the developer never sits in the chart)."""
 
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        if not request.user.is_developer:
+            raise PermissionDenied("راه‌اندازی شرکت را فقط توسعه‌دهنده می‌تواند شروع کند.")
         serializer = StartSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        if not bootstrap.is_eligible_manager(request.user):
-            raise PermissionDenied("راه‌اندازی را فقط مدیر عامل می‌تواند شروع کند.")
-
-        result = bootstrap.bootstrap(
-            company_name=serializer.validated_data["company_name"].strip() or DEFAULT_COMPANY_NAME,
-            existing_manager_national_code=request.user.national_code,
+        company = bootstrap.start_company(
+            company_name=serializer.validated_data["company_name"].strip() or DEFAULT_COMPANY_NAME
         )
-        body = {"company": company_payload(result.company, request), "user": UserSerializer(result.user).data}
-        response = Response(body, status=status.HTTP_201_CREATED)
+        response = Response({"company": company_payload(company, request)}, status=status.HTTP_201_CREATED)
         response["Cache-Control"] = "no-store"
         return response
 
 
 class SetupCompleteView(APIView):
-    """`POST /setup/complete/` — the manager says the chart is drawn."""
+    """`POST /setup/complete/` — the developer says the chart is drawn. Needs an active lead on the
+    company root (a مدیر عامل placed through the «پرسنل» step), not `manage_organization`: the
+    مدیر عامل holds that capability too, and finishing setup is the developer's job alone."""
 
-    permission_classes = [IsAuthenticated, capability_required(Capability.MANAGE_ORGANIZATION)]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        if not request.user.is_developer:
+            raise PermissionDenied("پایان راه‌اندازی را فقط توسعه‌دهنده می‌تواند انجام دهد.")
         bootstrap.complete_setup()
         return Response(bootstrap.setup_status())

@@ -22,7 +22,8 @@ export function UnitsStep({
   onNext: () => void;
 }) {
   const domains = nodes.filter((node) => node.kind === "DOMAIN" && node.is_active);
-  const parents = domains.length > 0 ? domains : [{ id: rootId, name: rootName }];
+  const parents =
+    domains.length > 0 ? [...domains, { id: rootId, name: "مستقیم زیر شرکت" }] : [{ id: rootId, name: rootName }];
 
   return (
     <StepCard title="واحدها" intro="در هر حوزه، واحدهای آن را بیفزایید. اگر شرکت حوزه ندارد، واحدها مستقیم زیر شرکت ساخته می‌شوند.">

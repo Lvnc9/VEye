@@ -2,31 +2,35 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_ACCOUNT_FORM,
   PASSWORD_MIN_LENGTH,
+  CHART_STEPS,
   bootstrapBody,
+  finishBlockedReason,
   validateAccountForm,
   wizardStepFor,
   type AccountForm,
 } from "./setup";
 import type { SetupStatus } from "./types";
 
-const status = (over: Partial<SetupStatus>): SetupStatus => ({ needed: false, has_users: true, step: "DOMAINS", ...over });
+const status = (over: Partial<SetupStatus>): SetupStatus => ({
+  developer_exists: true,
+  company_exists: true,
+  completed: false,
+  step: "DOMAINS",
+  has_root_lead: false,
+  ...over,
+});
 
 describe("wizardStepFor", () => {
-  it("starts at the account on a fresh database, signed in or not", () => {
-    expect(wizardStepFor(status({ needed: true, step: null }), false)).toBe("account");
-    expect(wizardStepFor(status({ needed: true, step: null, has_users: false }), true)).toBe("account");
-  });
-
-  it("asks an unauthenticated browser to sign in once a company exists", () => {
+  it("asks an unauthenticated browser to sign in", () => {
     expect(wizardStepFor(status({ step: "UNITS" }), false)).toBe("login");
   });
 
-  it("resumes at the bookmarked step for a signed-in manager", () => {
+  it("resumes at the bookmarked step for a signed-in developer", () => {
     expect(wizardStepFor(status({ step: "COMPANY" }), true)).toBe("company");
     expect(wizardStepFor(status({ step: "DOMAINS" }), true)).toBe("company");
     expect(wizardStepFor(status({ step: "UNITS" }), true)).toBe("units");
     expect(wizardStepFor(status({ step: "SECTIONS" }), true)).toBe("sections");
-    expect(wizardStepFor(status({ step: "PEOPLE" }), true)).toBe("ready");
+    expect(wizardStepFor(status({ step: "PEOPLE" }), true)).toBe("people"); // not "ready" (Phase 10)
   });
 
   it("is done when setup is complete, whoever is looking", () => {
@@ -37,7 +41,6 @@ describe("wizardStepFor", () => {
 
 const filled = (over: Partial<AccountForm> = {}): AccountForm => ({
   ...EMPTY_ACCOUNT_FORM,
-  companyName: " شرکت ",
   fullName: " علی رضایی ",
   nationalCode: "۱۲۳ ۴۵",
   mobilePhone: " 0912 ",
@@ -53,8 +56,12 @@ describe("validateAccountForm", () => {
 
   it("names every missing field, in Persian, next to the field", () => {
     const errors = validateAccountForm(EMPTY_ACCOUNT_FORM);
-    expect(Object.keys(errors).sort()).toEqual(["companyName", "fullName", "nationalCode", "password"]);
+    expect(Object.keys(errors).sort()).toEqual(["fullName", "nationalCode", "password"]);
     expect(Object.values(errors).join(" ")).not.toMatch(/توکن/); // no setup token since 2026-09-25
+  });
+
+  it("has no company-name field at all (Phase 10: that moves to the wizard's own step)", () => {
+    expect(EMPTY_ACCOUNT_FORM).not.toHaveProperty("companyName");
   });
 
   it("wants a password of a sane length that is typed twice", () => {
@@ -64,10 +71,26 @@ describe("validateAccountForm", () => {
 });
 
 describe("bootstrapBody", () => {
-  it("trims, and normalises the national code to ASCII digits", () => {
+  it("trims, and normalises the national code to ASCII digits — no company name", () => {
     expect(bootstrapBody(filled())).toEqual({
-      company_name: "شرکت",
-      manager: { full_name: "علی رضایی", national_code: "12345", mobile_phone: "0912", password: "Qz7-vector-maple-93" },
+      full_name: "علی رضایی",
+      national_code: "12345",
+      mobile_phone: "0912",
+      password: "Qz7-vector-maple-93",
     });
+  });
+});
+
+describe("the people step and finishing", () => {
+  it("puts «پرسنل» between the sections and the last step", () => {
+    const keys = CHART_STEPS.map((step) => step.key);
+    expect(keys.indexOf("people")).toBe(keys.indexOf("sections") + 1);
+    expect(keys[keys.length - 1]).toBe("ready");
+  });
+
+  it("locks finishing until the company root has a lead, and says why in Persian", () => {
+    const reason = finishBlockedReason({ has_root_lead: false });
+    expect(reason).toMatch(/مسئول/);
+    expect(finishBlockedReason({ has_root_lead: true })).toBeNull();
   });
 });

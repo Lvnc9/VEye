@@ -1,42 +1,26 @@
-"""First-run bootstrap: from an empty database to a company with a مدیر عامل.
+"""First-run bootstrap, run entirely by the developer account (Phase 10, ADR-010, decided with the
+owner 2026-09-25). No setup token, and no مدیر عامل is created here at all — that person is
+registered afterwards as ordinary personnel, through the wizard's «پرسنل» step (A4's `POST
+/personnel/`).
 
-**Is the database fresh?** `not Company.objects.exists()` — *not* "are there no users": the V_1.0
-importer creates an inactive `import_user` and personnel may exist already. The Company row is
-the only honest marker.
+Two doors, both race-safe the same way (an insert that can fail, not a locked read of rows that do
+not exist yet):
 
-**The race-safe first write** is one transaction (`_bootstrap`):
+* `POST /setup/bootstrap/` (anonymous, rate-limited) creates the **one** developer account:
+  `User.is_developer=True`, صفی / لول ۳, never `is_superuser`, no membership, no company. Guarded
+  by `uniq_developer_account` (a partial unique constraint on `is_developer`) — two concurrent
+  bootstraps both try to insert a developer; the loser blocks on that index until the winner
+  commits, then fails, which `bootstrap_developer()` turns into 409 `developer_exists` and rolls
+  the loser's user back with it. A duplicate national code is likewise a 409 with nothing kept.
+* `POST /setup/start/` (the developer's own session) creates the root `OrgNode`, its channel and
+  `Company(pk=1)` — and deliberately **no membership**: the developer itself may never sit in the
+  chart. Guarded the same way, by `Company(pk=1)`'s primary key (and, one insert earlier, by the
+  root's own `uniq_company_root_node`).
 
-    1. fast path: a Company already exists            -> 409 already_bootstrapped (for the message)
-    2. the root OrgNode
-    3. Company(pk=1)                                  <- THE GUARD
-    4. the manager: a new User, or an existing one promoted
-    5. the manager's lead + primary membership on the root
-
-Step 3 is what makes this impossible to run twice. Two concurrent bootstraps both try to insert
-Company(pk=1) (and, before it, a second COMPANY root); the loser blocks on that unique index until
-the winner commits, then fails, which `bootstrap()` turns into 409 and rolls back the loser's root
-node and user with it. The `if` at step 1 exists for the error message; the constraints exist for
-the correctness. (A `select_for_update` on the users table would not work: Postgres cannot lock
-rows that do not exist yet.) A duplicate national code is likewise a 409 with everything rolled
-back — no half-bootstrapped state is reachable.
-
-The manager is کارفرمایی / لول ۱ with no choice offered, so they inherit every capability through
-`FULL_ACCESS_POSITIONS`, present and future. `is_superuser` is deliberately not set: that is a
-Django-admin concept, and the roll already grants everything in-app.
-
-**No setup token** (removed by the owner, 2026-09-25). Two doors instead:
-
-* `POST /setup/bootstrap/` (anonymous) *creates* the first مدیر عامل — only while no active
-  کارفرمایی / لول ۱ exists, else 409 `manager_exists`. Until setup is done on a fresh install,
-  whoever reaches the server first can take that seat; the owner accepted this.
-* `POST /setup/start/` (signed in) promotes the caller *themselves* through the path below.
-
-**Promoting an existing manager** (the importer path, where users exist but no Company) never sets
-or reads a password, and it is reachable only from that manager's own session (`setup/start/`), so
-it issues no new session either.
+`POST /setup/complete/` now needs a fact about the *chart*, not a stored roll: an active lead
+Membership on the company root (someone the wizard's «پرسنل» step placed as «مسئول» at «خود
+شرکت»). Until then it is 409 `root_lead_missing`.
 """
-from dataclasses import dataclass
-
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -45,106 +29,92 @@ from rest_framework.exceptions import NotFound
 from apps.accounts.models import AccessLevel, AccessRoll
 from apps.core.exceptions import ConflictError
 
-from . import memberships, tree
-from .models import Company, SetupStep
+from . import tree
+from .models import Company, Membership, SetupStep
 
 User = get_user_model()
 
-#: Constraints whose violation means "someone else bootstrapped first".
-_ALREADY_BOOTSTRAPPED = {"uniq_company_root_node", "organization_company_pkey"}
+#: Constraint names whose violation means "someone else already took this seat".
+_DEVELOPER_UNIQUE = "uniq_developer_account"
+_COMPANY_UNIQUE = {"uniq_company_root_node", "organization_company_pkey"}
 _NATIONAL_CODE_UNIQUE = "accounts_user_national_code_key"
 
-#: Who may be the company's مدیر عامل: an active کارفرمایی / لول ۱ — never the importer's inactive
-#: `import_user`.
-_MANAGER = {"is_active": True, "access_roll": AccessRoll.EMPLOYER, "access_level": AccessLevel.LEVEL_1}
 
-
-@dataclass(frozen=True)
-class BootstrapResult:
-    company: Company
-    user: "User"
-    created_user: bool
+def _developer_exists() -> ConflictError:
+    return ConflictError("حساب توسعه‌دهنده از قبل ساخته شده است.", code="developer_exists")
 
 
 def _already_bootstrapped() -> ConflictError:
-    return ConflictError("راه‌اندازی اولیه قبلاً انجام شده است.", code="already_bootstrapped")
-
-
-def _manager_exists() -> ConflictError:
-    return ConflictError(
-        "حساب مدیر عامل از قبل وجود دارد؛ با آن وارد شوید و «شروع راه‌اندازی» را بزنید.", code="manager_exists"
-    )
+    return ConflictError("راه‌اندازی شرکت قبلاً انجام شده است.", code="already_bootstrapped")
 
 
 def _national_code_exists() -> ConflictError:
     return ConflictError("کاربری با این کد ملی وجود دارد.", code="national_code_exists")
 
 
+def _root_lead_missing() -> ConflictError:
+    return ConflictError(
+        "برای پایان راه‌اندازی، دست‌کم یک «مسئول» باید در ریشهٔ ساختار سازمان ثبت شده باشد.",
+        code="root_lead_missing",
+    )
+
+
 def _constraint_name(exc: IntegrityError) -> str | None:
     return getattr(getattr(exc.__cause__, "diag", None), "constraint_name", None)
 
 
-def bootstrap(*, company_name: str, manager: dict | None = None, existing_manager_national_code: str | None = None) -> BootstrapResult:
-    """Exactly one of `manager` (create this person) or `existing_manager_national_code`
-    (promote them) must be given."""
-    if (manager is None) == (existing_manager_national_code is None):
-        raise ValueError("pass exactly one of manager / existing_manager_national_code")
+def bootstrap_developer(*, full_name: str, national_code: str, mobile_phone: str, password: str) -> "User":
     try:
-        return _bootstrap(company_name, manager, existing_manager_national_code)
-    except IntegrityError as exc:  # raised after _bootstrap's transaction rolled back
+        return _bootstrap_developer(full_name, national_code, mobile_phone, password)
+    except IntegrityError as exc:  # raised after the transaction below rolled back
         constraint = _constraint_name(exc)
-        if constraint in _ALREADY_BOOTSTRAPPED:
-            raise _already_bootstrapped()
+        if constraint == _DEVELOPER_UNIQUE:
+            raise _developer_exists()
         if constraint == _NATIONAL_CODE_UNIQUE:
             raise _national_code_exists()
         raise
 
 
 @transaction.atomic
-def _bootstrap(company_name, manager, existing_national_code) -> BootstrapResult:
+def _bootstrap_developer(full_name, national_code, mobile_phone, password) -> "User":
+    if User.objects.filter(is_developer=True).exists():
+        raise _developer_exists()
+    if User.objects.filter(national_code=national_code).exists():
+        raise _national_code_exists()
+    return User.objects.create_user(
+        national_code=national_code,
+        password=password,
+        full_name=full_name,
+        mobile_phone=mobile_phone,
+        access_roll=AccessRoll.GUILD,
+        access_level=AccessLevel.LEVEL_3,
+        is_developer=True,
+    )
+
+
+def start_company(*, company_name: str) -> Company:
+    try:
+        return _start_company(company_name)
+    except IntegrityError as exc:
+        if _constraint_name(exc) in _COMPANY_UNIQUE:
+            raise _already_bootstrapped()
+        raise
+
+
+@transaction.atomic
+def _start_company(company_name) -> Company:
     if Company.objects.exists():
         raise _already_bootstrapped()
-
-    if existing_national_code is not None:
-        user = _eligible_manager(existing_national_code)
-    elif User.objects.filter(**_MANAGER).exists():
-        raise _manager_exists()  # an anonymous form must not mint a second مدیر عامل
-    elif User.objects.filter(national_code=manager["national_code"]).exists():
-        raise _national_code_exists()
-
-    root = tree.create_root(name=company_name)
-    company = Company.objects.create(pk=1, root=root, setup_step=SetupStep.DOMAINS)  # the guard
-
-    created = existing_national_code is None
-    if created:
-        user = User.objects.create_user(
-            national_code=manager["national_code"],
-            password=manager["password"],
-            full_name=manager["full_name"],
-            mobile_phone=manager.get("mobile_phone", ""),
-            access_roll=AccessRoll.EMPLOYER,
-            access_level=AccessLevel.LEVEL_1,
-        )
-    memberships.add_membership(
-        user=user, node=root, is_lead=True, is_primary=True, added_by=user, advance_setup=False
-    )
-    return BootstrapResult(company=company, user=user, created_user=created)
+    root = tree.create_root(name=company_name)  # the root's own channel is made in the same transaction
+    return Company.objects.create(pk=1, root=root, setup_step=SetupStep.DOMAINS)
 
 
-def _eligible_manager(national_code: str):
-    """An active کارفرمایی / لول ۱ — never the importer's inactive `import_user`. One answer for
-    "no such person" and "not eligible", so it says nothing about which national codes exist."""
-    user = User.objects.select_for_update().filter(national_code=national_code, **_MANAGER).first()
-    if user is None:
-        raise ConflictError(
-            "این کد ملی متعلق به یک مدیر عامل فعال نیست.", code="manager_not_eligible"
-        )
-    return user
-
-
-def is_eligible_manager(user) -> bool:
-    """The signed-in side of the same rule `_eligible_manager` applies inside the transaction."""
-    return all(getattr(user, field, None) == value for field, value in _MANAGER.items())
+def has_root_lead() -> bool:
+    """An active lead Membership sits on the company root — the fact «پایان راه‌اندازی» waits for."""
+    company = Company.objects.only("root_id").first()
+    if company is None:
+        return False
+    return Membership.objects.filter(node_id=company.root_id, is_lead=True, user__is_active=True).exists()
 
 
 def complete_setup() -> None:
@@ -152,6 +122,8 @@ def complete_setup() -> None:
     exactly one changes a row, and the other is told it was already done."""
     if not Company.objects.exists():
         raise NotFound("شرکت هنوز راه‌اندازی نشده است.")
+    if not has_root_lead():
+        raise _root_lead_missing()
     now = timezone.now()
     changed = Company.objects.filter(pk=1, setup_completed_at__isnull=True).update(
         setup_completed_at=now, setup_step=SetupStep.DONE, updated_at=now
@@ -161,16 +133,13 @@ def complete_setup() -> None:
 
 
 def setup_status() -> dict:
-    """What the public login page may learn, and nothing more: no counts, no names, never whether a
-    given national code exists.
-
-    `has_users` means "an active کارفرمایی / لول ۱ account exists": the anonymous form is then closed
-    (409 `manager_exists`) and that person signs in instead — the importer's inactive `import_user`
-    does not count.
-    """
-    company = Company.objects.only("setup_step").first()
+    """What the public landing page and the login page may learn, and nothing more: no counts, no
+    names, never whether a given national code exists."""
+    company = Company.objects.only("setup_step", "setup_completed_at").first()
     return {
-        "needed": company is None,
-        "has_users": User.objects.filter(**_MANAGER).exists(),
+        "developer_exists": User.objects.filter(is_developer=True).exists(),
+        "company_exists": company is not None,
+        "completed": bool(company and company.setup_completed_at),
         "step": company.setup_step if company else None,
+        "has_root_lead": has_root_lead(),
     }

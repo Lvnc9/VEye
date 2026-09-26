@@ -16,15 +16,15 @@ describe("proxy", () => {
     expect(nextParam("http://veye.test/documents/12/edit")).toBe("/documents/12/edit");
   });
 
-  it("does not add next for the root", () => {
+  it("the root is public (Phase 10: a landing page decides where to send the visitor)", () => {
     const response = proxy(new NextRequest("http://veye.test/"));
-    expect(response.headers.get("location")).toBe("http://veye.test/login");
+    expect(response.headers.get("location")).toBeNull();
   });
 
   it("lets a signed-in visitor and the public pages through", () => {
     const signedIn = new NextRequest("http://veye.test/inbox?c=42", { headers: { cookie: "refresh_token=x" } });
     expect(proxy(signedIn).headers.get("location")).toBeNull();
-    for (const url of ["http://veye.test/login?next=/inbox", "http://veye.test/setup", "http://veye.test/verify/abc"]) {
+    for (const url of ["http://veye.test/", "http://veye.test/login?next=/inbox", "http://veye.test/setup", "http://veye.test/verify/abc"]) {
       expect(proxy(new NextRequest(url)).headers.get("location"), url).toBeNull();
     }
   });

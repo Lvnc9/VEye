@@ -125,6 +125,13 @@ class MembershipCreateSerializer(serializers.Serializer):
     is_primary = serializers.BooleanField(required=False, default=None, allow_null=True)
     position_label = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
 
+    def validate_user(self, value):
+        # The developer is a technical account (Phase 10): it may set up the chart, but it is
+        # never *in* the chart.
+        if value.is_developer:
+            raise serializers.ValidationError("حساب توسعه‌دهنده را نمی‌توان در ساختار سازمان جای داد.")
+        return value
+
 
 class MembershipUpdateSerializer(serializers.Serializer):
     """`user` and `node` are accepted only to say "unchanged" — to move someone, remove the
