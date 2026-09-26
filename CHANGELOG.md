@@ -8,6 +8,7 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 
 ## [Unreleased]
 ### Phase 11 — form designer for فرم (FR) documents (ADR-011, branch `phase11/forms`)
+- **Fix: the designer's save bar pushed the page sideways on a phone.** Its negative margins assumed `<main>`'s desktop padding (`p-8`), but `<main>` is `p-4 sm:p-6 md:p-8`, so below `md` the bar stuck out 16px on each side and a 375px screen scrolled horizontally. The margins now follow the padding at every width.
 - **Refactor: the designer page is split into parts a second editor can reuse.** No behaviour change. `app/(app)/documents/[id]/edit/page.tsx` now only loads the body and hands it to `components/designer/ClassicDesigner.tsx`. The load / save / conflict / preview life cycle moved into `useDesignerDocument` (generic over the editor's state, given an adapter: `fromResponse` / `toPayload` / `snapshot` / `validate`). The header card, banners, timeline and sticky save bar moved into `DesignerShell`; the logo and footnote editors into `LogoSection` and `FootnoteFields`.
 
 ### Phase 10 — A1 · setup and first run (developer account)

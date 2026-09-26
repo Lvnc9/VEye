@@ -108,8 +108,9 @@ export function DesignerShell<S>({
 
       {/* Sticky inside the content column (not fixed to the window, which would
           slide it under the sidebar). The negative margins cancel <main>'s padding
-          so the bar spans the column edge to edge. */}
-      <div className="sticky bottom-0 z-40 -mx-8 -mb-8 mt-6 border-t border-slate-200 bg-white/95 px-8 py-3 backdrop-blur">
+          (p-4 sm:p-6 md:p-8, app/(app)/layout.tsx) at every width, so the bar spans
+          the column edge to edge without pushing the page sideways on a phone. */}
+      <div className="sticky bottom-0 z-40 -mx-4 -mb-4 mt-6 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6 md:-mx-8 md:-mb-8 md:px-8">
         <div className={`mx-auto flex ${width} flex-wrap items-center gap-3`}>
           {canEdit && (
             <button
