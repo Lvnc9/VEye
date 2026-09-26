@@ -152,7 +152,12 @@ describe("pruneOrphanAssignees", () => {
 describe("serializeDraft / parseDraftPayload", () => {
   it("round-trips a form through the current version", () => {
     const form = filled({ objectives: [draftObjective()] });
-    expect(parseDraftPayload(serializeDraft(form))).toEqual(form);
+    expect(parseDraftPayload(serializeDraft(form).payload)).toEqual(form);
+  });
+
+  it("wraps the payload the way PUT /projects/draft/ expects", () => {
+    expect(Object.keys(serializeDraft(filled()))).toEqual(["payload"]);
+    expect(serializeDraft(filled()).payload.version).toBe(1);
   });
 
   it("ignores an unknown version rather than treating it as corrupt", () => {

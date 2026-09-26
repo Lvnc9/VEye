@@ -173,7 +173,12 @@ export default function ProjectDetailPage() {
           ) : (
             <ObjectiveTree project={data} objectives={objectives.data ?? []} onChanged={refresh} />
           )}
-          <MeetingsPanel projectId={projectId} members={data.members} canManageMeetings={data.can_manage_meetings} />
+          <MeetingsPanel
+            projectId={projectId}
+            members={data.members}
+            canManageMeetings={data.can_manage_meetings}
+            onActivity={refresh}
+          />
           <CommentsPanel projectId={projectId} />
           <DocumentLinksPanel projectId={projectId} canEdit={data.can_edit} />
         </div>

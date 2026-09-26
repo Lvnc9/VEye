@@ -44,6 +44,9 @@ export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
 
 /** Tailwind classes per project-activity-event kind — the direct analogue of
  *  `lib/history.ts`'s `EVENT_KIND_TONE` for the document register. */
+/** Feed kinds whose `to_status` carries the meeting's day as an ISO date (backend `_meeting_event`). */
+export const MEETING_EVENT_KINDS: ReadonlySet<string> = new Set(["meeting_scheduled", "meeting_changed", "meeting_cancelled"]);
+
 export const PROJECT_EVENT_TONE: Record<string, string> = {
   project_created: "bg-blue-500",
   project_status_changed: "bg-amber-500",
@@ -390,9 +393,11 @@ export interface ProjectDraftPayload {
   form: ProjectCreateForm;
 }
 
-/** The `PUT /projects/draft/` body. */
-export function serializeDraft(form: ProjectCreateForm): ProjectDraftPayload {
-  return { version: PROJECT_DRAFT_VERSION, form };
+/** The `PUT /projects/draft/` body: the contract wraps the opaque payload as `{payload: …}` (a bare
+ *  `{version, form}` is a 400). `GET` answers `{payload, updated_at}`; feed its `payload` to
+ *  `parseDraftPayload`. */
+export function serializeDraft(form: ProjectCreateForm): { payload: ProjectDraftPayload } {
+  return { payload: { version: PROJECT_DRAFT_VERSION, form } };
 }
 
 /** `null` for anything that isn't a recognised, well-shaped draft: no draft saved yet, a version this

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api-client";
 import { formatJalali, formatJalaliDateTime } from "@/lib/jalali";
-import { PROJECT_EVENT_TONE, type ProjectActivityEvent } from "@/lib/projects";
+import { MEETING_EVENT_KINDS, PROJECT_EVENT_TONE, type ProjectActivityEvent } from "@/lib/projects";
 
 /**
  * A project's activity feed (docs/11 §3.5) — the same shape of thing `WorkflowTimeline.tsx` is for
@@ -58,6 +58,9 @@ export function ProjectActivityFeed({ projectId, version }: { projectId: number;
                   <p className="mt-0.5 text-xs text-slate-500">
                     {formatJalali(event.from_status)} ← {formatJalali(event.to_status)}
                   </p>
+                ) : MEETING_EVENT_KINDS.has(event.kind) && event.to_status ? (
+                  // The meeting's day, as an ISO date in to_status (backend services._meeting_event).
+                  <p className="mt-0.5 text-xs text-slate-500">تاریخ جلسه: {formatJalali(event.to_status)}</p>
                 ) : (
                   event.from_status_label &&
                   event.to_status_label && (

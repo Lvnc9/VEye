@@ -97,6 +97,14 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   weight is this objective's share of the project's progress percentage (1–100; all 1 = all equal). Linked
   with `aria-describedby`. Owner request, 2026-09-26.
 
+- **Projects frontend wired to the real A2 endpoints (after merging A2's meetings and draft).** Three
+  mismatches with the contract, found by using the page against the live backend: the meeting form sent
+  ProjectMember ids as `attendees` (the contract, like objective assignees, takes user ids — every save was a
+  400); the new-project autosave sent the draft bare instead of `{payload: …}` (every PUT was a 400, so no draft
+  was ever kept); and after a successful create, the page's save-on-unmount put the draft straight back. Also:
+  the activity feed now reloads when a meeting is scheduled, changed or cancelled, and shows a meeting event's
+  day in Jalali (`MEETING_EVENT_KINDS`, the day travels in `to_status`). Tests: +1 vitest → 196.
+
 ### Phase 10 — A4 · personnel placement and کارتابل attachments
 - _(A4: add lines under this heading only)_
 

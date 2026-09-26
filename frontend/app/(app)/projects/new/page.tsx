@@ -51,6 +51,9 @@ export default function NewProjectPage() {
   const [pendingDraft, setPendingDraft] = useState<ProjectCreateForm | null>(null);
   const formRef = useRef(form);
   const draftReadyRef = useRef(false);
+  /** Set while (and after) the create request runs: the server deletes the draft on success, so no
+   *  autosave — debounced or the unmount flush — may put it back. Cleared again if the create fails. */
+  const submittedRef = useRef(false);
   useEffect(() => {
     formRef.current = form;
     draftReadyRef.current = draftState === "ready";
@@ -79,6 +82,7 @@ export default function NewProjectPage() {
   useEffect(() => {
     if (draftState !== "ready") return;
     const timer = setTimeout(() => {
+      if (submittedRef.current) return;
       apiPut("/projects/draft/", serializeDraft(form)).catch(() => {});
     }, DRAFT_DEBOUNCE_MS);
     return () => clearTimeout(timer);
@@ -87,7 +91,7 @@ export default function NewProjectPage() {
   // One last save on unmount, via refs so this effect only ever runs once.
   useEffect(() => {
     return () => {
-      if (draftReadyRef.current) {
+      if (draftReadyRef.current && !submittedRef.current) {
         apiPut("/projects/draft/", serializeDraft(formRef.current)).catch(() => {});
       }
     };
@@ -159,10 +163,12 @@ export default function NewProjectPage() {
     if (Object.keys(found).length > 0) return;
 
     setSaving(true);
+    submittedRef.current = true;
     try {
       const project = await apiPost<Project>("/projects/", createProjectBody(form));
       router.push(`/projects/${project.id}`);
     } catch (err) {
+      submittedRef.current = false; // the create failed: the server kept the draft, and autosave resumes
       setServerError(err instanceof ApiError ? err.message : "ایجاد پروژه ممکن نشد.");
       setSaving(false);
     }

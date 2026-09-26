@@ -19,10 +19,13 @@ export function MeetingsPanel({
   projectId,
   members,
   canManageMeetings,
+  onActivity,
 }: {
   projectId: number;
   members: ProjectMember[];
   canManageMeetings: boolean;
+  /** A meeting was scheduled, changed or cancelled: the page's activity feed should reload. */
+  onActivity?: () => void;
 }) {
   const [reload, setReload] = useState(0);
   const meetings = useApiQuery<ProjectMeeting[]>(`/projects/${projectId}/meetings/`, reload);
@@ -32,6 +35,7 @@ export function MeetingsPanel({
 
   function refresh() {
     setReload((n) => n + 1);
+    onActivity?.();
   }
 
   const rows = meetings.data ?? [];
@@ -244,12 +248,13 @@ function MeetingForm({
   );
   const description = isEdit ? meetingDescription : draftDescription;
   const setDescription = isEdit ? setMeetingDescription : setDraftDescription;
-  const [attendees, setAttendees] = useState<number[]>(meeting?.attendees.map((a) => a.member) ?? []);
+  // User ids, per the API contract (the same as an objective's assignees) — not ProjectMember ids.
+  const [attendees, setAttendees] = useState<number[]>(meeting?.attendees.map((a) => a.user) ?? []);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  function toggle(memberId: number) {
-    setAttendees((current) => (current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId]));
+  function toggle(userId: number) {
+    setAttendees((current) => (current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]));
   }
 
   async function submit() {
@@ -329,7 +334,7 @@ function MeetingForm({
             {members.map((member) => (
               <li key={member.id}>
                 <label className="flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-slate-50">
-                  <input type="checkbox" checked={attendees.includes(member.id)} onChange={() => toggle(member.id)} />
+                  <input type="checkbox" checked={attendees.includes(member.user)} onChange={() => toggle(member.user)} />
                   <span className="truncate">{member.user_name}</span>
                   <span className="truncate text-xs text-slate-500">{member.user_title}</span>
                 </label>
