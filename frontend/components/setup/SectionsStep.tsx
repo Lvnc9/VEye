@@ -72,7 +72,7 @@ export function SectionsStep({
           بازگشت
         </button>
         <button type="button" onClick={onNext} className={primaryButton}>
-          ادامه: آمادهٔ شروع
+          ادامه: پرسنل
         </button>
       </div>
     </StepCard>

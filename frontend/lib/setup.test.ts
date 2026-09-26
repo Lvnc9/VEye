@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_ACCOUNT_FORM,
   PASSWORD_MIN_LENGTH,
+  CHART_STEPS,
   bootstrapBody,
+  finishBlockedReason,
   validateAccountForm,
   wizardStepFor,
   type AccountForm,
@@ -76,5 +78,19 @@ describe("bootstrapBody", () => {
       mobile_phone: "0912",
       password: "Qz7-vector-maple-93",
     });
+  });
+});
+
+describe("the people step and finishing", () => {
+  it("puts «پرسنل» between the sections and the last step", () => {
+    const keys = CHART_STEPS.map((step) => step.key);
+    expect(keys.indexOf("people")).toBe(keys.indexOf("sections") + 1);
+    expect(keys[keys.length - 1]).toBe("ready");
+  });
+
+  it("locks finishing until the company root has a lead, and says why in Persian", () => {
+    const reason = finishBlockedReason({ has_root_lead: false });
+    expect(reason).toMatch(/مسئول/);
+    expect(finishBlockedReason({ has_root_lead: true })).toBeNull();
   });
 });

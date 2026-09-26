@@ -16,15 +16,22 @@ import type { SetupStatus } from "./types";
  */
 export type WizardStep = "login" | "company" | "units" | "sections" | "people" | "ready" | "done";
 
-/** The screens in order. `login` is not a step of the chart, only a door; «پرسنل» is added to this
- *  nav once the wizard embeds it (A4's `PersonnelForm`, the next slice) — `wizardStepFor` already
- *  resumes there from the `PEOPLE` bookmark, but nothing points a visitor at it until then. */
-export const CHART_STEPS: { key: "company" | "units" | "sections" | "ready"; title: string }[] = [
+/** The screens in order. `login` is not a step of the chart, only a door. */
+export const CHART_STEPS: { key: "company" | "units" | "sections" | "people" | "ready"; title: string }[] = [
   { key: "company", title: "شرکت و حوزه‌ها" },
   { key: "units", title: "واحدها" },
   { key: "sections", title: "بخش‌ها" },
+  { key: "people", title: "پرسنل" },
   { key: "ready", title: "آمادهٔ شروع" },
 ];
+
+/** Why «پایان راه‌اندازی» is still locked, or null when it may run (ADR-010: finishing needs a مدیر
+ *  عامل — an active lead on the company root). The server enforces the same rule
+ *  (409 `root_lead_missing`); this only disables the button and says why. */
+export function finishBlockedReason(status: Pick<SetupStatus, "has_root_lead">): string | null {
+  if (status.has_root_lead) return null;
+  return "برای پایان راه‌اندازی، دست‌کم یک نفر باید مسئول «خود شرکت» باشد (معمولاً مدیر عامل). او را در مرحلهٔ «پرسنل» ثبت کنید و گزینهٔ «مسئول» را بزنید.";
+}
 
 /**
  * Where the wizard should open, from `GET /setup/status/` and whether this browser holds a session.

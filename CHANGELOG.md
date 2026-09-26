@@ -16,6 +16,14 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 
   **Frontend:** `/` is now a public landing page (`proxy.ts`) reading `GET /setup/status/` alone: no developer → «شروع راه‌اندازی» → `/setup`; a developer exists but setup is unfinished → «ادامهٔ راه‌اندازی» → `/login?next=%2Fsetup`; completed → `/dashboard` if signed in (`apiGetIfSignedIn`, never bounces an anonymous visitor to `/login`) else `/login`. The wizard, `SetupBanner` and the account form are gated on `user.is_developer` everywhere `manage_organization` used to gate them — anyone else signed in sees «راه‌اندازی در حال انجام است — با توسعه‌دهنده تماس بگیرید»; `AccountStep`'s form has no company-name field any more (`lib/setup.ts` `AccountForm`/`bootstrapBody`), since the company is created afterwards by `StartSetupButton` with the existing default name and renamed in the wizard's own «شرکت و حوزه‌ها» step. `LoginScreen`'s setup branches use the developer wording. Fixed along the way: `SetupWizard`'s `FirstStep` re-checks `/auth/me/` only once per mount, so right after `AccountStep` signs the new developer in it kept showing the stale "not signed in" screen until a manual reload — now keyed by `status.developer_exists`, so a fresh mount (and a fresh session check) follows the flip from "no developer" to "developer, no company" immediately. Tests: frontend +0 net in `lib/setup.test.ts` (rewritten for the new `SetupStatus` shape and the `PEOPLE → "people"` mapping), `proxy.test.ts` (`/` is public), 172 total.
 
+- **The wizard registers personnel, and finishing needs a مدیر عامل (ADR-010 §A).** New step «پرسنل» between
+  بخش‌ها and آمادهٔ شروع (`components/setup/PeopleStep.tsx`): it embeds A4's `PersonnelForm tone="dark"` (register
+  + place in one request), lists who is registered and where, and says in amber, until it is true, that someone must
+  be «مسئول» of «خود شرکت». «ورود به نرم‌افزار» on the last step is disabled with that reason and a link back to
+  «پرسنل» until `has_root_lead`; a 409 other than `already_completed` (e.g. `root_lead_missing`) is now shown instead
+  of being treated as "already finished". Registering someone refreshes `/setup/status/`. `lib/setup.ts`:
+  `CHART_STEPS` gains `people`, new `finishBlockedReason` (+2 vitest → 198).
+
 ### Phase 10 — A2 · projects backend (assignees, progress log, meetings, draft)
 - _(A2: add lines under this heading only)_
 

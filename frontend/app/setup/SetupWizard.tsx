@@ -5,6 +5,7 @@ import Link from "next/link";
 import { OrgTreeList } from "@/components/OrgTreeList";
 import { AccountStep } from "@/components/setup/AccountStep";
 import { CompanyStep } from "@/components/setup/CompanyStep";
+import { PeopleStep } from "@/components/setup/PeopleStep";
 import { ReadyStep } from "@/components/setup/ReadyStep";
 import { SectionsStep } from "@/components/setup/SectionsStep";
 import { StartSetupButton } from "@/components/setup/StartSetupButton";
@@ -51,7 +52,15 @@ export function SetupWizard() {
             <FirstStep key={String(status.data.developer_exists)} status={status.data} onDone={refreshStatus} />
           </div>
         ) : (
-          <SignedInWizard status={status.data} reload={nodeReload} refresh={refreshNodes} />
+          <SignedInWizard
+            status={status.data}
+            reload={nodeReload}
+            refresh={refreshNodes}
+            onPeopleChanged={() => {
+              refreshNodes();
+              refreshStatus(); // has_root_lead may have flipped
+            }}
+          />
         )}
       </div>
     </main>
@@ -112,7 +121,17 @@ function FirstStep({ status, onDone }: { status: SetupStatus; onDone: () => void
 }
 
 /** Mounted only once a company exists, so its (authenticated) requests never run on a fresh database. */
-function SignedInWizard({ status, reload, refresh }: { status: SetupStatus; reload: number; refresh: () => void }) {
+function SignedInWizard({
+  status,
+  reload,
+  refresh,
+  onPeopleChanged,
+}: {
+  status: SetupStatus;
+  reload: number;
+  refresh: () => void;
+  onPeopleChanged: () => void;
+}) {
   const me = useApiQuery<User>("/auth/me/");
   const tree = useApiQuery<OrgTreeResponse>("/org/tree/", reload);
   const company = useApiQuery<Company>("/org/company/", reload);
@@ -204,8 +223,11 @@ function SignedInWizard({ status, reload, refresh }: { status: SetupStatus; relo
             onNext={go("sections")}
           />
         )}
-        {current === "sections" && <SectionsStep nodes={nodes} onChanged={refresh} onBack={go("units")} onNext={go("ready")} />}
-        {current === "ready" && <ReadyStep nodes={nodes} onBack={go("sections")} />}
+        {current === "sections" && <SectionsStep nodes={nodes} onChanged={refresh} onBack={go("units")} onNext={go("people")} />}
+        {current === "people" && (
+          <PeopleStep status={status} onRegistered={onPeopleChanged} onBack={go("sections")} onNext={go("ready")} />
+        )}
+        {current === "ready" && <ReadyStep nodes={nodes} status={status} onBack={go("people")} onPeople={go("people")} />}
       </div>
 
       <aside aria-label="پیش‌نمایش ساختار" className="h-fit rounded-2xl border border-line bg-surface-raised p-4 lg:sticky lg:top-6">
