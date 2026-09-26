@@ -295,3 +295,81 @@ class FormBuildTests(TestCase):
         pdf = storage.absolute_path(build.path).read_bytes()
         self.assertTrue(pdf.startswith(b"%PDF-"))
         self.assertEqual(page_count(pdf), 1)
+
+
+class InputElementTests(SimpleTestCase):
+    def fields(self, rows, **extra):
+        return form_schema.clean_element({"kind": "fields", "rows": rows, **extra}, number=1)
+
+    def row(self, *labels):
+        width = 100 / len(labels)
+        return {"cells": [{"label": label, "width": width} for label in labels]}
+
+    def test_the_first_field_is_drawn_on_the_right(self):
+        element = self.fields([self.row("اول", "دوم")])
+        grid = form_renderer.FieldGrid(element, 10)
+        canvas = RecordingCanvas(pagesize=A4)
+        grid.wrap(400, 800)
+        grid.drawOn(canvas, 0, 0)
+        x = {text: left for left, _, text in canvas.drawn}
+        self.assertGreater(x[rtl.shape("اول:")], x[rtl.shape("دوم:")])
+
+    def test_a_checkbox_has_no_colon(self):
+        element = self.fields([{"cells": [{"label": "متأهل", "type": "checkbox", "width": 100}]}])
+        canvas = RecordingCanvas(pagesize=A4)
+        grid = form_renderer.FieldGrid(element, 10)
+        grid.wrap(400, 800)
+        grid.drawOn(canvas, 0, 0)
+        self.assertEqual(canvas.texts(), [rtl.shape("متأهل")])
+
+    def test_the_grid_splits_between_rows(self):
+        element = self.fields([self.row(str(i)) for i in range(10)], row_height=10)
+        grid = form_renderer.FieldGrid(element, 10)
+        first, rest = grid.split(400, 45 * form_renderer.mm)
+        self.assertEqual(len(first.rows), 4)
+        self.assertEqual(len(rest.rows), 6)
+
+    def test_the_photo_stays_with_rows_tall_enough_for_it(self):
+        element = self.fields([self.row(str(i)) for i in range(10)], row_height=10, photo=True)
+        grid = form_renderer.FieldGrid(element, 10)
+        self.assertEqual(grid.split(400, 30 * form_renderer.mm), [])  # the photo would not fit: move on
+        first, rest = grid.split(400, 60 * form_renderer.mm)
+        self.assertTrue(first.photo)
+        self.assertFalse(rest.photo)
+        # With fewer rows than the photo is tall, the photo sets the height.
+        short = form_renderer.FieldGrid(self.fields([self.row("x")], row_height=9, photo=True), 10)
+        _, height = short.wrap(400, 800)
+        self.assertGreater(height, form_renderer.PHOTO_HEIGHT * form_renderer.mm)
+
+    def test_an_answer_box_never_outgrows_the_page(self):
+        element = form_schema.clean_element({"kind": "answer_box", "lines": 0, "height": 200}, number=1)
+        box = form_renderer.AnswerBox(element, 10, max_height=120 * form_renderer.mm)
+        _, height = box.wrap(400, 1000)
+        self.assertLessEqual(height, 120 * form_renderer.mm)
+
+    def test_signature_boxes_run_right_to_left_then_the_stamp(self):
+        element = form_schema.clean_element(
+            {"kind": "signatures", "boxes": [{"caption": "متقاضی"}, {"caption": "بررسی"}], "stamp": True}, number=1
+        )
+        row = form_renderer.SignatureRow(element, 10)
+        canvas = RecordingCanvas(pagesize=A4)
+        row.wrap(500, 800)
+        row.drawOn(canvas, 0, 0)
+        x = {text: left for left, _, text in canvas.drawn}
+        self.assertGreater(x[rtl.shape("متقاضی")], x[rtl.shape("بررسی")])
+        self.assertGreater(x[rtl.shape("بررسی")], x[rtl.shape("محل مهر")])
+
+    def test_a_full_hiring_form_renders_in_landscape_too(self):
+        items = elements(
+            {"kind": "fields", "photo": True, "rows": [
+                {"cells": [{"label": "نام", "width": 50}, {"label": "تاریخ تولد", "type": "date", "width": 50}]},
+                {"cells": [{"label": "کد ملی", "type": "national_code", "width": 60},
+                           {"label": "همراه", "type": "phone", "width": 40}]},
+            ]},
+            {"kind": "answer_box", "label": "توضیحات", "lines": 0, "height": 200},
+            {"kind": "signatures", "stamp": True},
+        )
+        for orientation in ("portrait", "landscape"):
+            with self.subTest(orientation=orientation):
+                pdf = form_renderer.render(form_input(orientation=orientation, elements=items))
+                self.assertTrue(pdf.startswith(b"%PDF-"))

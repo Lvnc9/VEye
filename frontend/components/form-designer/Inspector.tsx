@@ -4,10 +4,11 @@ import type { ReactNode } from "react";
 import { MAX_LABEL, MAX_TEXT, elementLabel, type FormElement, type FormSettings } from "@/lib/form-designer";
 import { RichTextArea } from "@/components/designer/RichTextArea";
 import { FieldLabel, inputClass } from "@/components/designer/ui";
+import { AnswerBoxEditor, FieldsEditor, SignaturesEditor } from "./InputEditors";
 
 export type ElementUpdate = (updater: (element: FormElement) => FormElement) => void;
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
       <FieldLabel>{label}</FieldLabel>
@@ -16,7 +17,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Select<T extends string | number>({
+export function Select<T extends string | number>({
   value,
   options,
   disabled,
@@ -46,7 +47,7 @@ function Select<T extends string | number>({
   );
 }
 
-function NumberInput({
+export function NumberInput({
   value,
   min,
   max,
@@ -237,6 +238,10 @@ export function ElementInspector({
       {element.kind === "page_break" && (
         <p className="text-sm text-slate-600">جزء بعدی از بالای یک صفحهٔ تازه چاپ می‌شود.</p>
       )}
+
+      {element.kind === "fields" && <FieldsEditor element={element} disabled={disabled} set={set} />}
+      {element.kind === "answer_box" && <AnswerBoxEditor element={element} disabled={disabled} set={set} />}
+      {element.kind === "signatures" && <SignaturesEditor element={element} disabled={disabled} set={set} />}
     </div>
   );
 }

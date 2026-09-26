@@ -24,3 +24,10 @@ export const LEADING = 1.55;
 export const HEADING_SIZE_BONUS: Record<1 | 2 | 3, number> = { 1: 2.5, 2: 1.5, 3: 0.5 };
 
 export const PT_IN_MM = 25.4 / 72;
+
+// Input elements (form_renderer.py)
+export const PHOTO_WIDTH = 30;
+export const PHOTO_HEIGHT = 40;
+export const PHOTO_GAP = 4;
+export const ANSWER_LINE = 8;
+export const SIGNATURE_GAP = 3;

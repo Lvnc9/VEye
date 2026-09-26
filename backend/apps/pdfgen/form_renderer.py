@@ -48,6 +48,12 @@ LINE_COLOR = (0.2, 0.2, 0.2)
 MUTED = (0.42, 0.45, 0.51)  # #6c7482, the owner's footer grey
 BAND_FILL = (0.9, 0.91, 0.93)
 LEADING = 1.55
+# Input elements (mm)
+PHOTO_WIDTH = 30
+PHOTO_HEIGHT = 40
+PHOTO_GAP = 4
+ANSWER_LINE = 8
+SIGNATURE_GAP = 3
 
 PREVIEW_TEXT = "پیش نمایش"
 
@@ -259,6 +265,233 @@ class LetterBox(Flowable):
             y -= self.line_height
 
 
+def _blank_line(c, x0, x1, y, style):
+    """The line a hand fills in. `style`: underline, dotted or box."""
+    c.saveState()
+    c.setStrokeColorRGB(*LINE_COLOR)
+    c.setLineWidth(0.5)
+    if style == "dotted":
+        c.setDash(0.8, 1.6)
+    if style == "box":
+        c.rect(x0, y - 1.6 * mm, x1 - x0, 5.6 * mm)
+    else:
+        c.line(x0, y - 1, x1, y - 1)
+    c.restoreState()
+
+
+def _digit_boxes(c, x_right, x_min, y, count):
+    """`count` boxes for digits, right after the label; left-to-right digits, so
+    the first box is the leftmost of the run."""
+    size = min(5 * mm, max(2.5 * mm, (x_right - x_min) / count))
+    c.saveState()
+    c.setStrokeColorRGB(*LINE_COLOR)
+    c.setLineWidth(0.5)
+    left = x_right - size * count
+    for i in range(count):
+        c.rect(left + i * size, y - 1.4 * mm, size, size)
+    c.restoreState()
+
+
+class FieldGrid(Flowable):
+    """Rows of labelled blanks, right to left, with an optional 3×4 photo box on
+    the left. Splits between rows; the photo stays with the first rows."""
+
+    def __init__(self, element: dict, base_size: int, *, rows=None, photo=None):
+        super().__init__()
+        self.element = element
+        self.font = _fonts(base_size)
+        self.rows = element["rows"] if rows is None else rows
+        self.photo = element["photo"] if photo is None else photo
+        self.row_height = element["row_height"] * mm
+        self.gap_after = 1.5 * mm
+
+    def _min_height(self, rows) -> float:
+        photo = PHOTO_HEIGHT * mm + 1 * mm if self.photo else 0
+        return max(len(rows) * self.row_height, photo) + self.gap_after
+
+    def wrap(self, avail_width, avail_height):
+        self.width = avail_width
+        self.height = self._min_height(self.rows)
+        return self.width, self.height
+
+    def split(self, avail_width, avail_height):
+        fits = int((avail_height - self.gap_after) // self.row_height)
+        if fits <= 0 or fits >= len(self.rows):
+            return []
+        if self.photo and fits * self.row_height < PHOTO_HEIGHT * mm + 1 * mm:
+            return []
+        return [
+            FieldGrid(self.element, self.font.size, rows=self.rows[:fits], photo=self.photo),
+            FieldGrid(self.element, self.font.size, rows=self.rows[fits:], photo=False),
+        ]
+
+    def draw(self):
+        c = self.canv
+        top = self.height
+        left_edge = (PHOTO_WIDTH + PHOTO_GAP) * mm if self.photo else 0
+        area = self.width - left_edge
+        blank = self.element["blank"]
+
+        for index, row in enumerate(self.rows):
+            baseline = top - (index + 1) * self.row_height + self.row_height * 0.32
+            x_right = self.width
+            for cell in row["cells"]:
+                cell_width = area * cell["width"] / 100
+                x_left = x_right - cell_width
+                self._cell(c, cell, x_left + 1.5 * mm, x_right - 1 * mm, baseline, blank)
+                x_right = x_left
+
+        if self.photo:
+            c.saveState()
+            c.setStrokeColorRGB(*LINE_COLOR)
+            c.setLineWidth(0.6)
+            box_top = top - 0.5 * mm
+            c.rect(0, box_top - PHOTO_HEIGHT * mm, PHOTO_WIDTH * mm, PHOTO_HEIGHT * mm)
+            c.setFillColorRGB(*MUTED)
+            small = _fonts(self.font.size - 2)
+            middle = box_top - PHOTO_HEIGHT * mm / 2
+            _draw_text(c, "محل الصاق عکس", small, x_right=0, y=middle + 1 * mm, center_in=(0, PHOTO_WIDTH * mm))
+            # Vazir has no «×» glyph, so the size is written out.
+            _draw_text(c, "ابعاد ۳ در ۴", small, x_right=0, y=middle - 3.5 * mm, center_in=(0, PHOTO_WIDTH * mm))
+            c.restoreState()
+
+    def _cell(self, c, cell, x_min, x_right, baseline, blank):
+        label = cell["label"].strip()
+        c.setFillColorRGB(0, 0, 0)
+        if cell["type"] == "checkbox":
+            size = 3.4 * mm
+            c.saveState()
+            c.setStrokeColorRGB(*LINE_COLOR)
+            c.setLineWidth(0.6)
+            c.rect(x_right - size, baseline - 0.6 * mm, size, size)
+            c.restoreState()
+            if label:
+                rtl.draw_line(c, [(label, rtl.NORMAL)], self.font, x_right=x_right - size - 1.5 * mm, y=baseline)
+            return
+
+        text = f"{label}:" if label else ""
+        line = [(text, rtl.NORMAL)]
+        label_width = rtl.line_width(line, self.font) if text else 0
+        if text:
+            rtl.draw_line(c, line, self.font, x_right=x_right, y=baseline)
+        blank_right = x_right - label_width - (1.5 * mm if text else 0)
+        if blank_right - x_min < 3 * mm:
+            return  # the label fills the cell
+
+        if cell["type"] == "national_code":
+            _digit_boxes(c, blank_right, x_min, baseline, 10)
+        elif cell["type"] == "phone":
+            _digit_boxes(c, blank_right, x_min, baseline, 11)
+        elif cell["type"] == "date":
+            # «....../....../......», written year/month/day left to right.
+            third = (blank_right - x_min - 4 * mm) / 3
+            x = x_min
+            for part in range(3):
+                _blank_line(c, x, x + third, baseline, "dotted" if blank == "box" else blank)
+                x += third
+                if part < 2:
+                    c.setFont(self.font.regular, self.font.size)
+                    c.drawCentredString(x + 1 * mm, baseline, "/")
+                    x += 2 * mm
+        else:
+            _blank_line(c, x_min, blank_right, baseline, blank)
+
+
+class AnswerBox(Flowable):
+    """Room to write an answer: a title, then ruled lines or an empty frame."""
+
+    def __init__(self, element: dict, base_size: int, max_height: float):
+        super().__init__()
+        self.element = element
+        self.font = _fonts(base_size)
+        self.title_height = self.font.size * LEADING if element["label"].strip() else 0
+        lines = element["lines"]
+        box = (lines * ANSWER_LINE + 2) * mm if lines else element["height"] * mm
+        # Never taller than a page's frame: platypus cannot place it otherwise.
+        self.box_height = min(box, max_height - self.title_height - 3 * mm)
+        self.gap_after = 2 * mm
+
+    def wrap(self, avail_width, avail_height):
+        self.width = avail_width
+        self.height = self.title_height + self.box_height + self.gap_after
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        top = self.height
+        if self.title_height:
+            c.setFillColorRGB(0, 0, 0)
+            baseline = top - self.title_height + (self.title_height - self.font.size) / 2 + self.font.size * 0.2
+            rtl.draw_line(c, [(self.element["label"], rtl.BOLD)], self.font, x_right=self.width, y=baseline)
+        box_top = top - self.title_height
+        bottom = box_top - self.box_height
+        c.saveState()
+        c.setStrokeColorRGB(*LINE_COLOR)
+        if self.element["framed"]:
+            c.setLineWidth(0.6)
+            c.rect(0, bottom, self.width, self.box_height)
+        c.setLineWidth(0.4)
+        if self.element["line_style"] == "dotted":
+            c.setDash(0.8, 1.8)
+        inset = 3 * mm if self.element["framed"] else 0
+        y = box_top - ANSWER_LINE * mm
+        for _ in range(self.element["lines"]):
+            if y <= bottom + 1:
+                break
+            c.line(inset, y, self.width - inset, y)
+            y -= ANSWER_LINE * mm
+        c.restoreState()
+
+
+class SignatureRow(Flowable):
+    """Signature boxes side by side, the first on the right, then the stamp."""
+
+    def __init__(self, element: dict, base_size: int):
+        super().__init__()
+        self.element = element
+        self.font = _fonts(base_size - 1)
+        self.boxes = list(element["boxes"]) + (
+            [{"caption": "محل مهر", "name_line": False, "date_line": False}] if element["stamp"] else []
+        )
+        self.gap_before = 3 * mm
+        self.gap_after = 2 * mm
+
+    def wrap(self, avail_width, avail_height):
+        self.width = avail_width
+        self.height = self.element["height"] * mm + self.gap_before + self.gap_after
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        count = len(self.boxes)
+        box_width = (self.width - SIGNATURE_GAP * mm * (count - 1)) / count
+        box_height = self.element["height"] * mm
+        bottom = self.gap_after
+        top = bottom + box_height
+        x_right = self.width
+        for box in self.boxes:
+            x_left = x_right - box_width
+            c.saveState()
+            c.setStrokeColorRGB(*LINE_COLOR)
+            c.setLineWidth(0.6)
+            c.rect(x_left, bottom, box_width, box_height)
+            c.restoreState()
+            c.setFillColorRGB(0, 0, 0)
+            y = top - 5 * mm
+            if box["caption"].strip():
+                _draw_text(c, box["caption"], self.font, x_right=0, y=y, bold=True, center_in=(x_left, x_right))
+            for wanted, label in ((box["name_line"], "نام و نام خانوادگی:"), (box["date_line"], "تاریخ:")):
+                if not wanted:
+                    continue
+                y -= 6 * mm
+                if y < bottom + 2 * mm:
+                    break
+                line = [(label, rtl.NORMAL)]
+                rtl.draw_line(c, line, self.font, x_right=x_right - 2 * mm, y=y)
+                _blank_line(c, x_left + 2 * mm, x_right - 3 * mm - rtl.line_width(line, self.font), y, "dotted")
+            x_right = x_left - SIGNATURE_GAP * mm
+
+
 # --------------------------------------------------------------------------
 # Elements → flowables
 # --------------------------------------------------------------------------
@@ -319,12 +552,31 @@ def _page_break(element, data, numbering):
     return [PageBreak()]
 
 
+def _fields(element, data, numbering):
+    return [FieldGrid(element, data.base_font_size)]
+
+
+def _answer_box(element, data, numbering, max_height):
+    return [AnswerBox(element, data.base_font_size, max_height)]
+
+
+def _signatures(element, data, numbering):
+    return [SignatureRow(element, data.base_font_size)]
+
+
 BUILDERS = {
     "heading": _heading,
     "text": _text,
     "divider": _divider,
     "spacer": _spacer,
     "page_break": _page_break,
+    "fields": _fields,
+    "signatures": _signatures,
+}
+
+#: Builders that need the frame's height (to never exceed a page).
+SIZED_BUILDERS = {
+    "answer_box": _answer_box,
 }
 
 
@@ -383,15 +635,18 @@ def _approval_strip(data: FormPdfInput, width: float) -> list:
     return [Spacer(1, 6 * mm), KeepTogether([table])]
 
 
-def story(data: FormPdfInput, width: float) -> list:
+def story(data: FormPdfInput, width: float, height: float = 230 * mm) -> list:
     flowables: list = []
     if data.show_letter_box:
         flowables.append(LetterBox(data.base_font_size))
     numbering = _Numbering()
     for element in data.elements:
-        builder = BUILDERS.get(element.get("kind"))
-        if builder is not None:  # an element kind this build doesn't know is skipped, not fatal
-            flowables.extend(builder(element, data, numbering))
+        kind = element.get("kind")
+        if kind in SIZED_BUILDERS:
+            flowables.extend(SIZED_BUILDERS[kind](element, data, numbering, height))
+        elif kind in BUILDERS:
+            flowables.extend(BUILDERS[kind](element, data, numbering))
+        # An element kind this build doesn't know is skipped, not fatal.
     if data.approval_strip and data.signers:
         flowables.extend(_approval_strip(data, width))
     return flowables
@@ -567,7 +822,7 @@ def render(data: FormPdfInput, *, preview: bool = False, invariant: bool = False
     on_page = (lambda canvas, _doc: _draw_watermark(canvas)) if preview else (lambda canvas, _doc: None)
     doc.addPageTemplates([PageTemplate(id="form", frames=[frame], onPage=on_page)])
 
-    content = story(data, frame_width)
+    content = story(data, frame_width, frame_top - frame_bottom)
     if not content:
         content = [Spacer(1, 1)]  # an empty form still prints its header and footer
     doc.build(content, canvasmaker=_canvas_class(data))

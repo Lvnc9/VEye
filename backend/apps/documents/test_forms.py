@@ -207,3 +207,53 @@ class FormSchemaTests(SimpleTestCase):
                 "header": {"subtitle": "", "show_company_name": True, "show_letter_box": False},
             },
         )
+
+
+class InputElementSchemaTests(SimpleTestCase):
+    def clean(self, raw):
+        return form_schema.clean_element(raw, number=4)
+
+    def messages(self, raw):
+        with self.assertRaises(form_schema.FormSchemaError) as caught:
+            self.clean(raw)
+        return caught.exception.messages
+
+    def test_fields_default_to_a_name_row(self):
+        fields = self.clean({"kind": "fields"})
+        self.assertEqual([c["label"] for c in fields["rows"][0]["cells"]], ["نام", "نام خانوادگی"])
+        self.assertEqual(fields["blank"], "underline")
+        self.assertFalse(fields["photo"])
+
+    def test_a_row_must_add_up_to_100(self):
+        row = {"cells": [{"label": "الف", "width": 30}, {"label": "ب", "width": 30}]}
+        [message] = self.messages({"kind": "fields", "rows": [row]})
+        self.assertIn("جزء ۴ (فیلدها) — ردیف ۱", message)
+        self.assertIn("۱۰۰ درصد", message)
+        row["cells"][1]["width"] = 70.4  # within the tolerance
+        self.clean({"kind": "fields", "rows": [row]})
+
+    def test_nested_problems_name_their_cell(self):
+        rows = [{"cells": [{"label": "x", "width": 100, "type": "passport"}]}]
+        [message] = self.messages({"kind": "fields", "rows": rows})
+        self.assertIn("ردیف ۱ — خانه ۱", message)
+        self.assertIn("نوع خانه", message)
+
+    def test_field_caps(self):
+        too_many_cells = [{"cells": [{"label": "", "width": 100 / 7}] * 7}]
+        self.assertTrue(self.messages({"kind": "fields", "rows": too_many_cells}))
+        self.assertTrue(self.messages({"kind": "fields", "rows": []}))  # at least one row
+        narrow = [{"cells": [{"label": "", "width": 2}, {"label": "", "width": 98}]}]
+        self.assertTrue(self.messages({"kind": "fields", "rows": narrow}))
+
+    def test_signatures_hold_one_to_four_boxes(self):
+        self.assertEqual(len(self.clean({"kind": "signatures"})["boxes"]), 1)
+        self.assertTrue(self.messages({"kind": "signatures", "boxes": []}))
+        self.assertTrue(self.messages({"kind": "signatures", "boxes": [{"caption": "x"}] * 5}))
+        box = self.clean({"kind": "signatures", "boxes": [{"caption": "مدیر"}]})["boxes"][0]
+        self.assertEqual(box, {"caption": "مدیر", "name_line": True, "date_line": True})
+
+    def test_answer_box_ranges(self):
+        self.assertEqual(self.clean({"kind": "answer_box"})["lines"], 4)
+        self.assertTrue(self.messages({"kind": "answer_box", "lines": 26}))
+        self.assertTrue(self.messages({"kind": "answer_box", "lines": 2.5}))
+        self.assertTrue(self.messages({"kind": "answer_box", "height": 500}))

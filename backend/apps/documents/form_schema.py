@@ -42,12 +42,17 @@ class _Reader:
     """Reads typed properties out of one raw dict, collecting problems instead
     of stopping at the first, so a save reports everything wrong at once."""
 
-    def __init__(self, raw: Any, where: str):
+    def __init__(self, raw: Any, where: str, problems: list[str] | None = None):
         self.raw = raw if isinstance(raw, dict) else {}
         self.where = where
-        self.problems: list[str] = []
+        self.problems: list[str] = [] if problems is None else problems
         if not isinstance(raw, dict):
             self.problems.append(f"{where}: ساختار نامعتبر است.")
+
+    def nested(self, raw: Any, where: str) -> "_Reader":
+        """A reader for a dict inside this one (a table column, a field), whose
+        problems are reported with this element's name first."""
+        return _Reader(raw, f"{self.where} — {where}", self.problems)
 
     def fail(self, message: str) -> None:
         self.problems.append(f"{self.where}: {message}")
@@ -90,8 +95,8 @@ class _Reader:
             return default
         return int(value) if integer else float(value)
 
-    def items(self, key: str, *, label: str, max_items: int, min_items: int = 0) -> list:
-        value = self.raw.get(key, [])
+    def items(self, key: str, *, label: str, max_items: int, min_items: int = 0, default: list | None = None) -> list:
+        value = self.raw.get(key, [] if default is None else default)
         if not isinstance(value, list):
             self.fail(f"«{label}» باید فهرست باشد.")
             return []
@@ -109,6 +114,16 @@ _PERSIAN_DIGITS = str.maketrans("0123456789.", "۰۱۲۳۴۵۶۷۸۹٫")
 def _fa(number: float) -> str:
     text = f"{number:g}"
     return text.translate(_PERSIAN_DIGITS)
+
+
+#: Widths are percentages of the row; they must add up to 100 (± this).
+WIDTH_TOLERANCE = 0.5
+
+
+def _widths(reader: _Reader, widths: list[float], *, label: str) -> None:
+    """Checks one row's widths add up to the whole row."""
+    if widths and abs(sum(widths) - 100) > WIDTH_TOLERANCE:
+        reader.fail(f"مجموع پهنای {label} باید ۱۰۰ درصد باشد (اکنون {_fa(round(sum(widths), 1))}).")
 
 
 # --------------------------------------------------------------------------
@@ -155,6 +170,78 @@ def _page_break(r: _Reader) -> dict:
     return {}
 
 
+#: What the blank after a field's label looks like on paper.
+FIELD_TYPES = ("text", "date", "national_code", "phone", "checkbox")
+MAX_FIELD_ROWS = 40
+MAX_FIELDS_PER_ROW = 6
+MIN_WIDTH = 5
+
+
+def _fields(r: _Reader) -> dict:
+    """A grid of labelled blanks — «نام: ________  نام خانوادگی: ________»."""
+    default_rows = [
+        {"cells": [{"label": "نام", "width": 50}, {"label": "نام خانوادگی", "width": 50}]},
+    ]
+    rows = []
+    for row_number, raw_row in enumerate(
+        r.items("rows", label="ردیف‌ها", max_items=MAX_FIELD_ROWS, min_items=1, default=default_rows), start=1
+    ):
+        row = r.nested(raw_row, f"ردیف {_fa(row_number)}")
+        cells = []
+        for cell_number, raw_cell in enumerate(
+            row.items("cells", label="خانه‌ها", max_items=MAX_FIELDS_PER_ROW, min_items=1), start=1
+        ):
+            cell = row.nested(raw_cell, f"خانه {_fa(cell_number)}")
+            cells.append(
+                {
+                    "label": cell.text("label", label="برچسب"),
+                    "type": cell.choice("type", FIELD_TYPES, label="نوع خانه"),
+                    "width": cell.number("width", label="پهنا", low=MIN_WIDTH, high=100, default=100),
+                }
+            )
+        _widths(row, [c["width"] for c in cells], label="خانه‌های این ردیف")
+        rows.append({"cells": cells})
+    return {
+        "rows": rows,
+        "blank": r.choice("blank", ("underline", "dotted", "box"), label="شکل جای خالی"),
+        "row_height": r.number("row_height", label="ارتفاع ردیف", low=6, high=20, default=9),
+        "photo": r.boolean("photo"),
+    }
+
+
+def _answer_box(r: _Reader) -> dict:
+    """Room for a written answer: ruled lines, or an empty frame of a height."""
+    return {
+        "label": r.text("label", label="عنوان"),
+        "lines": r.number("lines", label="تعداد خط", low=0, high=25, default=4, integer=True),
+        "height": r.number("height", label="ارتفاع کادر", low=10, high=200, default=30),
+        "line_style": r.choice("line_style", ("dotted", "solid"), label="نوع خط"),
+        "framed": r.boolean("framed", default=True),
+    }
+
+
+def _signatures(r: _Reader) -> dict:
+    """A row of signature boxes, and optionally a box for the stamp (مهر)."""
+    default_boxes = [{"caption": "امضای تکمیل‌کننده"}]
+    boxes = []
+    for number, raw_box in enumerate(
+        r.items("boxes", label="کادرهای امضا", max_items=4, min_items=1, default=default_boxes), start=1
+    ):
+        box = r.nested(raw_box, f"کادر {_fa(number)}")
+        boxes.append(
+            {
+                "caption": box.text("caption", label="عنوان کادر"),
+                "name_line": box.boolean("name_line", default=True),
+                "date_line": box.boolean("date_line", default=True),
+            }
+        )
+    return {
+        "boxes": boxes,
+        "stamp": r.boolean("stamp"),
+        "height": r.number("height", label="ارتفاع کادر", low=15, high=60, default=28),
+    }
+
+
 #: kind → (Persian name, cleaner). The Persian name is how errors refer to it.
 ELEMENTS: dict[str, tuple[str, Callable[[_Reader], dict]]] = {
     "heading": ("عنوان بخش", _heading),
@@ -162,6 +249,9 @@ ELEMENTS: dict[str, tuple[str, Callable[[_Reader], dict]]] = {
     "divider": ("خط جداکننده", _divider),
     "spacer": ("فاصله", _spacer),
     "page_break": ("شکست صفحه", _page_break),
+    "fields": ("فیلدها", _fields),
+    "answer_box": ("کادر پاسخ", _answer_box),
+    "signatures": ("امضا", _signatures),
 }
 
 

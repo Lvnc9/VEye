@@ -5,11 +5,14 @@ import {
   MAX_ELEMENTS,
   defaultSettings,
   dropIndex,
+  evenWidths,
   fromResponse,
   headingNumbers,
   insertAfter,
+  moveBoundary,
   moveElement,
   newElement,
+  setWidth,
   snapshot,
   toPayload,
   validate,
@@ -161,5 +164,48 @@ describe("headingNumbers", () => {
       null,
       "3. ",
     ]);
+  });
+});
+
+describe("widths", () => {
+  const sum = (widths: number[]) => Math.round(widths.reduce((a, b) => a + b, 0) * 10) / 10;
+
+  it("evens a row out to exactly 100", () => {
+    for (const n of [1, 2, 3, 6, 7]) expect(sum(evenWidths(n))).toBe(100);
+    expect(evenWidths(3)).toEqual([33.3, 33.3, 33.4]);
+    expect(evenWidths(0)).toEqual([]);
+  });
+
+  it("moves a border without changing the total", () => {
+    expect(moveBoundary([50, 50], 0, 10, 5)).toEqual([60, 40]);
+    expect(moveBoundary([50, 50], 0, -10, 5)).toEqual([40, 60]);
+    expect(moveBoundary([20, 30, 50], 1, 5, 5)).toEqual([20, 35, 45]);
+  });
+
+  it("never squeezes a cell below the minimum", () => {
+    expect(moveBoundary([50, 50], 0, 60, 5)).toEqual([95, 5]);
+    expect(moveBoundary([50, 50], 0, -60, 5)).toEqual([5, 95]);
+  });
+
+  it("ignores a border that does not exist", () => {
+    const widths = [50, 50];
+    expect(moveBoundary(widths, 1, 5, 5)).toBe(widths);
+    expect(moveBoundary(widths, -1, 5, 5)).toBe(widths);
+  });
+
+  it("sets one width, taking the difference from the next cell (or the previous for the last)", () => {
+    expect(setWidth([25, 25, 50], 0, 40, 5)).toEqual([40, 10, 50]);
+    expect(setWidth([25, 25, 50], 2, 60, 5)).toEqual([25, 15, 60]);
+    expect(setWidth([100], 0, 50, 5)).toEqual([100]);
+    expect(sum(setWidth([33.3, 33.3, 33.4], 1, 50, 5))).toBe(100);
+  });
+
+  it("validate reports a row that does not add up", () => {
+    const state = fromResponse(response([]));
+    const fields = newElement("fields");
+    if (fields.kind !== "fields") throw new Error("unreachable");
+    expect(validate({ ...state, elements: [fields] })).toEqual([]);
+    const broken = { ...fields, rows: [{ cells: [{ ...fields.rows[0].cells[0], width: 30 }] }] };
+    expect(validate({ ...state, elements: [broken] })).toHaveLength(1);
   });
 });
