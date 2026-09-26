@@ -37,6 +37,12 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   can_edit}` or `null`) and `update_count` per assignee, plus a top-level `can_post_update` — all computed with
   correlated subqueries (`queries.with_latest_update`), so a whole objective list costs no query per row. Tests:
   **+18 → 933**.
+- **Every کارفرمایی account edits every project (owner, 2026-09-26)**: the مدیر عامل and the other کارفرمایی
+  levels (رئیس/عضو هیئت مدیره) now pass `projects.access.can_manage_project` with no lead membership — edit,
+  archive, members and objectives. Previously they could only *read* every project (through
+  `manage_organization`) and edited only as a lead of the company root. Checked on the roll, not as a new
+  capability, so the per-roll capability sets are unchanged; the developer (صفی/لول ۳) never gets it. Creating
+  meetings still needs the project's MANAGER role (ADR-010).
 
 ### Phase 10 — A3 · projects frontend (objective tree, timeline, meetings table, drafts)
 - _(A3: add lines under this heading only)_

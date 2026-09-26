@@ -539,18 +539,21 @@ class ProjectEditApiTests(ProjectApiCase):
         self.assertEqual(denied.data["detail"], "شما مدیر این پروژه نیستید.")
         self.assertNotEqual(Project.objects.get().goal, "هک")
 
-    def test_manage_organization_reads_everything_but_edits_only_as_a_lead_or_manager(self):
-        """Plan §5.3: read = member, lead of an ancestor, or manage_organization; edit = the project's
-        manager or a lead of its بخش (or an ancestor). Bootstrap makes the مدیر عامل lead of the company
-        root, which is how they edit everything in a real deployment."""
-        self.as_(self.ceo)
-        self.assertEqual(self.client.get(self.detail_url(self.project)).status_code, 200)
-        self.assertEqual(self.client.patch(self.detail_url(self.project), {"goal": "x"}, format="json").status_code, 403)
-        join(self.ceo, self.root, is_lead=True)  # what bootstrap does
-        self.assertEqual(self.client.patch(self.detail_url(self.project), {"goal": "y"}, format="json").status_code, 200)
+    def test_every_employer_account_edits_every_project_without_a_lead_membership(self):
+        """Owner, 2026-09-26: the مدیر عامل and every other کارفرمایی level edit any project, with no
+        membership anywhere. A ستادی outside the project still cannot even see it."""
+        board = person("9800000030", "عضو هیئت مدیره", roll=AccessRoll.EMPLOYER, level=AccessLevel.LEVEL_3)
+        for user in (self.ceo, board):
+            self.as_(user)
+            with self.subTest(user=user.full_name):
+                self.assertEqual(self.client.patch(self.detail_url(self.project), {"goal": f"توسط {user.pk}"}, format="json").status_code, 200)
+                self.assertEqual(self.client.post(reverse("project-archive", args=[self.project.pk])).status_code, 200)
+                self.assertEqual(self.client.post(reverse("project-unarchive", args=[self.project.pk])).status_code, 200)
+        self.as_(self.hq)
+        self.assertEqual(self.client.patch(self.detail_url(self.project), {"goal": "x"}, format="json").status_code, 404)
 
     def test_the_can_edit_flag_is_the_same_answer(self):
-        for user, expected in ((self.mgr, True), (self.member, False), (self.lead_d1, True), (self.ceo, False)):
+        for user, expected in ((self.mgr, True), (self.member, False), (self.lead_d1, True), (self.ceo, True)):
             self.as_(user)
             self.assertEqual(self.client.get(self.detail_url(self.project)).data["can_edit"], expected, user.full_name)
 
@@ -1004,8 +1007,8 @@ class ObjectiveApiTests(ProjectApiCase):
         self.as_(self.outsider)
         self.assertEqual(self.client.get(self.list_url).status_code, 404)
 
-    def test_only_the_manager_or_a_lead_may_create_an_objective(self):
-        for user in (self.mgr, self.lead_s1, self.lead_d1):
+    def test_only_the_manager_a_lead_or_an_employer_may_create_an_objective(self):
+        for user in (self.mgr, self.lead_s1, self.lead_d1, self.ceo):
             self.as_(user)
             with self.subTest(user=user.full_name):
                 self.assertEqual(self.post(title=f"از {user.pk}").status_code, 201)

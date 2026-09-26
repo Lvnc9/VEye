@@ -2,7 +2,7 @@
 
   Create a project      `create_project`, or lead of the target بخش (or an ancestor)
   Read a project        a ProjectMember, or lead of its بخش (or an ancestor), or `manage_organization`
-  Edit / manage         its مدیر پروژه, or lead of its بخش (or an ancestor)
+  Edit / manage         its مدیر پروژه, or lead of its بخش (or an ancestor), or any کارفرمایی account
 
 Reading is decided by **queryset scoping** (`visible_projects`), so an invisible project is a 404
 and no list route can forget the rule; `can_manage` is for writes on a project that is already
@@ -12,7 +12,7 @@ visible, so the 403 can say why. The org half (leads, capabilities) comes from
 from django.db.models import OuterRef, Q, Subquery
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
-from apps.accounts.models import Capability
+from apps.accounts.models import AccessRoll, Capability
 from apps.organization.access import access_for
 
 from .models import Project, ProjectMember, ProjectRole
@@ -37,7 +37,13 @@ def can_create_project(request, section) -> bool:
 
 
 def can_manage_project(request, project) -> bool:
-    """`project` must come from `visible_projects` (it needs `my_role` and `section`)."""
+    """`project` must come from `visible_projects` (it needs `my_role` and `section`).
+
+    Every کارفرمایی account — the مدیر عامل and the board, all levels — may edit every project, without
+    needing a lead membership (owner, 2026-09-26). Checked on the roll rather than as a new capability,
+    so the per-roll capability sets stay untouched. The developer account is صفی/لول ۳ and never gets it."""
+    if request.user.access_roll == AccessRoll.EMPLOYER:
+        return True
     return project.my_role == ProjectRole.MANAGER or access_for(request).leads(project.section)
 
 
