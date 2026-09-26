@@ -39,6 +39,15 @@ export interface Conversation {
   created_at: string;
 }
 
+/** A file on a message (Phase 10 §E). Downloaded only through the API, never a public media URL. */
+export interface ChatAttachment {
+  id: number;
+  name: string;
+  kind: "PICTURE" | "DOCUMENT" | "VIDEO";
+  size: number;
+  download_url: string;
+}
+
 export interface ChatMessage {
   id: number;
   conversation: number;
@@ -50,6 +59,8 @@ export interface ChatMessage {
   is_deleted: boolean;
   is_mine: boolean;
   can_delete: boolean;
+  /** Empty for a tombstone. */
+  attachments: ChatAttachment[];
   created_at: string;
 }
 
@@ -121,9 +132,64 @@ export function readOnlyReason(conversation: Conversation): string | null {
   return "این گره بایگانی شده است؛ گفتگو فقط‌خواندنی است.";
 }
 
-export function canSend(body: string): boolean {
+/** A message may be text, files, or both — never neither, and never text over the limit. */
+export function canSend(body: string, fileCount = 0): boolean {
   const text = body.trim();
-  return text.length > 0 && text.length <= MESSAGE_MAX_LENGTH;
+  if (text.length > MESSAGE_MAX_LENGTH) return false;
+  return text.length > 0 || (fileCount > 0 && fileCount <= ATTACHMENT_MAX_FILES);
+}
+
+// ---------------------------------------------------------------------------
+// Attachments (Phase 10 §E). Mirrors of the server's limits, for an early Persian message only —
+// the server re-checks everything (CHAT_ATTACHMENT_MAX_FILES / _MAX_BYTES, core FILE_EXTENSIONS).
+// ---------------------------------------------------------------------------
+
+export const ATTACHMENT_MAX_FILES = 5;
+export const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+export const ATTACHMENT_EXTENSIONS: readonly string[] = [
+  ...["png", "jpg", "jpeg", "gif", "webp"],
+  ...["docx", "pptx", "xlsx", "xlsm", "xlsb", "xls", "xltx", "pdf", "txt", "csv"],
+  ...["mp4", "mov", "webm"],
+];
+/** For the file input's `accept`: only filters the picker. */
+export const ATTACHMENT_ACCEPT = ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`).join(",");
+
+export const ATTACHMENT_KIND_LABEL: Record<ChatAttachment["kind"], string> = {
+  PICTURE: "تصویر",
+  DOCUMENT: "فایل",
+  VIDEO: "ویدیو",
+};
+
+function extensionOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
+}
+
+/**
+ * Add picked files to the ones already chosen. Returns what is kept and one Persian line per file
+ * refused (bad type, empty, too big, or past the per-message count), in pick order — so the first
+ * ones picked win.
+ */
+export function addAttachments<T extends { name: string; size: number }>(
+  current: T[],
+  picked: T[],
+): { files: T[]; errors: string[] } {
+  const files = [...current];
+  const errors: string[] = [];
+  for (const file of picked) {
+    if (!ATTACHMENT_EXTENSIONS.includes(extensionOf(file.name))) {
+      errors.push(`${file.name}: این نوع فایل مجاز نیست.`);
+    } else if (file.size === 0) {
+      errors.push(`${file.name}: فایل خالی است.`);
+    } else if (file.size > ATTACHMENT_MAX_BYTES) {
+      errors.push(`${file.name}: حجم فایل نباید بیش از ۲۰ مگابایت باشد.`);
+    } else if (files.length >= ATTACHMENT_MAX_FILES) {
+      errors.push(`${file.name}: حداکثر ${ATTACHMENT_MAX_FILES} فایل در هر پیام مجاز است.`);
+    } else {
+      files.push(file);
+    }
+  }
+  return { files, errors };
 }
 
 /** Should the read mark move? Only forward, and only when there is something newer than it. */
