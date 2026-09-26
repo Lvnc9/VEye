@@ -32,6 +32,18 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   its own flat `<select>`. Pure cascade logic in `lib/personnel-org.ts` (`placementOptions` /
   `resolvePlacement`). Tests: +6 backend (`apps.accounts` 41), +23 frontend (`personnel-org.test.ts`, replacing
   7 old ones — 188 total).
+- **کارتابل messages carry files — backend (ADR-010 §E).** New `MessageAttachment(message CASCADE, file →
+  `chat_files/<conversation>/<uuid><ext>`, original_name, kind, size, sha256)` (migration `chat/0002`). `POST
+  …/conversations/{id}/messages/` takes JSON as before or multipart `body` + `files` — at most 5 files of 20 MB each
+  (`CHAT_ATTACHMENT_MAX_FILES` / `CHAT_ATTACHMENT_MAX_BYTES`), the designer's extensions; a message may be files
+  only. Every file is validated before any byte is written, and a failure partway deletes the files already
+  written. Sends that carry files have their own limit (`CHAT_ATTACHMENT_RATELIMIT_RATE`, 20/min) on top of the
+  60/min message limit. Files download only through `GET …/messages/{mid}/attachments/{aid}/` (a participant;
+  404 for an outsider, a tombstoned message or a foreign attachment); deleting a message deletes its attachment
+  rows and, once committed, their bytes. A file-only message previews in the list as «📎 <name>».
+  `documents.files.inspect_upload` gained `max_bytes`/`field` keyword arguments (documents unchanged). Opening a
+  DM with the developer account is a Persian 400. Tests: +19 → 928; the tombstone file deletion and the
+  attachment rate limit were each mutation-checked.
 
 ### Phase 10 — foundation (on main before the parallel work)
 - **The developer account exists as a kind of user** (Phase 10, ADR-010, decided with the owner 2026-09-25 — the setup flow that creates it is Phase 10 A1). `User.is_developer` (migration `accounts/0003`) marks the one technical account that runs first-time setup; a partial unique constraint (`uniq_developer_account`) allows **at most one**. Its capabilities are exactly `manage_organization`, `manage_membership` and `manage_personnel` — **no document capability (it can never sign) and no project capability**, even if its stored roll/level were the مدیر عامل's; it is deliberately not `is_superuser`, which grants everything. Its `title` is «توسعه‌دهنده», so activity/chat snapshots never call it مدیر عامل. `/auth/me/` and the personnel API expose `is_developer` read-only (it cannot be set through the API). **Only the developer may change or delete the developer account**: anyone else — a مدیر عامل included — gets a Persian 403 before validation, so the technical account cannot be locked out by a password reset or deactivation. Tests: +10 (accounts 35), both rules mutation-checked.
