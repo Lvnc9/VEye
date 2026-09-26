@@ -128,10 +128,11 @@ export function ObjectiveEditDialog({
           </div>
           <div>
             <label className={label} htmlFor="edit-objective-weight">
-              وزن (۱ تا ۱۰۰)
+              وزن
             </label>
             <input
               id="edit-objective-weight"
+              aria-describedby="edit-objective-weight-hint"
               type="number"
               min={1}
               max={100}
@@ -140,6 +141,9 @@ export function ObjectiveEditDialog({
               className={input}
             />
           </div>
+          <p id="edit-objective-weight-hint" className="col-span-2 -mt-2 text-xs text-slate-500">
+            وزن: سهم این ریز هدف در درصد پیشرفت پروژه (۱ تا ۱۰۰). اگر همه ۱ بمانند، همه هم‌ارزش‌اند.
+          </p>
         </div>
 
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">

@@ -55,6 +55,9 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   its دیرکرد dates (`formatJalali(from_status)` ← `formatJalali(to_status)` — that kind overloads those two
   fields with raw ISO dates rather than a status enum, so it never had `..._label`s to show). Tests: +6 in
   `lib/projects.test.ts`, +4 in the new `lib/local-draft.test.ts` (195 total).
+- **A one-line hint under «وزن»** in the inline «افزودن ریز هدف» form and in the objective edit dialog: the
+  weight is this objective's share of the project's progress percentage (1–100; all 1 = all equal). Linked
+  with `aria-describedby`. Owner request, 2026-09-26.
 
 ### Phase 10 — A4 · personnel placement and کارتابل attachments
 - _(A4: add lines under this heading only)_

@@ -587,6 +587,7 @@ function AddObjectiveForm({
           </label>
           <input
             id="new-objective-weight"
+            aria-describedby="new-objective-weight-hint"
             type="number"
             min={1}
             max={100}
@@ -596,6 +597,9 @@ function AddObjectiveForm({
           />
         </div>
       </div>
+      <p id="new-objective-weight-hint" className="text-xs text-slate-500">
+        وزن: سهم این ریز هدف در درصد پیشرفت پروژه (۱ تا ۱۰۰). اگر همه ۱ بمانند، همه هم‌ارزش‌اند.
+      </p>
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
           انصراف
