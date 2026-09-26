@@ -8,10 +8,11 @@ the typed title happens to exist.
 from django.db import transaction
 from rest_framework.exceptions import NotFound
 
+from apps.core.constants import BodyKind, DocumentGroup
 from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_title
 
-from . import content
+from . import content, form_schema
 from .models import MAX_REVISION, Document, DocumentSequence
 
 
@@ -54,12 +55,18 @@ def create_document(*, user, category: str, title: str, group: str) -> Document:
             existing_id=existing.pk,
         )
 
+    # Phase 11 (ADR-011): a new فرم is authored in the form designer. The kind is
+    # fixed here and inherited by revisions, so older فرم documents (made before
+    # the form designer, or imported from V_1.0) keep their blocks.
+    is_form = group == DocumentGroup.FORM
     return Document.objects.create(
         category=category,
         title=title,
         group=group,
         number=number,
         revision=1,
+        body_kind=BodyKind.FORM if is_form else BodyKind.BLOCKS,
+        form_settings=form_schema.default_settings() if is_form else {},
         created_by=user,
     )
 
@@ -106,6 +113,7 @@ def create_revision(*, user, document_id: int) -> Document:
         number=previous.number,
         revision=previous.revision + 1,
         previous_revision=previous,
+        body_kind=previous.body_kind,
         created_by=user,
     )
     # V_1.0 opened a blank designer for every revision, so authors retyped the

@@ -8,6 +8,7 @@ from django.db.models import CheckConstraint, Index, Q, UniqueConstraint
 from apps.core.constants import (
     GROUP_CODE_PREFIX,
     REGISTER_COLUMN_ROLE,
+    BodyKind,
     DocumentCategory,
     DocumentEventKind,
     DocumentGroup,
@@ -126,6 +127,12 @@ class Document(TimeStampedModel):
     logo = models.ImageField(upload_to=logo_upload_to, blank=True)
     footnote1 = models.CharField(max_length=255, blank=True)
     footnote2 = models.CharField(max_length=255, blank=True)
+
+    # Phase 11 (ADR-011): which designer and which PDF layout the body uses, and
+    # the form's page settings (orientation, font size, header options) — see
+    # apps/documents/form_schema.py. `form_settings` is empty for a BLOCKS body.
+    body_kind = models.CharField(max_length=8, choices=BodyKind.choices, default=BodyKind.BLOCKS)
+    form_settings = models.JSONField(default=dict, blank=True)
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_documents"

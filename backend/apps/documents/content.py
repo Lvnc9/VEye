@@ -12,7 +12,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, ValidationError
 
-from apps.core.constants import RESPONSIBILITY_ROLE_ORDER, SectionType
+from apps.core.constants import RESPONSIBILITY_ROLE_ORDER, BodyKind, SectionType
 from apps.core.exceptions import ConflictError
 
 from .files import inspect_upload, normalize_logo
@@ -55,6 +55,8 @@ def _delete_storage_on_commit(field_file) -> None:
 
 def _section_content(item: dict) -> dict:
     kind = item["type"]
+    if kind == SectionType.FORM_ELEMENT:
+        return item["element"]
     if kind == SectionType.SHORT_EXPLANATION:
         return {"lines": item["lines"]}
     if kind == SectionType.LONG_EXPLANATION:
@@ -192,9 +194,13 @@ def save_content(*, user, document_id: int, data: dict) -> Document:
 
     document.footnote1 = data["footnote1"]
     document.footnote2 = data["footnote2"]
+    fields = ["footnote1", "footnote2", "content_version", "content_saved_at", "updated_at"]
+    if document.body_kind == BodyKind.FORM:
+        document.form_settings = data["form_settings"]
+        fields.append("form_settings")
     document.content_version += 1
     document.content_saved_at = timezone.now()
-    document.save(update_fields=["footnote1", "footnote2", "content_version", "content_saved_at", "updated_at"])
+    document.save(update_fields=fields)
 
     # Files nobody references any more (removed from their block, or uploaded and
     # then abandoned) are deleted with the save that orphaned them.
@@ -275,7 +281,7 @@ def _copy_stored_file(source_field, target_field, name: str) -> None:
 def copy_content(source: Document, target: Document) -> None:
     """Start `target` (a fresh draft revision) as a copy of `source`'s body.
 
-    Copied: footnotes, logo, uploaded files (physically — a shared file would be
+    Copied: footnotes, form settings, logo, uploaded files (physically — a shared file would be
     deleted out from under one revision by an edit to the other), every section,
     responsibilities, and attachment references.
 
@@ -286,9 +292,10 @@ def copy_content(source: Document, target: Document) -> None:
     changes.
     """
     target.footnote1, target.footnote2 = source.footnote1, source.footnote2
+    target.form_settings = source.form_settings
     if source.logo:
         _copy_stored_file(source.logo, target.logo, "logo.png")
-    target.save(update_fields=["footnote1", "footnote2", "logo", "updated_at"])
+    target.save(update_fields=["footnote1", "footnote2", "form_settings", "logo", "updated_at"])
 
     file_map = {}
     for old in source.files.all():

@@ -158,7 +158,7 @@ class ContentRoundTripTests(DesignerTestCase):
         self.assertEqual(data["document"]["full_code"], "PR-01-01")
 
     def test_every_block_type_round_trips(self):
-        other = new_doc(self.author, "مستند مرجع", DocumentGroup.FORM)
+        other = new_doc(self.author, "مستند مرجع", DocumentGroup.INSTRUCTION)
         saved = self.save(
             [
                 short("1-هدف", "", "متن سوم"),
@@ -191,7 +191,7 @@ class ContentRoundTripTests(DesignerTestCase):
         self.assertEqual(saved["sections"][3]["rows"][0]["text"], "اصلاح بند ۳")
         item = saved["sections"][4]["items"][0]
         self.assertEqual(item["caption"], "فرم درخواست")
-        self.assertEqual(item["document"]["full_code"], "FR-01-01")
+        self.assertEqual(item["document"]["full_code"], "WI-01-01")
 
         # And a fresh GET returns exactly what the save returned.
         self.assertEqual(self.get_content()["sections"], saved["sections"])
@@ -291,7 +291,7 @@ class ValidationTests(DesignerTestCase):
         self.assertRejected([changes("  ")], "عنوان تغییر را وارد کنید")
 
     def test_an_attachment_needs_a_caption_and_a_target(self):
-        other = new_doc(self.author, "هدف", DocumentGroup.FORM)
+        other = new_doc(self.author, "هدف", DocumentGroup.INSTRUCTION)
         self.assertRejected([attach(("", other.pk))], "عنوان ضمیمه را بنویسید")
         self.assertRejected(
             [{"type": ATTACH, "items": [{"caption": "بدون هدف"}]}], "مستند ضمیمه را انتخاب کنید"
@@ -379,7 +379,7 @@ class ChangeTableTests(DesignerTestCase):
         self.assertEqual(rows[1]["date"], timezone.localdate())
 
     def test_a_row_id_from_elsewhere_is_treated_as_new(self):
-        other = new_doc(self.author, "سند دیگر", DocumentGroup.FORM)
+        other = new_doc(self.author, "سند دیگر", DocumentGroup.INSTRUCTION)
         self.save([changes("مال دیگری")], doc=other)
         foreign = ChangeTableRow.objects.get()
         ChangeTableRow.objects.filter(pk=foreign.pk).update(date=date(2001, 1, 1))
@@ -422,7 +422,7 @@ class ChangeTableTests(DesignerTestCase):
         self.assertEqual(texts, ["تغییر 1", "تغییر 2", "تغییر 3", "تغییر 4"])
 
     def test_history_does_not_leak_between_documents(self):
-        other = new_doc(self.author, "سند دیگر", DocumentGroup.FORM)
+        other = new_doc(self.author, "سند دیگر", DocumentGroup.INSTRUCTION)
         self.save([changes("مال دیگری")], doc=other)
         finalize(other)
         services.create_revision(user=self.author, document_id=other.pk)
@@ -440,8 +440,8 @@ class AttachmentTests(DesignerTestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_attachments_can_be_added_and_removed(self):
-        a = new_doc(self.author, "الف", DocumentGroup.FORM)
-        b = new_doc(self.author, "ب", DocumentGroup.FORM)
+        a = new_doc(self.author, "الف", DocumentGroup.INSTRUCTION)
+        b = new_doc(self.author, "ب", DocumentGroup.INSTRUCTION)
         first = self.save([attach(("اولی", a.pk), ("دومی", b.pk))])
         self.assertEqual([i["document"]["id"] for i in first["sections"][0]["items"]], [a.pk, b.pk])
 
@@ -450,13 +450,13 @@ class AttachmentTests(DesignerTestCase):
         self.assertEqual(AttachmentReference.objects.count(), 1, "V_1.0 could never remove a linked row")
 
     def test_a_referenced_document_cannot_be_deleted(self):
-        target = new_doc(self.author, "هدف", DocumentGroup.FORM)
+        target = new_doc(self.author, "هدف", DocumentGroup.INSTRUCTION)
         self.save([attach(("ضمیمه", target.pk))])
         with self.assertRaises(ProtectedError):
             target.delete()
 
     def test_the_payload_reports_the_targets_live_status(self):
-        target = new_doc(self.author, "هدف", DocumentGroup.FORM)
+        target = new_doc(self.author, "هدف", DocumentGroup.INSTRUCTION)
         self.save([attach(("ضمیمه", target.pk))])
         finalize(target, DocumentStatus.OBSOLETE)
         item = self.get_content()["sections"][0]["items"][0]
@@ -522,7 +522,7 @@ class FileTests(DesignerTestCase):
         self.assertEqual(contents, {b"version one", b"version two"})
 
     def test_files_belong_to_one_document(self):
-        other = new_doc(self.author, "دیگری", DocumentGroup.FORM)
+        other = new_doc(self.author, "دیگری", DocumentGroup.INSTRUCTION)
         mine = self.upload_file("a.pdf", b"shared bytes")
         theirs = self.upload_file("a.pdf", b"shared bytes", doc=other)
         self.assertEqual(theirs.status_code, 201, "the same bytes in another document are a separate file")
@@ -548,7 +548,7 @@ class FileTests(DesignerTestCase):
         self.assertEqual(files[0]["name"], "a.pdf")
 
     def test_a_file_from_another_document_cannot_be_attached(self):
-        other = new_doc(self.author, "دیگری", DocumentGroup.FORM)
+        other = new_doc(self.author, "دیگری", DocumentGroup.INSTRUCTION)
         foreign = self.upload_file("a.pdf", b"theirs", doc=other).data["id"]
         response = self.put([long_block("ع", "ب", file_ids=[foreign])])
         self.assertEqual(response.status_code, 400)
@@ -723,7 +723,7 @@ class RegisterColumnTests(DesignerTestCase):
 
     def test_the_register_does_not_query_per_row(self):
         for i in range(8):
-            doc = new_doc(self.author, f"سند {i}", DocumentGroup.FORM)
+            doc = new_doc(self.author, f"سند {i}", DocumentGroup.INSTRUCTION)
             self.save([resp({ResponsibilityRole.RESPONDER: {"post": f"پست {i}"}})], doc=doc)
         # count + page + sign-offs + responsibility sections + their rows
         with self.assertNumQueries(5):
@@ -731,7 +731,7 @@ class RegisterColumnTests(DesignerTestCase):
         self.assertEqual(sum(1 for r in rows if r["responsibilities"]["responder"]), 8)
 
     def test_can_edit_flag(self):
-        finished = finalize(new_doc(self.author, "تمام‌شده", DocumentGroup.FORM))
+        finished = finalize(new_doc(self.author, "تمام‌شده", DocumentGroup.INSTRUCTION))
         rows = {r["id"]: r for r in self.client.get(reverse("document-list")).data["results"]}
         self.assertTrue(rows[self.doc.pk]["can_edit"])
         self.assertFalse(rows[finished.pk]["can_edit"])
@@ -739,7 +739,7 @@ class RegisterColumnTests(DesignerTestCase):
 
 class CopyForwardTests(DesignerTestCase):
     def build_finished_document(self):
-        target = new_doc(self.author, "مرجع", DocumentGroup.FORM)
+        target = new_doc(self.author, "مرجع", DocumentGroup.INSTRUCTION)
         self.client.post(
             self.url("logo"), {"logo": upload("l.png", png_bytes())}, format="multipart"
         )

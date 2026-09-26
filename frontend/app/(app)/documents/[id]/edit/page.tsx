@@ -6,6 +6,7 @@ import { ApiError, apiGet } from "@/lib/api-client";
 import type { ContentResponse } from "@/lib/types";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { ClassicDesigner } from "@/components/designer/ClassicDesigner";
+import { FormDesigner } from "@/components/form-designer/FormDesigner";
 
 /** طراحی مستند: loads the body once, then hands it to the editor for its kind. */
 export default function DocumentDesignerPage() {
@@ -31,5 +32,8 @@ export default function DocumentDesignerPage() {
 
   if (loadError) return <ErrorBanner message={loadError} />;
   if (!initial) return <LoadingBanner />;
+  // A فرم made in Phase 11 or later has a form body; everything else (and older
+  // فرم documents) the classic blocks.
+  if (initial.body_kind === "form") return <FormDesigner key={initial.document.id} initial={initial} />;
   return <ClassicDesigner key={initial.document.id} initial={initial} />;
 }

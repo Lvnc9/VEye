@@ -113,6 +113,22 @@ class SectionType(models.TextChoices):
     RESPONSIBILITIES = "Responsibilities", "مسئولیت ها"
     CHANGES_TABLE = "Changes Table", "جدول تغییرات"
     ATTACHMENT = "Attachment", "ضمائم"
+    #: Not a V_1.0 type: one element of a form body (Phase 11, ADR-011). Its
+    #: `content` says which element it is (`{"kind": "table", ...}`, see
+    #: apps/documents/form_schema.py), so new element kinds need no migration.
+    FORM_ELEMENT = "Form Element", "جزء فرم"
+
+
+class BodyKind(models.TextChoices):
+    """How a document's body is authored and printed (Phase 11, ADR-011).
+
+    BLOCKS is V_1.0's designer (the five block types) and the owner's renderer.
+    FORM is the form designer and the compact form PDF. Fixed when the document
+    is created — a فرم gets FORM — and inherited by every revision, so existing
+    and imported فرم documents keep their blocks."""
+
+    BLOCKS = "blocks", "متن"
+    FORM = "form", "فرم"
 
 
 #: The letters the PDF prints beside the four Responsibility rows

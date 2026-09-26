@@ -1,0 +1,215 @@
+"""The shape of a form body (Phase 11, ADR-011).
+
+A form body is an ordered list of `Section` rows of type FORM_ELEMENT. Each row's
+`content` is one element, `{"kind": "...", ...}`; `Document.form_settings` holds
+the page settings. This module is the single place that says what a valid
+element or settings object looks like. `clean_element` / `clean_settings` take
+what a client sent and return the normalised dict that is stored — every
+property present, defaults filled in, unknown keys dropped — or raise
+`FormSchemaError` with Persian messages.
+
+It is plain Python rather than DRF serializers because the shapes are nested
+JSON (table cells, merged ranges) and the messages must name the element's
+own words («ستون ۲»), which a serializer's error tree would have to be
+translated back into.
+
+Units: widths are percentages of the usable page width, heights are
+millimetres, line thickness is points. Text may use the designer's rich-text
+markers (**bold**, ~~italic~~, --underline--).
+"""
+from __future__ import annotations
+
+from typing import Any, Callable
+
+#: Caps. Generous for any real form; they bound what one save can make the
+#: server store and the PDF renderer draw.
+MAX_ELEMENTS = 300
+MAX_TEXT = 5000
+MAX_LABEL = 300
+
+SETTINGS_VERSION = 1
+
+
+class FormSchemaError(Exception):
+    """Invalid form input. `messages` are Persian, ready for the user."""
+
+    def __init__(self, messages: list[str]):
+        super().__init__("; ".join(messages))
+        self.messages = messages
+
+
+class _Reader:
+    """Reads typed properties out of one raw dict, collecting problems instead
+    of stopping at the first, so a save reports everything wrong at once."""
+
+    def __init__(self, raw: Any, where: str):
+        self.raw = raw if isinstance(raw, dict) else {}
+        self.where = where
+        self.problems: list[str] = []
+        if not isinstance(raw, dict):
+            self.problems.append(f"{where}: ساختار نامعتبر است.")
+
+    def fail(self, message: str) -> None:
+        self.problems.append(f"{self.where}: {message}")
+
+    def text(self, key: str, *, label: str, max_length: int = MAX_LABEL, default: str = "") -> str:
+        value = self.raw.get(key, default)
+        if value is None:
+            return default
+        if not isinstance(value, str):
+            self.fail(f"«{label}» باید متن باشد.")
+            return default
+        if len(value) > max_length:
+            self.fail(f"«{label}» نباید بیشتر از {_fa(max_length)} نویسه باشد.")
+            return value[:max_length]
+        # Stored as typed (no trimming): the author's spacing is theirs.
+        return value
+
+    def choice(self, key: str, options: tuple[str, ...], *, label: str) -> str:
+        value = self.raw.get(key, options[0])
+        if value not in options:
+            self.fail(f"مقدار «{label}» نامعتبر است.")
+            return options[0]
+        return value
+
+    def boolean(self, key: str, *, default: bool = False) -> bool:
+        value = self.raw.get(key, default)
+        return value if isinstance(value, bool) else default
+
+    def number(self, key: str, *, label: str, low: float, high: float, default: float, integer=False) -> float:
+        value = self.raw.get(key, default)
+        # bool is an int subclass; `True` is not a size.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            self.fail(f"«{label}» باید عدد باشد.")
+            return default
+        if integer and int(value) != value:
+            self.fail(f"«{label}» باید عدد صحیح باشد.")
+            return default
+        if not low <= value <= high:
+            self.fail(f"«{label}» باید بین {_fa(low)} و {_fa(high)} باشد.")
+            return default
+        return int(value) if integer else float(value)
+
+    def items(self, key: str, *, label: str, max_items: int, min_items: int = 0) -> list:
+        value = self.raw.get(key, [])
+        if not isinstance(value, list):
+            self.fail(f"«{label}» باید فهرست باشد.")
+            return []
+        if len(value) > max_items:
+            self.fail(f"«{label}» نباید بیشتر از {_fa(max_items)} مورد باشد.")
+            return value[:max_items]
+        if len(value) < min_items:
+            self.fail(f"«{label}» باید دست‌کم {_fa(min_items)} مورد داشته باشد.")
+        return value
+
+
+_PERSIAN_DIGITS = str.maketrans("0123456789.", "۰۱۲۳۴۵۶۷۸۹٫")
+
+
+def _fa(number: float) -> str:
+    text = f"{number:g}"
+    return text.translate(_PERSIAN_DIGITS)
+
+
+# --------------------------------------------------------------------------
+# Elements
+# --------------------------------------------------------------------------
+
+ALIGNMENTS = ("right", "center", "left")
+
+
+def _heading(r: _Reader) -> dict:
+    return {
+        "text": r.text("text", label="عنوان"),
+        "style": r.choice("style", ("band", "underline", "plain"), label="شکل عنوان"),
+        "level": r.number("level", label="سطح عنوان", low=1, high=3, default=1, integer=True),
+        "numbered": r.boolean("numbered"),
+        "align": r.choice("align", ("right", "center"), label="چینش"),
+    }
+
+
+def _text(r: _Reader) -> dict:
+    return {
+        "text": r.text("text", label="متن", max_length=MAX_TEXT),
+        "align": r.choice("align", ALIGNMENTS, label="چینش"),
+        # 0 = the form's base size.
+        "size": r.number("size", label="اندازه قلم", low=0, high=20, default=0, integer=True),
+        "boxed": r.boolean("boxed"),
+    }
+
+
+def _divider(r: _Reader) -> dict:
+    return {
+        "style": r.choice("style", ("solid", "dashed", "dotted", "double"), label="نوع خط"),
+        "thickness": r.number("thickness", label="ضخامت خط", low=0.25, high=3, default=0.75),
+        "space_before": r.number("space_before", label="فاصله از بالا", low=0, high=30, default=2),
+        "space_after": r.number("space_after", label="فاصله از پایین", low=0, high=30, default=2),
+    }
+
+
+def _spacer(r: _Reader) -> dict:
+    return {"height": r.number("height", label="ارتفاع فاصله", low=1, high=150, default=5)}
+
+
+def _page_break(r: _Reader) -> dict:
+    return {}
+
+
+#: kind → (Persian name, cleaner). The Persian name is how errors refer to it.
+ELEMENTS: dict[str, tuple[str, Callable[[_Reader], dict]]] = {
+    "heading": ("عنوان بخش", _heading),
+    "text": ("متن", _text),
+    "divider": ("خط جداکننده", _divider),
+    "spacer": ("فاصله", _spacer),
+    "page_break": ("شکست صفحه", _page_break),
+}
+
+
+def element_label(kind: str) -> str:
+    entry = ELEMENTS.get(kind)
+    return entry[0] if entry else "جزء ناشناخته"
+
+
+def clean_element(raw: Any, *, number: int) -> dict:
+    """The stored form of one element. `number` is its 1-based position, for messages."""
+    kind = raw.get("kind") if isinstance(raw, dict) else None
+    entry = ELEMENTS.get(kind)
+    if entry is None:
+        raise FormSchemaError([f"جزء {_fa(number)}: نوع جزء فرم نامعتبر است."])
+    name, cleaner = entry
+    reader = _Reader(raw, f"جزء {_fa(number)} ({name})")
+    cleaned = cleaner(reader)
+    if reader.problems:
+        raise FormSchemaError(reader.problems)
+    return {"kind": kind, **cleaned}
+
+
+# --------------------------------------------------------------------------
+# Page settings
+# --------------------------------------------------------------------------
+
+
+def clean_settings(raw: Any) -> dict:
+    reader = _Reader(raw if raw is not None else {}, "تنظیمات صفحه")
+    header = _Reader(reader.raw.get("header", {}), "سربرگ فرم")
+    cleaned = {
+        "v": SETTINGS_VERSION,
+        "orientation": reader.choice("orientation", ("portrait", "landscape"), label="جهت صفحه"),
+        "base_font_size": reader.number(
+            "base_font_size", label="اندازه قلم", low=8, high=14, default=10, integer=True
+        ),
+        "approval_strip": reader.boolean("approval_strip", default=True),
+        "header": {
+            "subtitle": header.text("subtitle", label="زیرعنوان سربرگ", max_length=255),
+            "show_company_name": header.boolean("show_company_name", default=True),
+            "show_letter_box": header.boolean("show_letter_box", default=False),
+        },
+    }
+    problems = reader.problems + header.problems
+    if problems:
+        raise FormSchemaError(problems)
+    return cleaned
+
+
+def default_settings() -> dict:
+    return clean_settings({})

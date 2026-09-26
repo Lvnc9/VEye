@@ -100,6 +100,8 @@ describe("fromResponse", () => {
       logo_url: null,
       footnote1: "الف",
       footnote2: "ب",
+      body_kind: "blocks",
+      form_settings: null,
       previous_changes: [],
       sections: [
         { id: 1, type: "Short Explanation", lines: ["۱-هدف", ""] },
@@ -123,6 +125,8 @@ describe("fromResponse — keys across a save", () => {
     logo_url: null,
     footnote1: "",
     footnote2: "",
+    body_kind: "blocks",
+    form_settings: null,
     previous_changes: [],
     sections: [
       { id: 10, type: "Short Explanation", lines: [""] },

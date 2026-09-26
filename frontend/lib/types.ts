@@ -494,6 +494,11 @@ export interface ContentResponse {
   logo_url: string | null;
   footnote1: string;
   footnote2: string;
+  /** "form": a فرم authored in the form designer (Phase 11); its `sections`
+   *  are form elements (lib/form-designer.ts), not the five block types. */
+  body_kind: "blocks" | "form";
+  /** The form's page settings; null for a block body. */
+  form_settings: import("./form-designer").FormSettings | null;
   sections: ServerSection[];
   previous_changes: PreviousChange[];
 }

@@ -6,7 +6,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from django.db import OperationalError
 from django.utils import timezone
 
-from . import adapter, provider, storage
+from . import render, storage
 from .models import PdfBuild, PdfKind, PdfStatus
 
 logger = logging.getLogger("veye")
@@ -37,8 +37,7 @@ def build_pdf(self, build_id: int, token: str) -> str:
         return "skipped"
 
     try:
-        data = adapter.load(build.document_id)
-        pdf = provider.deliver_to_pdf(data, preview=build.kind == PdfKind.PREVIEW)
+        pdf = render.render(build.document_id, preview=build.kind == PdfKind.PREVIEW)
         relative = storage.relative_path(build.document, build.kind)
         storage.write_atomic(relative, pdf)
     except SoftTimeLimitExceeded:

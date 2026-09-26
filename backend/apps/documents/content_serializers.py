@@ -9,10 +9,12 @@ from rest_framework import serializers
 
 from apps.core.constants import (
     RESPONSIBILITY_ROLE_ORDER,
+    BodyKind,
     ResponsibilityRole,
     SectionType,
 )
 
+from . import form_schema
 from .serializers import DocumentDetailSerializer
 
 MAX_SECTIONS = 100
@@ -147,16 +149,31 @@ def _describe(path) -> str:
 
 
 class ContentInputSerializer(serializers.Serializer):
-    """The body of a `PUT /documents/{id}/content/` request."""
+    """The body of a `PUT /documents/{id}/content/` request.
+
+    Needs the document in its context: a form body (Phase 11) takes only form
+    elements plus `form_settings`, a block body only the five block types."""
 
     base_version = serializers.IntegerField(min_value=0)
     footnote1 = serializers.CharField(allow_blank=True, max_length=255, required=False, default="")
     footnote2 = serializers.CharField(allow_blank=True, max_length=255, required=False, default="")
     sections = serializers.ListField(
-        child=serializers.DictField(), allow_empty=True, max_length=MAX_SECTIONS
+        child=serializers.DictField(), allow_empty=True, max_length=form_schema.MAX_ELEMENTS
     )
+    form_settings = serializers.JSONField(required=False, default=dict)
+
+    @property
+    def _is_form(self) -> bool:
+        return self.context["document"].body_kind == BodyKind.FORM
 
     def validate_sections(self, raw_sections):
+        if self._is_form:
+            return self._validate_form_elements(raw_sections)
+        if len(raw_sections) > MAX_SECTIONS:
+            raise serializers.ValidationError([f"یک مستند نمی‌تواند بیش از {MAX_SECTIONS} بخش داشته باشد."])
+        if any(raw.get("type") == SectionType.FORM_ELEMENT for raw in raw_sections):
+            raise serializers.ValidationError(["اجزای فرم فقط در مستندهای فرم مجاز است."])
+
         validated, messages = [], []
 
         for index, raw in enumerate(raw_sections):
@@ -187,10 +204,43 @@ class ContentInputSerializer(serializers.Serializer):
                     [f"در هر مستند فقط یک بخش «{SectionType(singleton).label}» مجاز است."]
                 )
 
-        ids = [s["id"] for s in validated if s.get("id")]
-        if len(ids) != len(set(ids)):
-            raise serializers.ValidationError(["شناسه بخش‌ها تکراری است."])
+        _check_unique_ids(validated)
         return validated
+
+    def _validate_form_elements(self, raw_sections):
+        validated, messages = [], []
+        for index, raw in enumerate(raw_sections):
+            if raw.get("type") != SectionType.FORM_ELEMENT:
+                messages.append(f"بخش {index + 1}: این مستند فرم است؛ فقط اجزای فرم مجاز است.")
+                continue
+            section_id = raw.get("id")
+            if section_id is not None and (isinstance(section_id, bool) or not isinstance(section_id, int)):
+                messages.append(f"بخش {index + 1}: شناسه نامعتبر است.")
+                continue
+            try:
+                element = form_schema.clean_element(raw, number=index + 1)
+            except form_schema.FormSchemaError as error:
+                messages.extend(error.messages)
+                continue
+            validated.append({"id": section_id, "type": SectionType.FORM_ELEMENT, "element": element})
+        if messages:
+            raise serializers.ValidationError(messages)
+        _check_unique_ids(validated)
+        return validated
+
+    def validate_form_settings(self, raw):
+        if not self._is_form:
+            return {}
+        try:
+            return form_schema.clean_settings(raw)
+        except form_schema.FormSchemaError as error:
+            raise serializers.ValidationError(error.messages)
+
+
+def _check_unique_ids(validated):
+    ids = [s["id"] for s in validated if s.get("id")]
+    if len(ids) != len(set(ids)):
+        raise serializers.ValidationError(["شناسه بخش‌ها تکراری است."])
 
 
 # --------------------------------------------------------------------------
@@ -268,6 +318,9 @@ def _section_payload(document, section, request) -> dict:
             ],
         }
 
+    if kind == SectionType.FORM_ELEMENT:
+        return {**base, **content}
+
     return base
 
 
@@ -292,6 +345,8 @@ def content_payload(document, request) -> dict:
         "logo_url": logo_url,
         "footnote1": document.footnote1,
         "footnote2": document.footnote2,
+        "body_kind": document.body_kind,
+        "form_settings": document.form_settings if document.body_kind == BodyKind.FORM else None,
         "sections": [_section_payload(document, s, request) for s in sections],
         "previous_changes": [
             {

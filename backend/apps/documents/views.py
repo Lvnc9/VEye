@@ -151,7 +151,7 @@ class DocumentViewSet(
         if request.method == "GET":
             return Response(content_payload(document, request))
 
-        serializer = ContentInputSerializer(data=request.data)
+        serializer = ContentInputSerializer(data=request.data, context={"document": document})
         serializer.is_valid(raise_exception=True)
         saved = content_service.save_content(user=request.user, document_id=document.pk, data=serializer.validated_data)
         return Response(content_payload(saved, request))
