@@ -1,3 +1,4 @@
+from django.urls import reverse
 from rest_framework import serializers
 
 from apps.organization.models import OrgNodeKind
@@ -7,6 +8,7 @@ from .services import MESSAGE_MAX_LENGTH
 
 DELETED_TEXT = "پیام حذف شد"
 PREVIEW_LENGTH = 120
+ATTACHMENT_PREVIEW_PREFIX = "📎 "
 
 
 class OpenDirectSerializer(serializers.Serializer):
@@ -19,7 +21,11 @@ class OpenNodeSerializer(serializers.Serializer):
 
 class SendMessageSerializer(serializers.Serializer):
     # The length rule lives in services._clean_body (Persian message); this only bounds the payload.
-    body = serializers.CharField(allow_blank=True, trim_whitespace=False, max_length=MESSAGE_MAX_LENGTH * 2)
+    # Optional so a multipart send may carry files only (ADR-010 §E); _clean_body still refuses an
+    # empty body when there are no files.
+    body = serializers.CharField(
+        required=False, default="", allow_blank=True, trim_whitespace=False, max_length=MESSAGE_MAX_LENGTH * 2
+    )
 
 
 class MarkReadSerializer(serializers.Serializer):
@@ -34,6 +40,7 @@ class MessageSerializer(serializers.ModelSerializer):
     is_deleted = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
     can_delete = serializers.SerializerMethodField()
+    attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -48,6 +55,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "is_deleted",
             "is_mine",
             "can_delete",
+            "attachments",
             "created_at",
         ]
 
@@ -62,6 +70,32 @@ class MessageSerializer(serializers.ModelSerializer):
 
     def get_can_delete(self, message):
         return self.get_is_mine(message) and message.deleted_at is None and message.kind == MessageKind.TEXT
+
+    def get_attachments(self, message):
+        # A tombstoned message keeps no attachment rows either (services.delete_message removes
+        # them), but the guard costs nothing and reads as the same rule as get_body's.
+        if message.deleted_at is not None:
+            return []
+        request = self.context["request"]
+        return [
+            {
+                "id": attachment.pk,
+                "name": attachment.original_name,
+                "kind": attachment.kind,
+                "size": attachment.size,
+                "download_url": request.build_absolute_uri(
+                    reverse(
+                        "conversation-attachment",
+                        kwargs={
+                            "pk": message.conversation_id,
+                            "message_id": message.pk,
+                            "attachment_id": attachment.pk,
+                        },
+                    )
+                ),
+            }
+            for attachment in message.attachments.all()
+        ]
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -129,15 +163,21 @@ class ConversationSerializer(serializers.ModelSerializer):
         return other is not None and other.is_active
 
     def get_last_message(self, conversation):
-        """A one-line preview for the list, from annotations (no query per row)."""
+        """A one-line preview for the list, from annotations (no query per row). A file-only
+        message has no body to preview, so it falls back to «📎 <first attachment's name>»."""
         if conversation.last_message_id is None:
             return None
         deleted = getattr(conversation, "last_deleted", None) is not None
         body = "" if deleted else (getattr(conversation, "last_body", "") or "")
+        preview = body[:PREVIEW_LENGTH]
+        if not deleted and not preview:
+            attachment_name = getattr(conversation, "last_first_attachment_name", None)
+            if attachment_name:
+                preview = f"{ATTACHMENT_PREVIEW_PREFIX}{attachment_name}"
         return {
             "id": conversation.last_message_id,
             "kind": getattr(conversation, "last_kind", None),
             "sender_name": getattr(conversation, "last_sender_name", "") or "",
-            "preview": body[:PREVIEW_LENGTH],
+            "preview": preview,
             "is_deleted": deleted,
         }

@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import F, Prefetch
+from django.http import FileResponse, Http404
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import mixins, status, viewsets
@@ -14,7 +15,7 @@ from apps.organization.models import OrgNode
 
 from . import services
 from .access import chat_access_for
-from .models import ConversationParticipant, Message
+from .models import ConversationParticipant, Message, MessageAttachment
 from .queries import with_viewer_state
 from .serializers import (
     ConversationSerializer,
@@ -118,7 +119,7 @@ class ConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
         if before is not None and after is not None:
             raise ValidationError({"detail": "فقط یکی از before یا after را بفرستید."})
         limit = self._limit(request)
-        messages = Message.objects.filter(conversation=conversation)
+        messages = Message.objects.filter(conversation=conversation).prefetch_related("attachments")
         if after is not None:
             rows = list(messages.filter(id__gt=after).order_by("id")[: limit + 1])
             has_more = len(rows) > limit
@@ -135,14 +136,30 @@ class ConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
     @method_decorator(
         ratelimit(key="user", rate=lambda group, request: settings.CHAT_SEND_RATELIMIT_RATE, method="POST", block=True)
     )
+    @method_decorator(
+        ratelimit(
+            group="chat-attachments",
+            key="user",
+            # A rate of None is "unlimited" (django-ratelimit): a body-only send never counts
+            # against the attachment limit, only a send that actually carries files does.
+            rate=lambda group, request: settings.CHAT_ATTACHMENT_RATELIMIT_RATE if request.FILES else None,
+            method="POST",
+            block=True,
+        )
+    )
     @action(detail=True, methods=["get", "post"])
     def messages(self, request, pk=None):
+        """JSON `{body}` as before, or multipart `body` + `files` (at most
+        `CHAT_ATTACHMENT_MAX_FILES`) — DRF's default parsers already accept both."""
         conversation = self.get_object()
         if request.method == "GET":
             return self._list_messages(request, conversation)
         serializer = SendMessageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        message = services.send_message(conversation, sender=request.user, body=serializer.validated_data["body"])
+        files = request.FILES.getlist("files")
+        message = services.send_message(
+            conversation, sender=request.user, body=serializer.validated_data["body"], files=files
+        )
         data = MessageSerializer(message, context=self.get_serializer_context()).data
         return Response(data, status=status.HTTP_201_CREATED)
 
@@ -154,6 +171,26 @@ class ConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
             raise NotFound("پیام یافت نشد.")
         message = services.delete_message(message, actor=request.user)
         return Response(MessageSerializer(message, context=self.get_serializer_context()).data)
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path=r"messages/(?P<message_id>[0-9]+)/attachments/(?P<attachment_id>[0-9]+)",
+    )
+    def attachment(self, request, pk=None, message_id=None, attachment_id=None):
+        """Attachments are served through the API, not as public media URLs — the uuid name in
+        storage stops a guess, but only a signed-in participant should get the bytes at all
+        (mirrors `documents.views.download_file`)."""
+        conversation = self.get_object()
+        message = Message.objects.filter(pk=message_id, conversation=conversation).first()
+        if message is None or message.deleted_at is not None:
+            raise Http404
+        try:
+            record = MessageAttachment.objects.get(pk=attachment_id, message=message)
+            handle = record.file.open("rb")
+        except (MessageAttachment.DoesNotExist, FileNotFoundError, ValueError):
+            raise Http404
+        return FileResponse(handle, as_attachment=True, filename=record.original_name)
 
     @action(detail=True, methods=["post"])
     def read(self, request, pk=None):

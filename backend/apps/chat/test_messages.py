@@ -1,9 +1,15 @@
 """Slice 9.2: sending, cursor paging and polling, read marks, tombstones, unread counts, rate limits,
-and the system lines membership changes write."""
+and the system lines membership changes write. Phase 10 §E (slice 2) adds attachments."""
+import shutil
+import tempfile
+from unittest import mock
+
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, TransactionTestCase, override_settings, skipUnlessDBFeature
 from django.urls import reverse
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from apps.accounts.tests import make_developer
 from apps.core.exceptions import ConflictError
 from apps.organization import memberships, tree
 from apps.organization.models import Membership
@@ -12,7 +18,7 @@ from apps.organization.tests import Threaded, add, make_company, person
 
 from . import services
 from .access import ChatAccess
-from .models import Conversation, ConversationParticipant, Message, MessageKind
+from .models import Conversation, ConversationParticipant, Message, MessageAttachment, MessageKind
 from .queries import unread_total, with_viewer_state
 from .services import MESSAGE_MAX_LENGTH
 from .tests import ChatWorld, channel
@@ -343,3 +349,223 @@ class MessageConcurrencyTests(Threaded, TransactionTestCase):
         mark = ConversationParticipant.objects.get(conversation=self.conversation, user=reader).last_read_message_id
         self.assertEqual(mark, max(sent))
         self.assertEqual(Membership.objects.filter(node=self.unit).count(), 6)
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 §E (slice 2): attachments
+# ---------------------------------------------------------------------------
+
+
+def upload(name="note.txt", data=b"hello"):
+    return SimpleUploadedFile(name, data)
+
+
+class MediaIsolated:
+    """An isolated MEDIA_ROOT, so attachment tests never touch real storage (the pattern of
+    documents/test_designer.py's DesignerTestCase)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media = tempfile.mkdtemp(prefix="veye-test-chat-media-")
+        cls._override = override_settings(MEDIA_ROOT=cls._media)
+        cls._override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._override.disable()
+        shutil.rmtree(cls._media, ignore_errors=True)
+        super().tearDownClass()
+
+
+class AttachmentServiceTests(MediaIsolated, ChatWorld, TestCase):
+    def setUp(self):
+        self.build_world()
+        self.dm, _ = services.open_direct(actor=self.s1a, other=self.s1b)
+
+    def test_files_are_stored_and_attached_with_their_kind_and_hash(self):
+        message = services.send_message(
+            self.dm, sender=self.s1a, body="دو فایل", files=[upload("a.txt", b"one"), upload("b.png", b"two")]
+        )
+        attachments = list(message.attachments.all())
+        self.assertEqual(len(attachments), 2)
+        self.assertEqual([a.original_name for a in attachments], ["a.txt", "b.png"])
+        self.assertEqual([a.kind for a in attachments], ["DOCUMENT", "PICTURE"])
+        self.assertTrue(all(a.size > 0 and a.sha256 and a.file.name for a in attachments))
+
+    def test_a_message_may_be_files_only(self):
+        message = services.send_message(self.dm, sender=self.s1a, body="", files=[upload()])
+        self.assertEqual(message.body, "")
+        self.assertEqual(message.attachments.count(), 1)
+
+    def test_an_empty_body_with_no_files_is_still_refused(self):
+        with self.assertRaises(ValidationError):
+            services.send_message(self.dm, sender=self.s1a, body="", files=[])
+
+    def test_more_than_the_file_limit_is_refused_and_creates_nothing(self):
+        with override_settings(CHAT_ATTACHMENT_MAX_FILES=2):
+            with self.assertRaises(ValidationError):
+                services.send_message(
+                    self.dm, sender=self.s1a, body="زیاد", files=[upload(f"{i}.txt") for i in range(3)]
+                )
+        self.assertEqual(Message.objects.filter(conversation=self.dm).count(), 0)
+        self.assertEqual(MessageAttachment.objects.count(), 0)
+
+    def test_a_file_over_the_byte_limit_is_refused(self):
+        with override_settings(CHAT_ATTACHMENT_MAX_BYTES=4):
+            with self.assertRaises(ValidationError) as caught:
+                services.send_message(self.dm, sender=self.s1a, body="", files=[upload("big.txt", b"12345")])
+        self.assertIn("files", caught.exception.detail)
+        self.assertEqual(Message.objects.filter(conversation=self.dm).count(), 0)
+
+    def test_a_disallowed_extension_is_refused(self):
+        with self.assertRaises(ValidationError) as caught:
+            services.send_message(self.dm, sender=self.s1a, body="", files=[upload("virus.exe", b"MZ")])
+        self.assertIn("files", caught.exception.detail)
+        self.assertEqual(Message.objects.filter(conversation=self.dm).count(), 0)
+
+    def test_a_failure_partway_through_deletes_every_file_already_written_and_the_message(self):
+        """Mutation check: without `written.append` running before `.save()`, the attachment whose
+        own save() raises would leak its own just-written bytes — this fails if that regresses."""
+        from django.core.files.storage import default_storage
+
+        real_save = MessageAttachment.save
+        calls = []
+
+        def flaky_save(self, *args, **kwargs):
+            calls.append(1)
+            if len(calls) == 2:
+                raise RuntimeError("boom")
+            return real_save(self, *args, **kwargs)
+
+        deleted = []
+        real_delete_now = services._delete_storage_now
+
+        def spy_delete_now(field_file):
+            deleted.append(field_file.name)
+            real_delete_now(field_file)
+
+        with mock.patch.object(MessageAttachment, "save", flaky_save):
+            with mock.patch.object(services, "_delete_storage_now", spy_delete_now):
+                with self.assertRaises(RuntimeError):
+                    services.send_message(
+                        self.dm, sender=self.s1a, body="", files=[upload("a.txt"), upload("b.txt"), upload("c.txt")]
+                    )
+        self.assertEqual(len(deleted), 2, "the file whose own save() failed must be cleaned up too")
+        self.assertFalse(any(default_storage.exists(name) for name in deleted))
+        self.assertEqual(Message.objects.filter(conversation=self.dm).count(), 0)
+        self.assertEqual(MessageAttachment.objects.count(), 0)
+
+    def test_deleting_a_message_deletes_its_attachment_rows_and_files(self):
+        message = services.send_message(self.dm, sender=self.s1a, body="", files=[upload("a.txt", b"bytes")])
+        stored_name = message.attachments.get().file.name
+        from django.core.files.storage import default_storage
+
+        self.assertTrue(default_storage.exists(stored_name))
+        with self.captureOnCommitCallbacks(execute=True):
+            services.delete_message(message, actor=self.s1a)
+        self.assertEqual(message.attachments.count(), 0)
+        self.assertFalse(default_storage.exists(stored_name))
+
+
+class AttachmentApiTests(MediaIsolated, ChatWorld, OrgApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.build_world()
+        self.dm, _ = services.open_direct(actor=self.s1a, other=self.s1b)
+
+    def url(self, conversation, suffix="messages"):
+        return reverse(f"conversation-{suffix}", args=[conversation.pk])
+
+    def download_url(self, conversation, message_id, attachment_id):
+        return reverse("conversation-attachment", args=[conversation.pk, message_id, attachment_id])
+
+    def test_sending_with_files_returns_their_download_urls(self):
+        response = self.as_(self.s1a).post(
+            self.url(self.dm), {"body": "پیوست", "files": [upload("a.txt", b"content")]}, format="multipart"
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        attachments = response.data["attachments"]
+        self.assertEqual(len(attachments), 1)
+        self.assertEqual(attachments[0]["name"], "a.txt")
+        self.assertIn(f"/attachments/{attachments[0]['id']}/", attachments[0]["download_url"])
+
+    @override_settings(RATELIMIT_ENABLE=True, CHAT_ATTACHMENT_RATELIMIT_RATE="2/m", CHAT_SEND_RATELIMIT_RATE="100/m")
+    def test_sends_with_files_have_their_own_rate_limit_and_text_sends_do_not_count(self):
+        sender = self.as_(self.s1a)
+        codes = [
+            sender.post(self.url(self.dm), {"files": [upload(f"{i}.txt", b"x")]}, format="multipart").status_code
+            for i in range(3)
+        ]
+        self.assertEqual(codes, [201, 201, 403])
+        self.assertEqual(sender.post(self.url(self.dm), {"body": "فقط متن"}, format="json").status_code, 201)
+
+    def test_a_multipart_send_may_omit_the_body_field_entirely(self):
+        """The composer sends only `files` for a file-only message; a missing `body` must not be
+        DRF's English «This field is required.»."""
+        response = self.as_(self.s1a).post(self.url(self.dm), {"files": [upload("only.txt", b"x")]}, format="multipart")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual((response.data["body"], len(response.data["attachments"])), ("", 1))
+        empty = self.as_(self.s1a).post(self.url(self.dm), {}, format="json")
+        self.assertEqual(empty.status_code, 400)
+        self.assertEqual(empty.data["body"], ["متن پیام نمی‌تواند خالی باشد."])
+
+    def test_a_participant_can_download_what_was_sent(self):
+        sent = self.as_(self.s1a).post(
+            self.url(self.dm), {"body": "", "files": [upload("a.txt", b"secret content")]}, format="multipart"
+        )
+        attachment_id = sent.data["attachments"][0]["id"]
+        response = self.as_(self.s1b).get(self.download_url(self.dm, sent.data["id"], attachment_id))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), b"secret content")
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertIn("a.txt", response["Content-Disposition"])
+
+    def test_an_outsider_gets_404_not_the_bytes(self):
+        sent = self.as_(self.s1a).post(
+            self.url(self.dm), {"body": "", "files": [upload()]}, format="multipart"
+        )
+        attachment_id = sent.data["attachments"][0]["id"]
+        response = self.as_(self.ceo).get(self.download_url(self.dm, sent.data["id"], attachment_id))
+        self.assertEqual(response.status_code, 404)
+
+    def test_a_tombstoned_messages_attachment_is_404_and_its_bytes_are_gone(self):
+        sent = self.as_(self.s1a).post(
+            self.url(self.dm), {"body": "", "files": [upload("a.txt", b"gone soon")]}, format="multipart"
+        )
+        message_id, attachment_id = sent.data["id"], sent.data["attachments"][0]["id"]
+        from django.core.files.storage import default_storage
+
+        stored_name = MessageAttachment.objects.get(pk=attachment_id).file.name
+        with self.captureOnCommitCallbacks(execute=True):
+            self.as_(self.s1a).delete(reverse("conversation-message", args=[self.dm.pk, message_id]))
+        response = self.as_(self.s1b).get(self.download_url(self.dm, message_id, attachment_id))
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(default_storage.exists(stored_name))
+
+    def test_an_attachment_id_from_another_message_is_404(self):
+        first = self.as_(self.s1a).post(
+            self.url(self.dm), {"body": "", "files": [upload("a.txt")]}, format="multipart"
+        )
+        second = self.as_(self.s1a).post(self.url(self.dm), {"body": "پیام دیگر"}, format="json")
+        response = self.as_(self.s1b).get(
+            self.download_url(self.dm, second.data["id"], first.data["attachments"][0]["id"])
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_a_file_only_message_previews_as_the_attachment_name(self):
+        self.as_(self.s1a).post(
+            self.url(self.dm), {"body": "", "files": [upload("گزارش.pdf", b"%PDF")]}, format="multipart"
+        )
+        row = self.as_(self.s1b).get(reverse("conversation-detail", args=[self.dm.pk])).data
+        self.assertEqual(row["last_message"]["preview"], "📎 گزارش.pdf")
+
+    def test_too_many_files_is_a_persian_400_through_the_api(self):
+        with override_settings(CHAT_ATTACHMENT_MAX_FILES=1):
+            response = self.as_(self.s1a).post(
+                self.url(self.dm),
+                {"body": "", "files": [upload("a.txt"), upload("b.txt")]},
+                format="multipart",
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("files", response.data)

@@ -47,6 +47,16 @@ class UserSerializer(serializers.ModelSerializer):
         return instance
 
 
+class PlacementSerializer(serializers.Serializer):
+    """The optional `placement` a personnel registration may carry. `node` stays a bare id —
+    accounts must never import `apps.organization` at module level (see the note at
+    `views.py` on `PersonnelViewSet.create`), so the view resolves and locks the node itself."""
+
+    node = serializers.IntegerField()
+    is_lead = serializers.BooleanField(required=False, default=False)
+    position_label = serializers.CharField(required=False, default="", allow_blank=True, max_length=255)
+
+
 class LoginSerializer(serializers.Serializer):
     national_code = serializers.CharField()
     password = serializers.CharField(write_only=True)
