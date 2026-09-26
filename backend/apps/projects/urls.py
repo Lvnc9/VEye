@@ -2,7 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from .history import AllProjectsActivityView, ProjectActivityView
-from .views import ProjectViewSet
+from .views import ProjectDraftView, ProjectViewSet
 
 # SimpleRouter: the other apps' routers already own the API root view.
 router = SimpleRouter()
@@ -16,6 +16,8 @@ urlpatterns = [
     # converter and the router's $ -anchored pattern can never match the same path — but it is kept
     # here too, beside its sibling route, rather than split across the file.
     path("projects/activity/", AllProjectsActivityView.as_view(), name="projects-activity"),
+    # Same reason: "draft" is not a pk, and the viewset has no PUT (ADR-010).
+    path("projects/draft/", ProjectDraftView.as_view(), name="project-draft"),
     path("projects/<int:pk>/activity/", ProjectActivityView.as_view(), name="project-activity"),
     path("", include(router.urls)),
 ]

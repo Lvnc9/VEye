@@ -25,6 +25,44 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   account (`User.is_developer`) with a Persian 400 — it is never a project member. Tests: **+11 → 915**,
   including a case that pins a real bug the new tests caught (a `Count()` over the same relation a preceding
   `filter()` had already joined silently restricted the count instead of totalling every assignee).
+- **A dated progress log under each assignee (Phase 10, ADR-010 §D, slice 2 — backend only)**: new
+  `ObjectiveUpdate(objective, author, author_name/author_title snapshots, body ≤4000, edited_at)` — every write
+  is a new row, the newest shows under the author's name, older ones expand; **the author may edit only their
+  own latest entry on that objective**, no delete. `GET/POST /projects/{id}/objectives/{oid}/updates/`
+  (paginated, newest first, `?author=<uid>`) and `PATCH …/updates/{uid}/`; only a *current* assignee may post
+  (not even the project's manager, if they are not one), only the author may edit, and editing anything but
+  their own latest entry is a 409 `not_latest_update` (checked under the project's row lock, so two concurrent
+  posts by the same author can't both think an older row is current). New event kind `objective_update_added`.
+  The objective payload's `assignees[]` now carries `latest_update` (`{id, body, created_at, edited_at,
+  can_edit}` or `null`) and `update_count` per assignee, plus a top-level `can_post_update` — all computed with
+  correlated subqueries (`queries.with_latest_update`), so a whole objective list costs no query per row. Tests:
+  **+18 → 933**.
+- **Every کارفرمایی account edits every project (owner, 2026-09-26)**: the مدیر عامل and the other کارفرمایی
+  levels (رئیس/عضو هیئت مدیره) now pass `projects.access.can_manage_project` with no lead membership — edit,
+  archive, members and objectives. Previously they could only *read* every project (through
+  `manage_organization`) and edited only as a lead of the company root. Checked on the roll, not as a new
+  capability, so the per-roll capability sets are unchanged; the developer (صفی/لول ۳) never gets it. Creating
+  meetings is covered by the next entry.
+- **Meetings that invited members acknowledge (ADR-010 §D, slice 3 — backend).** New `ProjectMeeting(title,
+  held_on, start_time?, location?, description, created_by_name snapshot)` and `MeetingAttendee(member →
+  ProjectMember CASCADE, acknowledged_at)` (migration `projects/0006`). `GET/POST /projects/{id}/meetings/`
+  (every reader sees every meeting, newest first, unpaginated, at most 200), `PATCH/DELETE …/meetings/{mid}/`,
+  `POST …/meetings/{mid}/acknowledge/`. **Who may schedule, edit or cancel: the project's MANAGER role or any
+  کارفرمایی account** (owner, 2026-09-26, on top of ADR-010's MANAGER-only) — not a بخش lead; exposed as
+  `can_manage_meetings` on the project detail (false once archived). Attendees must be project members; a
+  member removed from the project stops being an attendee. «مشاهده شد» is invited-attendees-only and idempotent
+  (the first time is kept); changing the day, time or place clears every acknowledgement, a title/description
+  edit does not. Events `meeting_scheduled` / `meeting_changed` / `meeting_cancelled` carry the day as an ISO date
+  in `to_status` (like `objective_due_changed`) and time · place in the note. Archived projects refuse every
+  meeting write, acknowledgements included. Tests: +16 (projects+dashboard 225); the کارفرمایی rule and the
+  acknowledgement clearing were each mutation-checked.
+- **One server-side draft of a new project per person (ADR-010 §D, slice 4 — backend).** New
+  `ProjectDraft(user one-to-one, payload JSON)` (migration `projects/0007`) behind `GET/PUT/DELETE
+  /projects/draft/` — a separate view registered before the router ("draft" is not a pk). GET always answers 200
+  (`{payload, updated_at}`, nulls when there is none); PUT takes a JSON object up to `PROJECT_DRAFT_MAX_BYTES`
+  (64 KB), else a Persian 400; DELETE is idempotent. The payload is opaque to the server. A successful
+  `POST /projects/` deletes the creator's draft in the same transaction, so a failed create keeps it. Tests: +7 →
+  956 overall; the delete-on-create was mutation-checked.
 
 ### Phase 10 — A3 · projects frontend (objective tree, timeline, meetings table, drafts)
 - **An objective's assignees render as a tree.** `ObjectiveTree` (replaces `ObjectivesList`) draws each

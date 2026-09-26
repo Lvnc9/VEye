@@ -5,14 +5,16 @@ from rest_framework import serializers
 from apps.documents.models import Document
 from apps.organization.models import OrgNode
 
-from .access import can_manage_project
+from .access import can_manage_meetings, can_manage_project
 from .models import (
     CLOSED_OBJECTIVE_STATUSES,
     Objective,
     ObjectiveStatus,
+    ObjectiveUpdate,
     Project,
     ProjectComment,
     ProjectDocumentLink,
+    ProjectMeeting,
     ProjectMember,
     ProjectRole,
     ProjectStatus,
@@ -86,10 +88,14 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 class ProjectDetailSerializer(ProjectSerializer):
     members = ProjectMemberSerializer(many=True, read_only=True)
+    can_manage_meetings = serializers.SerializerMethodField()
 
     class Meta(ProjectSerializer.Meta):
-        fields = [*ProjectSerializer.Meta.fields, "members"]
+        fields = [*ProjectSerializer.Meta.fields, "members", "can_manage_meetings"]
         read_only_fields = fields
+
+    def get_can_manage_meetings(self, project) -> bool:
+        return can_manage_meetings(self.context["request"], project)
 
 
 def _reject_developer(user):
@@ -108,30 +114,51 @@ class MemberInputSerializer(serializers.Serializer):
 
 class ObjectiveSerializer(serializers.ModelSerializer):
     """`assignees` are the people's *user ids* (the ProjectMember behind each one is an internal
-    detail), with no levels among them — any of them may write under their own name.
-    `can_change_status` / `can_edit` are the viewer's rights, from the very functions the endpoints
-    enforce; pass `manage` (bool) in the serializer context. Needs `objective.assignees` prefetched
-    with `member__user` (views.py), so this reads no extra query per row."""
+    detail), with no levels among them — any of them may write under their own name, each with
+    their own `latest_update`/`update_count` (their progress log on this one objective — `null`
+    latest_update means they have never posted). `can_change_status` / `can_edit` /
+    `can_post_update` are the viewer's rights, from the very functions the endpoints enforce; pass
+    `manage` (bool) and `archived` (bool) in the serializer context. Needs `objective.assignees`
+    prefetched with `member__user` and `queries.with_latest_update()` (views.py), so this reads no
+    extra query per row."""
 
     assignees = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     is_overdue = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
     can_change_status = serializers.SerializerMethodField()
+    can_post_update = serializers.SerializerMethodField()
 
     class Meta:
         model = Objective
         fields = [
             "id", "position", "title", "description", "assignees", "due_on",
-            "status", "status_label", "weight", "completed_at", "is_overdue", "can_edit", "can_change_status",
+            "status", "status_label", "weight", "completed_at", "is_overdue",
+            "can_edit", "can_change_status", "can_post_update",
         ]
         read_only_fields = fields
 
     def get_assignees(self, objective) -> list[dict]:
-        return [
-            {"user": a.member.user_id, "name": a.member.user.full_name, "title": a.member.user.title}
-            for a in objective.assignees.all()
-        ]
+        viewer_id = self.context["request"].user.pk
+        rows = []
+        for a in objective.assignees.all():
+            latest_update = None
+            if a.latest_update_id is not None:
+                latest_update = {
+                    "id": a.latest_update_id,
+                    "body": a.latest_update_body,
+                    "created_at": a.latest_update_created_at,
+                    "edited_at": a.latest_update_edited_at,
+                    "can_edit": a.member.user_id == viewer_id,
+                }
+            rows.append({
+                "user": a.member.user_id,
+                "name": a.member.user.full_name,
+                "title": a.member.user.title,
+                "latest_update": latest_update,
+                "update_count": a.update_count,
+            })
+        return rows
 
     def get_is_overdue(self, objective) -> bool:
         return objective.due_on < timezone.localdate() and objective.status not in CLOSED_OBJECTIVE_STATUSES
@@ -139,11 +166,15 @@ class ObjectiveSerializer(serializers.ModelSerializer):
     def get_can_edit(self, objective) -> bool:
         return bool(self.context.get("manage"))
 
-    def get_can_change_status(self, objective) -> bool:
-        if self.context.get("manage"):
-            return True
+    def _is_assignee(self, objective) -> bool:
         user_id = self.context["request"].user.pk
         return any(a.member.user_id == user_id for a in objective.assignees.all())
+
+    def get_can_change_status(self, objective) -> bool:
+        return bool(self.context.get("manage")) or self._is_assignee(objective)
+
+    def get_can_post_update(self, objective) -> bool:
+        return not self.context.get("archived") and self._is_assignee(objective)
 
 
 class ObjectiveInputSerializer(serializers.Serializer):
@@ -170,6 +201,31 @@ class ObjectiveUpdateSerializer(serializers.Serializer):
 
 class ReorderSerializer(serializers.Serializer):
     order = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+
+
+class ObjectiveProgressSerializer(serializers.ModelSerializer):
+    """One row of an objective's dated progress log — the paginated `…/updates/` list. `can_edit` is
+    true only for the one row that is both the viewer's own **and** their latest on this objective
+    (an older entry of theirs is frozen); pass `my_latest_id` (the viewer's own latest entry's id on
+    this objective, or `None`) in the serializer context, computed once per request, not per row."""
+
+    can_edit = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ObjectiveUpdate
+        fields = ["id", "author", "author_name", "author_title", "body", "created_at", "edited_at", "can_edit"]
+        read_only_fields = fields
+
+    def get_can_edit(self, update) -> bool:
+        request = self.context["request"]
+        return update.author_id == request.user.pk and update.pk == self.context.get("my_latest_id")
+
+
+class ObjectiveProgressBodySerializer(serializers.Serializer):
+    """POST (a new entry) and PATCH (editing one's own latest) both take just the text; length and
+    blankness are checked in services.py, in Persian, the same split `CommentCreateSerializer` uses."""
+
+    body = serializers.CharField()
 
 
 class ProjectCreateSerializer(serializers.Serializer):
@@ -249,3 +305,75 @@ class ProjectDocumentLinkSerializer(serializers.ModelSerializer):
 class DocumentLinkCreateSerializer(serializers.Serializer):
     document = serializers.PrimaryKeyRelatedField(queryset=Document.objects.all())
     caption = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class MeetingSerializer(serializers.ModelSerializer):
+    """A row of «جدول جلسات». Needs `attendees` prefetched with `member__user` (views.py), and
+    `manage` (the viewer's `can_manage_meetings` answer) and `archived` in the context."""
+
+    start_time = serializers.TimeField(format="%H:%M", read_only=True)
+    attendees = serializers.SerializerMethodField()
+    attendee_count = serializers.SerializerMethodField()
+    acknowledged_count = serializers.SerializerMethodField()
+    my_acknowledged_at = serializers.SerializerMethodField()
+    can_acknowledge = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectMeeting
+        fields = [
+            "id", "title", "held_on", "start_time", "location", "description", "created_by_name", "created_at",
+            "attendees", "attendee_count", "acknowledged_count", "my_acknowledged_at", "can_acknowledge", "can_edit",
+        ]
+        read_only_fields = fields
+
+    def _mine(self, meeting):
+        user_id = self.context["request"].user.pk
+        return next((a for a in meeting.attendees.all() if a.member.user_id == user_id), None)
+
+    def get_attendees(self, meeting) -> list[dict]:
+        return [
+            {"member": a.member_id, "user": a.member.user_id, "name": a.member.user.full_name,
+             "acknowledged_at": a.acknowledged_at}
+            for a in meeting.attendees.all()
+        ]
+
+    def get_attendee_count(self, meeting) -> int:
+        return len(meeting.attendees.all())
+
+    def get_acknowledged_count(self, meeting) -> int:
+        return sum(1 for a in meeting.attendees.all() if a.acknowledged_at is not None)
+
+    def get_my_acknowledged_at(self, meeting):
+        mine = self._mine(meeting)
+        return mine.acknowledged_at if mine else None
+
+    def get_can_acknowledge(self, meeting) -> bool:
+        """An invited attendee who has not pressed «مشاهده شد» yet, on a project that is not archived."""
+        mine = self._mine(meeting)
+        return mine is not None and mine.acknowledged_at is None and not self.context.get("archived")
+
+    def get_can_edit(self, meeting) -> bool:
+        return bool(self.context.get("manage"))
+
+
+class MeetingInputSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255)
+    held_on = serializers.DateField()
+    start_time = serializers.TimeField(required=False, allow_null=True, default=None)
+    location = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+    #: User ids of project members; the view maps them to ProjectMember rows.
+    attendees = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, allow_empty=False)
+
+
+class MeetingUpdateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255, required=False)
+    held_on = serializers.DateField(required=False)
+    start_time = serializers.TimeField(required=False, allow_null=True)
+    location = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True)
+    #: When given, replaces the whole attendee set.
+    attendees = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), many=True, required=False, allow_empty=False
+    )
