@@ -24,6 +24,7 @@ from .models import (
     Project,
     ProjectComment,
     ProjectDocumentLink,
+    ProjectDraft,
     ProjectEvent,
     ProjectEventKind,
     ProjectMeeting,
@@ -2078,3 +2079,74 @@ class MeetingApiTests(ProjectApiCase):
         ack = self.client.post(reverse("project-acknowledge-meeting", args=[self.project.pk, meeting_id]))
         self.assertEqual((ack.status_code, ack.data["code"]), (409, "project_archived"))
         self.assertEqual(self.client.get(self.url).data[0]["can_acknowledge"], False)
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 §D (slice 4): the server-side new-project draft
+# ---------------------------------------------------------------------------
+
+
+class ProjectDraftApiTests(ProjectApiCase):
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("project-draft")
+        self.payload = {"version": 1, "form": {"name": "نیمه‌کاره", "members": [], "objectives": []}}
+
+    def test_get_is_always_200_and_null_when_there_is_none(self):
+        self.as_(self.mgr)
+        response = self.client.get(self.url)
+        self.assertEqual((response.status_code, response.data), (200, {"payload": None, "updated_at": None}))
+
+    def test_put_stores_one_draft_per_person_and_replaces_it(self):
+        self.as_(self.mgr)
+        self.assertEqual(self.client.put(self.url, {"payload": self.payload}, format="json").status_code, 200)
+        self.payload["form"]["name"] = "نسخهٔ دوم"
+        self.client.put(self.url, {"payload": self.payload}, format="json")
+        self.assertEqual(ProjectDraft.objects.count(), 1)
+        got = self.client.get(self.url).data
+        self.assertEqual(got["payload"]["form"]["name"], "نسخهٔ دوم")
+        self.assertIsNotNone(got["updated_at"])
+        self.as_(self.member)  # someone else's draft is never visible
+        self.assertIsNone(self.client.get(self.url).data["payload"])
+
+    def test_put_refuses_a_non_object_or_an_oversized_payload_in_persian(self):
+        self.as_(self.mgr)
+        for body in ({"payload": [1, 2]}, {"payload": "text"}, {}):
+            with self.subTest(body=body):
+                response = self.client.put(self.url, body, format="json")
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.data["payload"], ["پیش‌نویس باید یک شیء JSON باشد."])
+        with override_settings(PROJECT_DRAFT_MAX_BYTES=100):
+            big = self.client.put(self.url, {"payload": {"x": "ب" * 60}}, format="json")  # 120 bytes in UTF-8
+        self.assertEqual(big.status_code, 400)
+        self.assertIn("پیش‌نویس بزرگ‌تر", big.data["payload"][0])
+        self.assertFalse(ProjectDraft.objects.exists())
+
+    def test_delete_is_idempotent(self):
+        self.as_(self.mgr)
+        self.client.put(self.url, {"payload": self.payload}, format="json")
+        self.assertEqual(self.client.delete(self.url).status_code, 204)
+        self.assertEqual(self.client.delete(self.url).status_code, 204)
+        self.assertFalse(ProjectDraft.objects.exists())
+
+    def test_creating_a_project_deletes_the_creators_draft_only(self):
+        self.as_(self.member)
+        self.client.put(self.url, {"payload": self.payload}, format="json")
+        self.as_(self.lead_s1)
+        self.client.put(self.url, {"payload": self.payload}, format="json")
+        self.assertEqual(self.create(name="از پیش‌نویس").status_code, 201)
+        self.assertEqual(list(ProjectDraft.objects.values_list("user", flat=True)), [self.member.pk])
+
+    def test_a_failed_create_keeps_the_draft(self):
+        self.as_(self.lead_s1)
+        self.client.put(self.url, {"payload": self.payload}, format="json")
+        self.assertEqual(self.create(name="یکتا").status_code, 201)
+        self.client.put(self.url, {"payload": self.payload}, format="json")
+        self.assertEqual(self.create(name="یکتا").status_code, 409)  # duplicate name in this بخش
+        self.assertTrue(ProjectDraft.objects.filter(user=self.lead_s1).exists())
+
+    def test_it_needs_a_login_and_draft_is_not_read_as_a_project_id(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.url).status_code, 401)
+        self.as_(self.mgr)
+        self.assertEqual(self.client.get("/api/v1/projects/draft/").status_code, 200)

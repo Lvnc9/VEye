@@ -1,3 +1,6 @@
+import json
+
+from django.conf import settings
 from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
@@ -5,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.core.pagination import DefaultPagination
 from apps.core.text import normalize_search_term
@@ -18,6 +22,7 @@ from .models import (
     ObjectiveUpdate,
     ProjectComment,
     ProjectDocumentLink,
+    ProjectDraft,
     ProjectMeeting,
     ProjectMember,
 )
@@ -489,3 +494,37 @@ class ProjectViewSet(
         services.acknowledge_meeting(meeting, user=request.user)
         meeting = self._fetch_meeting(project, meeting.pk)
         return Response(MeetingSerializer(meeting, context=self._meeting_context(request, project)).data)
+
+
+class ProjectDraftView(APIView):
+    """`/projects/draft/` — the caller's one half-typed new project (ADR-010), autosaved by
+    /projects/new. A separate view registered **before** the router in urls.py: the viewset has no
+    PUT, and "draft" would otherwise be read as a project pk. Only ever the caller's own draft — there
+    is no id in the URL to point at someone else's.
+
+    GET always answers 200 (`payload`/`updated_at` are null when there is none); PUT stores a JSON
+    object of at most `PROJECT_DRAFT_MAX_BYTES`; DELETE is idempotent. A successful `POST /projects/`
+    deletes it too (services.create_project)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        draft = ProjectDraft.objects.filter(user=request.user).first()
+        if draft is None:
+            return Response({"payload": None, "updated_at": None})
+        return Response({"payload": draft.payload, "updated_at": draft.updated_at})
+
+    def put(self, request):
+        payload = request.data.get("payload") if isinstance(request.data, dict) else None
+        if not isinstance(payload, dict):
+            raise ValidationError({"payload": ["پیش‌نویس باید یک شیء JSON باشد."]})
+        size = len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+        if size > settings.PROJECT_DRAFT_MAX_BYTES:
+            limit_kb = settings.PROJECT_DRAFT_MAX_BYTES // 1024
+            raise ValidationError({"payload": [f"پیش‌نویس بزرگ‌تر از حد مجاز ({limit_kb} کیلوبایت) است."]})
+        draft = services.save_draft(user=request.user, payload=payload)
+        return Response({"payload": draft.payload, "updated_at": draft.updated_at})
+
+    def delete(self, request):
+        services.delete_draft(user=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)

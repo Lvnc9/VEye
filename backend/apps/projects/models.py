@@ -343,3 +343,17 @@ class MeetingAttendee(TimeStampedModel):
     def __str__(self):
         return f"{self.member.user.full_name} → {self.meeting.title}"
 
+
+
+class ProjectDraft(TimeStampedModel):
+    """The one half-typed new project a person has, autosaved from /projects/new (ADR-010: server-side,
+    one per user, deleted when a project is created). `payload` is opaque to the server — the
+    frontend owns its shape and versioning (`{version, form}`); only its size is bounded
+    (`PROJECT_DRAFT_MAX_BYTES`). Not a `Project` row with a DRAFT status: that would leak into
+    visibility, lists, events, progress and name uniqueness."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="project_draft")
+    payload = models.JSONField()
+
+    def __str__(self):
+        return f"draft of {self.user_id}"

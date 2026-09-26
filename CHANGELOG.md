@@ -56,6 +56,13 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
   in `to_status` (like `objective_due_changed`) and time · place in the note. Archived projects refuse every
   meeting write, acknowledgements included. Tests: +16 (projects+dashboard 225); the کارفرمایی rule and the
   acknowledgement clearing were each mutation-checked.
+- **One server-side draft of a new project per person (ADR-010 §D, slice 4 — backend).** New
+  `ProjectDraft(user one-to-one, payload JSON)` (migration `projects/0007`) behind `GET/PUT/DELETE
+  /projects/draft/` — a separate view registered before the router ("draft" is not a pk). GET always answers 200
+  (`{payload, updated_at}`, nulls when there is none); PUT takes a JSON object up to `PROJECT_DRAFT_MAX_BYTES`
+  (64 KB), else a Persian 400; DELETE is idempotent. The payload is opaque to the server. A successful
+  `POST /projects/` deletes the creator's draft in the same transaction, so a failed create keeps it. Tests: +7 →
+  956 overall; the delete-on-create was mutation-checked.
 
 ### Phase 10 — A3 · projects frontend (objective tree, timeline, meetings table, drafts)
 - _(A3: add lines under this heading only)_

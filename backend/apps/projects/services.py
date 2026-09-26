@@ -29,6 +29,7 @@ from .models import (
     Project,
     ProjectComment,
     ProjectDocumentLink,
+    ProjectDraft,
     ProjectEvent,
     ProjectEventKind,
     ProjectMeeting,
@@ -264,6 +265,9 @@ def create_project(
         _add_objective(
             project, actor, assignees=assignee_members, **{k: v for k, v in entry.items() if k != "assignees"}
         )
+    # The creator's half-typed draft has become this project (ADR-010). Same transaction: a create
+    # that fails keeps the draft.
+    ProjectDraft.objects.filter(user=actor).delete()
     return project
 
 
@@ -775,3 +779,19 @@ def acknowledge_meeting(meeting: ProjectMeeting, *, user) -> ProjectMeeting:
         attendee.acknowledged_at = timezone.now()
         attendee.save(update_fields=["acknowledged_at", "updated_at"])
     return meeting
+
+
+# --------------------------------------------------------------------------
+# The new-project draft
+# --------------------------------------------------------------------------
+
+
+def save_draft(*, user, payload: dict) -> ProjectDraft:
+    """Keep the one draft this person has (insert or replace). The payload is opaque; its shape and
+    size are the view's job."""
+    draft, _ = ProjectDraft.objects.update_or_create(user=user, defaults={"payload": payload})
+    return draft
+
+
+def delete_draft(*, user) -> None:
+    ProjectDraft.objects.filter(user=user).delete()
