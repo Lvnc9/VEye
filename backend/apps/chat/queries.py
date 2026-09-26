@@ -7,7 +7,7 @@ unread. The same definition feeds the sidebar badge (`unread_total`).
 from django.db.models import Count, IntegerField, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 
-from .models import ConversationParticipant, Message, MessageKind
+from .models import ConversationParticipant, Message, MessageAttachment, MessageKind
 
 
 def with_viewer_state(queryset, user):
@@ -29,12 +29,14 @@ def with_viewer_state(queryset, user):
         .values("n")
     )
     last = Message.objects.filter(pk=OuterRef("last_message_id"))
+    last_attachment = MessageAttachment.objects.filter(message_id=OuterRef("last_message_id")).order_by("id")
     return queryset.annotate(
         unread_count=Coalesce(Subquery(unread, output_field=IntegerField()), Value(0)),
         last_sender_name=Subquery(last.values("sender_name")[:1]),
         last_kind=Subquery(last.values("kind")[:1]),
         last_body=Subquery(last.values("body")[:1]),
         last_deleted=Subquery(last.values("deleted_at")[:1]),
+        last_first_attachment_name=Subquery(last_attachment.values("original_name")[:1]),
     )
 
 

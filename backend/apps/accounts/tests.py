@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.conf import settings
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -298,6 +300,116 @@ class PersonnelDeletionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         author.refresh_from_db()
         self.assertFalse(author.is_active)
+
+
+@override_settings(CACHES=LOCMEM_CACHE, RATELIMIT_ENABLE=False)
+class PersonnelPlacementTests(TestCase):
+    """POST /personnel/ with `placement`: one request registers a person and puts them in the org
+    chart (ADR-010 §B). Either both happen or neither does — no more half-placed accounts."""
+
+    def setUp(self):
+        from apps.organization import tree
+        from apps.organization.models import Company, OrgNodeKind, SetupStep
+
+        self.client = APIClient(enforce_csrf_checks=False)
+        self.employer = make_user("6000000001", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
+        self.root = tree.create_root(name="شرکت نمونه")
+        Company.objects.create(pk=1, root=self.root, setup_step=SetupStep.DOMAINS)
+        self.unit = tree.create_node(kind=OrgNodeKind.UNIT, name="واحد فروش", parent=self.root)
+        self.payload = {
+            "national_code": "6100000001",
+            "full_name": "پرسنل جدید",
+            "mobile_phone": "09120000001",
+            "access_roll": AccessRoll.GUILD,
+            "access_level": AccessLevel.LEVEL_2,
+            "password": "a-new-password-1",
+        }
+
+    def test_registers_and_places_in_one_request(self):
+        from apps.organization.models import Membership
+
+        self.client.force_authenticate(user=self.employer)
+        response = self.client.post(
+            reverse("personnel-list"),
+            {**self.payload, "placement": {"node": self.unit.pk, "is_lead": True, "position_label": "رئیس فروش"}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        person = User.objects.get(national_code="6100000001")
+        membership = Membership.objects.get(user=person, node=self.unit)
+        self.assertTrue(membership.is_lead)
+        self.assertTrue(membership.is_primary)
+        self.assertEqual(membership.position_label, "رئیس فروش")
+        # The response carries the membership too, so the caller never has to ask again.
+        self.assertEqual(response.data["membership"]["id"], membership.pk)
+        self.assertEqual(response.data["membership"]["node"], self.unit.pk)
+
+    def test_without_placement_nothing_but_the_person_is_created(self):
+        from apps.organization.models import Membership
+
+        self.client.force_authenticate(user=self.employer)
+        response = self.client.post(reverse("personnel-list"), self.payload, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertNotIn("membership", response.data)
+        self.assertFalse(Membership.objects.filter(user__national_code="6100000001").exists())
+
+    def test_no_permission_to_place_creates_nobody(self):
+        """A caller without manage_personnel cannot use a `placement` payload as a side door: the
+        outer capability gate still applies first, and a refusal leaves nothing behind."""
+        guild = make_user("6000000002", AccessRoll.GUILD, AccessLevel.LEVEL_3)
+        self.client.force_authenticate(user=guild)
+        response = self.client.post(
+            reverse("personnel-list"),
+            {**self.payload, "placement": {"node": self.unit.pk}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(User.objects.filter(national_code="6100000001").exists())
+        from apps.organization.models import Membership
+
+        self.assertFalse(Membership.objects.filter(node=self.unit).exists())
+
+    def test_archived_node_is_409_and_creates_nobody(self):
+        from apps.organization import tree
+
+        tree.archive_node(self.unit)
+        self.client.force_authenticate(user=self.employer)
+        response = self.client.post(
+            reverse("personnel-list"),
+            {**self.payload, "placement": {"node": self.unit.pk}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["code"], "node_archived")
+        self.assertFalse(User.objects.filter(national_code="6100000001").exists())
+
+    def test_missing_node_is_404_and_creates_nobody(self):
+        self.client.force_authenticate(user=self.employer)
+        response = self.client.post(
+            reverse("personnel-list"),
+            {**self.payload, "placement": {"node": 999999}},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(User.objects.filter(national_code="6100000001").exists())
+
+    def test_rollback_on_a_membership_conflict_leaves_no_user(self):
+        """Whatever the reason `memberships.add_membership` refuses, the user it was about to
+        belong to must not survive either — same transaction, same fate."""
+        from apps.core.exceptions import ConflictError
+
+        self.client.force_authenticate(user=self.employer)
+        with mock.patch(
+            "apps.organization.memberships.add_membership",
+            side_effect=ConflictError("تعارض آزمایشی.", code="already_member"),
+        ):
+            response = self.client.post(
+                reverse("personnel-list"),
+                {**self.payload, "placement": {"node": self.unit.pk}},
+                format="json",
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(User.objects.filter(national_code="6100000001").exists())
 
 
 def make_developer(national_code="7000000001", **extra):

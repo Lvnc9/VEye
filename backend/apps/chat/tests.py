@@ -214,6 +214,18 @@ class DirectConversationTests(ChatWorld, TestCase):
         self.assertEqual(caught.exception.payload["code"], "user_inactive")
         self.assertFalse(Conversation.objects.filter(kind=ConversationKind.DIRECT).exists())
 
+    def test_the_developer_cannot_be_dmd_by_anyone(self):
+        """ADR-010 §A: the developer is a technical account, not a member of the company — it has
+        no title to show as a counterpart and is kept out of every people-picking surface."""
+        from apps.accounts.tests import make_developer
+
+        developer = make_developer()
+        with self.assertRaises(ValidationError):
+            services.open_direct(actor=self.s1a, other=developer)
+        with self.assertRaises(ValidationError):
+            services.open_direct(actor=developer, other=self.s1a)
+        self.assertFalse(Conversation.objects.filter(kind=ConversationKind.DIRECT).exists())
+
     def test_a_lost_race_returns_the_winners_row(self):
         """Simulate the loser of a race: the pre-read sees nothing, the insert hits the index."""
         winner, _ = services.open_direct(actor=self.s1a, other=self.s1b)

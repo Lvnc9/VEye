@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ChangeEvent } from "react";
 import { ApiError, apiUploadWithProgress } from "@/lib/api-client";
+import { FileRow } from "@/components/FileRow";
 import type { DocumentFileInfo, LongSection } from "@/lib/types";
 import { RichTextArea } from "./RichTextArea";
 import { AddButton, FieldLabel, IconButton, inputClass, type BlockProps } from "./ui";
@@ -28,37 +29,6 @@ interface PendingUpload {
   name: string;
   progress: number;
   controller: AbortController;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function FileRow({ file, disabled, onRemove }: { file: DocumentFileInfo; disabled: boolean; onRemove: () => void }) {
-  return (
-    <li className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-      <a
-        href={file.download_url}
-        target="_blank"
-        rel="noreferrer"
-        className="truncate font-medium text-slate-800 underline decoration-slate-300 hover:decoration-slate-600"
-        title={file.name}
-      >
-        {file.name}
-      </a>
-      <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
-        <span>{file.kind_label}</span>
-        <bdi dir="ltr">{formatSize(file.size)}</bdi>
-        {!disabled && (
-          <IconButton label="حذف فایل (با ذخیره‌سازی نهایی می‌شود)" tone="danger" onClick={onRemove}>
-            ✕
-          </IconButton>
-        )}
-      </span>
-    </li>
-  );
 }
 
 /**
@@ -242,9 +212,21 @@ export function LongBlock({
             {section.files.map((file) => (
               <FileRow
                 key={file.id}
-                file={file}
-                disabled={disabled}
-                onRemove={() => update((s) => ({ ...s, files: s.files.filter((f) => f.id !== file.id) }))}
+                name={file.name}
+                href={file.download_url}
+                size={file.size}
+                kindLabel={file.kind_label}
+                action={
+                  !disabled && (
+                    <IconButton
+                      label="حذف فایل (با ذخیره‌سازی نهایی می‌شود)"
+                      tone="danger"
+                      onClick={() => update((s) => ({ ...s, files: s.files.filter((f) => f.id !== file.id) }))}
+                    >
+                      ✕
+                    </IconButton>
+                  )
+                }
               />
             ))}
           </ul>
