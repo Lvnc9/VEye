@@ -47,10 +47,14 @@ class ProjectEventKind(models.TextChoices):
     OBJECTIVE_STATUS_CHANGED = "objective_status_changed", "وضعیت ریزهدف تغییر کرد"
     OBJECTIVE_DUE_CHANGED = "objective_due_changed", "مهلت ریزهدف تغییر کرد"
     OBJECTIVE_REMOVED = "objective_removed", "ریزهدف حذف شد"
+    OBJECTIVE_UPDATE_ADDED = "objective_update_added", "گزارش پیشرفت ثبت شد"
     COMMENT_ADDED = "comment_added", "یادداشت افزوده شد"
     COMMENT_REMOVED = "comment_removed", "یادداشت حذف شد"
     DOCUMENT_LINKED = "document_linked", "مستند پیوست شد"
     DOCUMENT_UNLINKED = "document_unlinked", "پیوند مستند حذف شد"
+    MEETING_SCHEDULED = "meeting_scheduled", "جلسه تعیین شد"
+    MEETING_CHANGED = "meeting_changed", "جلسه تغییر کرد"
+    MEETING_CANCELLED = "meeting_cancelled", "جلسه لغو شد"
 
 
 class Project(TimeStampedModel):
@@ -118,13 +122,10 @@ class ProjectMember(TimeStampedModel):
 
 
 class Objective(TimeStampedModel):
-    """A ریز هدف: one piece of a project's plan, with **one assignee and one deadline, both required**
-    — there is no unassigned backlog.
-
-    `assignee` points at the *ProjectMember*, not the User. That is the model's most valuable detail:
-    the database itself then refuses an objective assigned to a non-member, and removing a member who
-    still owns work is a 409 instead of a silent orphan. «هر ریز هدف باید متعلق به یکی از اعضای پروژه
-    باشد» lives in the schema, not in a validator that can be forgotten.
+    """A ریز هدف: one piece of a project's plan, with **several assignees (at least one) and one
+    deadline, both required** — there is no unassigned backlog. Who owns it lives in
+    `ObjectiveAssignee`, below; there are no levels among assignees, and any of them may write
+    under their own name and change the status.
 
     Progress and overdue-ness are **derived, never stored** (queries.py): a stored percentage is a
     cache that goes stale the moment anyone edits a weight.
@@ -135,7 +136,6 @@ class Objective(TimeStampedModel):
     position = models.PositiveSmallIntegerField()
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    assignee = models.ForeignKey(ProjectMember, on_delete=models.PROTECT, related_name="objectives")
     due_on = models.DateField()
     status = models.CharField(max_length=16, choices=ObjectiveStatus.choices, default=ObjectiveStatus.TODO)
     #: How much it counts towards the project's progress.
@@ -150,12 +150,64 @@ class Objective(TimeStampedModel):
         constraints = [CheckConstraint(check=Q(weight__gte=1), name="objective_weight_positive")]
         indexes = [
             Index(fields=["project", "position"], name="objective_project_position_idx"),
-            Index(fields=["assignee", "status"], name="objective_assignee_status_idx"),
             Index(fields=["status", "due_on"], name="objective_status_due_idx"),
         ]
 
     def __str__(self):
         return self.title
+
+
+class ObjectiveAssignee(TimeStampedModel):
+    """One person responsible for a ریز هدف. `member` points at the *ProjectMember*, not the User —
+    the model's most valuable detail, kept from the single-assignee design: the database itself
+    refuses an objective assigned to a non-member, and removing a member who still owns work is a
+    409 instead of a silent orphan. "At least one assignee" cannot be a CHECK constraint (it cannot
+    count sibling rows), so services.py enforces it."""
+
+    objective = models.ForeignKey(Objective, on_delete=models.CASCADE, related_name="assignees")
+    member = models.ForeignKey(ProjectMember, on_delete=models.PROTECT, related_name="objective_assignments")
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [UniqueConstraint(fields=["objective", "member"], name="uniq_objective_assignee")]
+
+    def __str__(self):
+        return f"{self.member.user.full_name} → {self.objective.title}"
+
+
+class ObjectiveUpdate(TimeStampedModel):
+    """A dated progress entry under one objective, written by one of its assignees. Every write is a
+    new row — the newest shows under the author's name, older ones expand in «سوابق» — never an edit
+    of an older one; the author may PATCH only **their own latest** entry on this objective
+    (views.py + services.py, the same "no delete, no rewriting history" rule `ProjectComment` half-
+    follows, tightened here to "your latest only" because a progress log is a timeline, not a
+    discussion).
+
+    `author_name`/`author_title` are the usual durable text snapshot, so an entry keeps reading
+    correctly after its author is deactivated or moves بخش.
+    """
+
+    objective = models.ForeignKey(Objective, on_delete=models.CASCADE, related_name="updates")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    author_name = models.CharField(max_length=255)
+    author_title = models.CharField(max_length=255, blank=True)
+    body = models.TextField()
+    edited_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        # Forward, so objective.updates.all() reads as a timeline; the API view orders newest first.
+        ordering = ["created_at", "id"]
+        indexes = [
+            Index(fields=["objective", "created_at"], name="obj_update_obj_time_idx"),
+            #: Backs "this author's latest entry on this objective" (services.py, and the objective
+            #: payload's per-assignee latest_update/update_count, queries.py).
+            Index(fields=["objective", "author"], name="obj_update_obj_author_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.author_name} on {self.objective.title}"
 
 
 class ProjectEvent(TimeStampedModel):
@@ -246,3 +298,62 @@ class ProjectDocumentLink(TimeStampedModel):
 
     def __str__(self):
         return f"{self.project.name} → {self.document.full_code}"
+
+
+class ProjectMeeting(TimeStampedModel):
+    """A meeting on the project's «جدول جلسات». Every project reader sees every meeting; only the
+    invited attendees acknowledge it («مشاهده شد»). Who may create, edit or cancel one is narrower
+    than `can_manage_project` on purpose (access.can_manage_meetings): the project's MANAGER role, or
+    a کارفرمایی account — not a بخش lead (ADR-010, and the owner's 2026-09-26 addition)."""
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="meetings")
+    title = models.CharField(max_length=255)
+    held_on = models.DateField()
+    #: Optional: a meeting may be fixed to a day before its hour is.
+    start_time = models.TimeField(null=True, blank=True)
+    location = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    #: Snapshot, like every other actor name in this app.
+    created_by_name = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-held_on", models.F("start_time").desc(nulls_last=True), "-id"]
+        indexes = [Index(fields=["project", "held_on"], name="meeting_project_day_idx")]
+
+    def __str__(self):
+        return f"{self.title} ({self.held_on})"
+
+
+class MeetingAttendee(TimeStampedModel):
+    """One invited project member. CASCADE on the member: someone removed from the project stops
+    being an attendee (ADR-010's default). `acknowledged_at` is set once, the first time they press
+    «مشاهده شد», and cleared for everyone when the date, time or place changes."""
+
+    meeting = models.ForeignKey(ProjectMeeting, on_delete=models.CASCADE, related_name="attendees")
+    member = models.ForeignKey(ProjectMember, on_delete=models.CASCADE, related_name="meeting_invitations")
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [UniqueConstraint(fields=["meeting", "member"], name="uniq_meeting_attendee")]
+
+    def __str__(self):
+        return f"{self.member.user.full_name} → {self.meeting.title}"
+
+
+
+class ProjectDraft(TimeStampedModel):
+    """The one half-typed new project a person has, autosaved from /projects/new (ADR-010: server-side,
+    one per user, deleted when a project is created). `payload` is opaque to the server — the
+    frontend owns its shape and versioning (`{version, form}`); only its size is bounded
+    (`PROJECT_DRAFT_MAX_BYTES`). Not a `Project` row with a DRAFT status: that would leak into
+    visibility, lists, events, progress and name uniqueness."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="project_draft")
+    payload = models.JSONField()
+
+    def __str__(self):
+        return f"draft of {self.user_id}"
