@@ -1024,6 +1024,9 @@ def _approval_strip(data: FormPdfInput, width: float) -> list:
                 ("GRID", (0, 0), (-1, -1), 0.5, LINE_COLOR),
                 ("BACKGROUND", (0, 0), (-1, 0), BAND_FILL),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                # Flowables narrower than their cell (the signature images) sit
+                # at the cell's left unless told otherwise.
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                 ("TOPPADDING", (0, 0), (-1, -1), 1.5),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
             ]

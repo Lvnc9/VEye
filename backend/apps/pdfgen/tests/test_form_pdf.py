@@ -556,3 +556,11 @@ class QuestionElementTests(SimpleTestCase):
         for orientation in ("portrait", "landscape"):
             with self.subTest(orientation=orientation):
                 self.assertTrue(form_renderer.render(form_input(orientation=orientation, elements=items)).startswith(b"%PDF-"))
+
+
+class ApprovalStripTests(SimpleTestCase):
+    def test_signatures_are_centred_in_their_cells(self):
+        signers = tuple(form_renderer.Signer(label, image=fixture_bytes("sign_creater.png")) for label in ("الف", "ب", "ج"))
+        [_, keep] = form_renderer._approval_strip(form_input(signers=signers), 500)
+        table = keep._content[0]
+        self.assertTrue(all(style.alignment == "CENTER" for row in table._cellStyles for style in row))
