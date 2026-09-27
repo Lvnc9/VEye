@@ -29,7 +29,7 @@ def load(document_id: int) -> FormPdfInput:
     header = settings["header"]
 
     elements = tuple(
-        section.content
+        form_schema.normalize_stored(section.content)
         for section in document.sections.filter(type=SectionType.FORM_ELEMENT).order_by("position", "id")
     )
 

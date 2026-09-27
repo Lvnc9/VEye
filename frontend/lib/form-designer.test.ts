@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  coveredCells,
+  mergeAt,
+  mergeNext,
+  mergeRange,
+  resizeRows,
+  splitAt,
   addColumn,
   dragToDelta,
   moveColumn,
@@ -273,5 +279,88 @@ describe("tables", () => {
     const broken = { ...table(), columns: table().columns.map((c) => ({ ...c, width: 10 })) };
     expect(validate({ ...state, elements: [table()] })).toEqual([]);
     expect(validate({ ...state, elements: [broken] })).toHaveLength(1);
+  });
+});
+
+describe("merged cells", () => {
+  // 2 header rows and 2 written rows, 3 columns.
+  const table = () => {
+    const element = newElement("table");
+    if (element.kind !== "table") throw new Error("unreachable");
+    return {
+      ...element,
+      header: [
+        ["ردیف", "مدت همکاری", ""],
+        ["", "از", "تا"],
+      ],
+      rows: [
+        ["", "الف", ""],
+        ["", "", "ب"],
+      ],
+    };
+  };
+
+  it("merges a range, keeping the first text and clearing the rest", () => {
+    const { table: merged, error } = mergeRange(table(), 2, 1, 3, 2);
+    expect(error).toBeUndefined();
+    expect(merged.merges).toEqual([{ row: 2, col: 1, rowspan: 2, colspan: 2 }]);
+    expect(merged.rows).toEqual([
+      ["", "الف", ""],
+      ["", "", ""],
+    ]);
+  });
+
+  it("accepts the corners in any order", () => {
+    expect(mergeRange(table(), 3, 2, 2, 1).table.merges).toEqual([{ row: 2, col: 1, rowspan: 2, colspan: 2 }]);
+  });
+
+  it("refuses to join header and written rows, or a single cell", () => {
+    expect(mergeRange(table(), 1, 0, 2, 0).error).toMatch(/سرستون/);
+    expect(mergeRange(table(), 0, 0, 0, 0).error).toMatch(/دو خانه/);
+  });
+
+  it("grows a range to swallow a merge it touches", () => {
+    const first = mergeRange(table(), 0, 1, 0, 2).table; // «مدت همکاری» over two columns
+    const grown = mergeRange(first, 0, 0, 0, 1).table;
+    expect(grown.merges).toEqual([{ row: 0, col: 0, rowspan: 1, colspan: 3 }]);
+    expect(grown.header[0]).toEqual(["ردیف", "", ""]);
+  });
+
+  it("merges with the next column or row, and splits back", () => {
+    const right = mergeNext(table(), 0, 1, "col").table;
+    expect(right.merges).toEqual([{ row: 0, col: 1, rowspan: 1, colspan: 2 }]);
+    const down = mergeNext(table(), 0, 0, "row").table;
+    expect(down.merges).toEqual([{ row: 0, col: 0, rowspan: 2, colspan: 1 }]);
+    expect(mergeNext(table(), 0, 2, "col").error).toBeTruthy();
+    expect(mergeNext(table(), 3, 0, "row").error).toBeTruthy();
+    expect(mergeNext(table(), 1, 0, "row").error).toMatch(/سرستون/);
+    expect(splitAt(right, 0, 2).merges).toEqual([]);
+    expect(splitAt(right, 1, 1)).toBe(right);
+  });
+
+  it("knows which cells are hidden and which merge covers a cell", () => {
+    const merged = mergeRange(table(), 2, 1, 3, 2).table;
+    expect([...coveredCells(merged.merges)].sort()).toEqual(["2,2", "3,1", "3,2"]);
+    expect(mergeAt(merged.merges, 3, 2)).toEqual(merged.merges[0]);
+    expect(mergeAt(merged.merges, 2, 0)).toBeUndefined();
+  });
+
+  it("keeps merges right when columns are removed or moved", () => {
+    const merged = mergeRange(table(), 0, 1, 0, 2).table;
+    expect(removeColumn(merged, 2).merges).toEqual([]); // one cell left: no merge
+    expect(removeColumn(merged, 0).merges).toEqual([{ row: 0, col: 0, rowspan: 1, colspan: 2 }]);
+    const wide = mergeRange(addColumn(table()), 0, 1, 0, 3).table;
+    expect(removeColumn(wide, 2).merges).toEqual([{ row: 0, col: 1, rowspan: 1, colspan: 2 }]);
+    expect(moveColumn(merged, 0, 1).merges).toEqual([]);
+  });
+
+  it("moves merges when header rows are added or removed, drops them with removed rows", () => {
+    const merged = mergeRange(table(), 2, 1, 3, 1).table; // written rows 1-2, column 2
+    const moreHeader = resizeRows(merged, "header", 3);
+    expect(moreHeader.header).toHaveLength(3);
+    expect(moreHeader.merges).toEqual([{ row: 3, col: 1, rowspan: 2, colspan: 1 }]);
+    expect(resizeRows(merged, "header", 1).merges).toEqual([{ row: 1, col: 1, rowspan: 2, colspan: 1 }]);
+    expect(resizeRows(merged, "rows", 1).merges).toEqual([]);
+    expect(resizeRows(merged, "rows", 3).rows).toHaveLength(3);
   });
 });

@@ -276,6 +276,42 @@ def _text_grid(r: _Reader, key: str, *, label: str, columns: int, max_rows: int,
     return grid
 
 
+MAX_MERGES = 200
+
+
+def _merges(r: _Reader, *, header_rows: int, grid_rows: int, columns: int) -> list[dict]:
+    """Merged cells over the header and the written rows (grid row 0 is the
+    first header row). A merge stays inside the header or inside the body,
+    covers at least two cells, and no two merges overlap."""
+    merges, taken = [], {}
+    for number, raw in enumerate(r.items("merges", label="ادغام‌ها", max_items=MAX_MERGES), start=1):
+        merge = r.nested(raw, f"ادغام {_fa(number)}")
+        row = merge.number("row", label="ردیف", low=0, high=max(grid_rows - 1, 0), default=0, integer=True)
+        col = merge.number("col", label="ستون", low=0, high=columns - 1, default=0, integer=True)
+        rowspan = merge.number("rowspan", label="تعداد ردیف", low=1, high=grid_rows, default=1, integer=True)
+        colspan = merge.number("colspan", label="تعداد ستون", low=1, high=columns, default=1, integer=True)
+        if grid_rows == 0:
+            merge.fail("جدول ردیفی برای ادغام ندارد.")
+            continue
+        if row + rowspan > grid_rows or col + colspan > columns:
+            merge.fail("از جدول بیرون می‌زند.")
+            continue
+        if rowspan * colspan < 2:
+            merge.fail("دست‌کم دو خانه را در بر بگیرد.")
+            continue
+        if row < header_rows < row + rowspan:
+            merge.fail("سرستون و ردیف‌های جدول را با هم ادغام نمی‌کند.")
+            continue
+        cells = {(y, x) for y in range(row, row + rowspan) for x in range(col, col + colspan)}
+        clash = next((taken[cell] for cell in cells if cell in taken), None)
+        if clash is not None:
+            merge.fail(f"با ادغام {_fa(clash)} هم‌پوشانی دارد.")
+            continue
+        taken.update({cell: number for cell in cells})
+        merges.append({"row": row, "col": col, "rowspan": rowspan, "colspan": colspan})
+    return merges
+
+
 def _table(r: _Reader) -> dict:
     """A table with a 1–3 row header, rows written in advance, and blank rows
     to fill by hand. Column 1 is the rightmost."""
@@ -304,6 +340,7 @@ def _table(r: _Reader) -> dict:
     blank_rows = r.number("blank_rows", label="ردیف‌های خالی", low=0, high=MAX_TABLE_ROWS, default=5, integer=True)
     if len(rows) + blank_rows > MAX_TABLE_ROWS:
         r.fail(f"یک جدول نمی‌تواند بیش از {_fa(MAX_TABLE_ROWS)} ردیف داشته باشد.")
+    merges = _merges(r, header_rows=len(header), grid_rows=len(header) + len(rows), columns=count)
     return {
         "title": r.text("title", label="عنوان جدول"),
         "columns": columns,
@@ -315,6 +352,7 @@ def _table(r: _Reader) -> dict:
         "borders": r.choice("borders", ("all", "outer", "horizontal", "none"), label="خطوط جدول"),
         "header_shade": r.boolean("header_shade", default=True),
         "repeat_header": r.boolean("repeat_header", default=True),
+        "merges": merges,
     }
 
 
@@ -351,6 +389,18 @@ def clean_element(raw: Any, *, number: int) -> dict:
     return {"kind": kind, **cleaned}
 
 
+def normalize_stored(content: dict) -> dict:
+    """A stored element as the current schema describes it. Elements saved
+    before a property existed gain it with its default (a table saved before
+    merged cells has `merges: []`), so readers — the designer, the PDF — never
+    meet a missing key. Stored data that no longer passes the rules is returned
+    as it is rather than hidden; the next save reports what to fix."""
+    try:
+        return clean_element(content, number=1)
+    except FormSchemaError:
+        return content
+
+
 # --------------------------------------------------------------------------
 # Page settings
 # --------------------------------------------------------------------------
@@ -376,6 +426,15 @@ def clean_settings(raw: Any) -> dict:
     if problems:
         raise FormSchemaError(problems)
     return cleaned
+
+
+def normalize_stored_settings(settings: dict) -> dict:
+    """Stored page settings as the current schema describes them (see
+    `normalize_stored`)."""
+    try:
+        return clean_settings(settings or {})
+    except FormSchemaError:
+        return settings
 
 
 def default_settings() -> dict:

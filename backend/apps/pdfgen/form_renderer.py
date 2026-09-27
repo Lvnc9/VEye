@@ -567,6 +567,17 @@ def _table(element, data, numbering):
                 cells.append(_table_cell(text, column, font, header=False))
         grid.append(cells)
 
+    # A merged range is drawn from its top-left cell in platypus terms, which,
+    # with the columns reversed, is the range's *last* logical column. Move the
+    # anchor's content there; the covered cells are never drawn.
+    for merge in element["merges"]:
+        row, first, last = merge["row"], merge["col"], merge["col"] + merge["colspan"] - 1
+        anchor = grid[row][first]
+        for y in range(row, row + merge["rowspan"]):
+            for x in range(first, last + 1):
+                grid[y][x] = ""
+        grid[row][last] = anchor
+
     flowables = []
     if element["title"].strip():
         title = RTLParagraph(element["title"], _fonts(data.base_font_size), bold=True)
@@ -592,15 +603,30 @@ class _TableFlowable(Flowable):
         element = self.element
         widths = [width * column["width"] / 100 for column in element["columns"]]
         min_body = element["row_height"] * mm
-        heights = []
+        # Each drawn cell's width, rows and anchor position (merged ranges count once).
+        spans = {}
+        for merge in element["merges"]:
+            last = merge["col"] + merge["colspan"] - 1
+            spans[(merge["row"], last)] = (sum(widths[merge["col"]:last + 1]), merge["rowspan"])
+        heights, tall = [], []
         for index, row in enumerate(self.grid):
             needed = 0
-            for cell, column_width in zip(row, widths):
-                if isinstance(cell, Flowable):
-                    _, h = cell.wrap(column_width - 2 * TABLE_PAD_X, 10_000)
+            for column, cell in enumerate(row):
+                if not isinstance(cell, Flowable):
+                    continue
+                cell_width, rowspan = spans.get((index, column), (widths[column], 1))
+                _, h = cell.wrap(cell_width - 2 * TABLE_PAD_X, 10_000)
+                if rowspan == 1:
                     needed = max(needed, h)
+                else:
+                    tall.append((index, rowspan, h + 2 * TABLE_PAD_Y))
             needed += 2 * TABLE_PAD_Y
             heights.append(max(needed, 6 * mm) if index < self.header_rows else max(needed, min_body))
+        # A cell spanning rows grows the last of them if they are too short together.
+        for index, rowspan, needed in tall:
+            short = needed - sum(heights[index:index + rowspan])
+            if short > 0:
+                heights[index + rowspan - 1] += short
         # Reverse every row and the widths: platypus lays column 0 on the left.
         data = [list(reversed(row)) for row in self.grid]
         table = Table(
@@ -624,6 +650,13 @@ class _TableFlowable(Flowable):
         ]
         if element["header_shade"]:
             style.append(("BACKGROUND", (0, 0), (-1, last_header), BAND_FILL))
+        count = len(element["columns"])
+        for merge in element["merges"]:
+            # Logical columns c..c+n-1 are platypus columns count-c-n .. count-1-c.
+            left = count - merge["col"] - merge["colspan"]
+            right = count - 1 - merge["col"]
+            bottom = merge["row"] + merge["rowspan"] - 1
+            style.append(("SPAN", (left, merge["row"]), (right, bottom)))
         borders = element["borders"]
         if borders == "all":
             style.append(("GRID", (0, 0), (-1, -1), 0.5, LINE_COLOR))

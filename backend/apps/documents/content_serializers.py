@@ -319,7 +319,7 @@ def _section_payload(document, section, request) -> dict:
         }
 
     if kind == SectionType.FORM_ELEMENT:
-        return {**base, **content}
+        return {**base, **form_schema.normalize_stored(content)}
 
     return base
 
@@ -346,7 +346,9 @@ def content_payload(document, request) -> dict:
         "footnote1": document.footnote1,
         "footnote2": document.footnote2,
         "body_kind": document.body_kind,
-        "form_settings": document.form_settings if document.body_kind == BodyKind.FORM else None,
+        "form_settings": (
+            form_schema.normalize_stored_settings(document.form_settings) if document.body_kind == BodyKind.FORM else None
+        ),
         "sections": [_section_payload(document, s, request) for s in sections],
         "previous_changes": [
             {

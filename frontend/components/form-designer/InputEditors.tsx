@@ -10,6 +10,7 @@ import {
   addColumn,
   moveColumn,
   removeColumn,
+  resizeRows,
   setColumnWidths,
   type Align,
   type ColumnType,
@@ -333,7 +334,7 @@ export function TableEditor({ element, disabled, set }: { element: TableProps; d
           </button>
         </div>
         <p className="text-xs text-slate-500">
-          پهنا درصدی از جدول است. روی خود جدول هم می‌توانید مرز ستون‌ها را بکشید. متن سرستون‌ها و ردیف‌های متن‌دار را روی جدول بنویسید.
+          پهنا درصدی از جدول است. روی خود جدول هم می‌توانید مرز ستون‌ها را بکشید. متن سرستون‌ها و ردیف‌های متن‌دار را روی جدول بنویسید؛ برای ادغام، خانه‌ای را انتخاب کنید (با Shift چند خانه) و از نوار بالای جدول استفاده کنید.
         </p>
       </div>
 
@@ -344,15 +345,7 @@ export function TableEditor({ element, disabled, set }: { element: TableProps; d
             min={1}
             max={MAX_HEADER_ROWS}
             disabled={disabled}
-            onChange={(n) =>
-              table((t) => ({
-                ...t,
-                header:
-                  n > t.header.length
-                    ? [...Array.from({ length: n - t.header.length }, () => Array<string>(count).fill("")), ...t.header]
-                    : t.header.slice(t.header.length - n),
-              }))
-            }
+            onChange={(n) => table((t) => resizeRows(t, "header", n))}
           />
         </Field>
         <Field label="ردیف‌های متن‌دار">
@@ -361,12 +354,7 @@ export function TableEditor({ element, disabled, set }: { element: TableProps; d
             min={0}
             max={MAX_TABLE_ROWS - element.blank_rows}
             disabled={disabled}
-            onChange={(n) =>
-              table((t) => ({
-                ...t,
-                rows: n > t.rows.length ? [...t.rows, ...Array.from({ length: n - t.rows.length }, () => Array<string>(count).fill(""))] : t.rows.slice(0, n),
-              }))
-            }
+            onChange={(n) => table((t) => resizeRows(t, "rows", n))}
           />
         </Field>
         <Field label="ردیف‌های خالی">

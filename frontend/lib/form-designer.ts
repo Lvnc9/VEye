@@ -123,6 +123,14 @@ export interface TableColumn {
   type: ColumnType;
 }
 
+/** A merged range; `row` counts the header rows first, then the written rows. */
+export interface Merge {
+  row: number;
+  col: number;
+  rowspan: number;
+  colspan: number;
+}
+
 export interface TableProps {
   kind: "table";
   title: string;
@@ -140,6 +148,7 @@ export interface TableProps {
   borders: "all" | "outer" | "horizontal" | "none";
   header_shade: boolean;
   repeat_header: boolean;
+  merges: Merge[];
 }
 
 export const MAX_COLUMNS = 20;
@@ -267,6 +276,7 @@ export function newElement(kind: ElementKind): FormElement {
         borders: "all",
         header_shade: true,
         repeat_header: true,
+        merges: [],
       };
   }
 }
@@ -477,7 +487,7 @@ export function headingNumbers(elements: FormElement[]): Map<string, string> {
 // Tables: column operations keep the header and rows in step with the columns
 // ---------------------------------------------------------------------------
 
-type TableShape = Pick<TableProps, "columns" | "header" | "rows">;
+type TableShape = Pick<TableProps, "columns" | "header" | "rows" | "merges">;
 
 export function addColumn<T extends TableShape>(table: T): T {
   if (table.columns.length >= MAX_COLUMNS) return table;
@@ -499,6 +509,13 @@ export function removeColumn<T extends TableShape>(table: T, index: number): T {
     columns: drop(table.columns).map((c, i) => ({ ...c, width: widths[i] })),
     header: table.header.map(drop),
     rows: table.rows.map(drop),
+    merges: table.merges
+      .map((m) => {
+        if (index < m.col) return { ...m, col: m.col - 1 };
+        if (index < m.col + m.colspan) return { ...m, colspan: m.colspan - 1 };
+        return m;
+      })
+      .filter((m) => m.colspan > 0 && m.rowspan * m.colspan > 1),
   };
 }
 
@@ -509,7 +526,13 @@ export function moveColumn<T extends TableShape>(table: T, from: number, to: num
     columns: moveElement(table.columns, from, to),
     header: table.header.map((row) => moveElement(row, from, to)),
     rows: table.rows.map((row) => moveElement(row, from, to)),
+    // A merge touching either column would no longer be a rectangle: undo it.
+    merges: table.merges.filter((m) => !touchesColumn(m, from) && !touchesColumn(m, to)),
   };
+}
+
+function touchesColumn(merge: Merge, column: number): boolean {
+  return column >= merge.col && column < merge.col + merge.colspan;
 }
 
 export function setColumnWidths<T extends TableShape>(table: T, widths: number[]): T {
@@ -522,4 +545,158 @@ export function setCell<T extends TableShape>(table: T, part: "header" | "rows",
     ...table,
     [part]: table[part].map((cells, r) => (r === row ? cells.map((cell, c) => (c === column ? text : cell)) : cells)),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Merged cells
+// ---------------------------------------------------------------------------
+
+export interface CellRange {
+  top: number;
+  left: number;
+  bottom: number;
+  right: number;
+}
+
+function rangeOf(merge: Merge): CellRange {
+  return { top: merge.row, left: merge.col, bottom: merge.row + merge.rowspan - 1, right: merge.col + merge.colspan - 1 };
+}
+
+function intersects(a: CellRange, b: CellRange): boolean {
+  return a.top <= b.bottom && b.top <= a.bottom && a.left <= b.right && b.left <= a.right;
+}
+
+/** The merge whose range contains the cell, if any. */
+export function mergeAt(merges: Merge[], row: number, col: number): Merge | undefined {
+  return merges.find((m) => row >= m.row && row < m.row + m.rowspan && col >= m.col && col < m.col + m.colspan);
+}
+
+/** Cells hidden under a merge (every cell of a merged range but its first), as "row,col". */
+export function coveredCells(merges: Merge[]): Set<string> {
+  const covered = new Set<string>();
+  for (const m of merges) {
+    for (let r = m.row; r < m.row + m.rowspan; r += 1) {
+      for (let c = m.col; c < m.col + m.colspan; c += 1) {
+        if (r !== m.row || c !== m.col) covered.add(`${r},${c}`);
+      }
+    }
+  }
+  return covered;
+}
+
+/**
+ * Merges the cells from (r0, c0) to (r1, c1). The range grows to swallow any
+ * merge it touches, keeps the first non-empty text (reading order) and clears
+ * the rest. Returns the table unchanged — with a Persian reason — when the
+ * range would join header and written rows, or is a single cell.
+ */
+export function mergeRange<T extends TableShape>(
+  table: T,
+  r0: number,
+  c0: number,
+  r1: number,
+  c1: number,
+): { table: T; error?: string } {
+  const range: CellRange = {
+    top: Math.min(r0, r1),
+    bottom: Math.max(r0, r1),
+    left: Math.min(c0, c1),
+    right: Math.max(c0, c1),
+  };
+  // Grow until no merge sticks out of the range.
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const m of table.merges) {
+      const other = rangeOf(m);
+      if (!intersects(range, other)) continue;
+      const grown = {
+        top: Math.min(range.top, other.top),
+        bottom: Math.max(range.bottom, other.bottom),
+        left: Math.min(range.left, other.left),
+        right: Math.max(range.right, other.right),
+      };
+      if (grown.top !== range.top || grown.bottom !== range.bottom || grown.left !== range.left || grown.right !== range.right) {
+        Object.assign(range, grown);
+        changed = true;
+      }
+    }
+  }
+  const headerRows = table.header.length;
+  if (range.top < headerRows && range.bottom >= headerRows) {
+    return { table, error: "سرستون و ردیف‌های جدول را نمی‌توان با هم ادغام کرد." };
+  }
+  if (range.top === range.bottom && range.left === range.right) {
+    return { table, error: "برای ادغام، دست‌کم دو خانه لازم است." };
+  }
+
+  const grid = [...table.header, ...table.rows].map((row) => row.slice());
+  let text = "";
+  for (let r = range.top; r <= range.bottom; r += 1) {
+    for (let c = range.left; c <= range.right; c += 1) {
+      if (!text && grid[r][c].trim()) text = grid[r][c];
+      grid[r][c] = "";
+    }
+  }
+  grid[range.top][range.left] = text;
+
+  const merge: Merge = {
+    row: range.top,
+    col: range.left,
+    rowspan: range.bottom - range.top + 1,
+    colspan: range.right - range.left + 1,
+  };
+  return {
+    table: {
+      ...table,
+      header: grid.slice(0, headerRows),
+      rows: grid.slice(headerRows),
+      merges: [...table.merges.filter((m) => !intersects(rangeOf(m), range)), merge],
+    },
+  };
+}
+
+/** Undoes the merge covering (row, col); the cells keep empty text. */
+export function splitAt<T extends TableShape>(table: T, row: number, col: number): T {
+  const merge = mergeAt(table.merges, row, col);
+  if (!merge) return table;
+  return { ...table, merges: table.merges.filter((m) => m !== merge) };
+}
+
+/** Merges the cell's range with the next column (towards the left on paper) or the next row. */
+export function mergeNext<T extends TableShape>(table: T, row: number, col: number, direction: "col" | "row") {
+  const current = mergeAt(table.merges, row, col);
+  const range = current ? rangeOf(current) : { top: row, left: col, bottom: row, right: col };
+  const gridRows = table.header.length + table.rows.length;
+  if (direction === "col") {
+    if (range.right + 1 >= table.columns.length) return { table, error: "ستونی بعد از این خانه نیست." };
+    return mergeRange(table, range.top, range.left, range.bottom, range.right + 1);
+  }
+  if (range.bottom + 1 >= gridRows) return { table, error: "ردیف متن‌داری زیر این خانه نیست." };
+  return mergeRange(table, range.top, range.left, range.bottom + 1, range.right);
+}
+
+/**
+ * Changes the number of header rows (added or removed at the top) or of
+ * written rows (at the bottom), moving or dropping merges to match.
+ */
+export function resizeRows<T extends TableShape>(table: T, part: "header" | "rows", count: number): T {
+  const columns = table.columns.length;
+  const blank = () => Array<string>(columns).fill("");
+  if (part === "header") {
+    const delta = count - table.header.length;
+    const header =
+      delta >= 0
+        ? [...Array.from({ length: delta }, blank), ...table.header]
+        : table.header.slice(-delta);
+    const merges = table.merges
+      .map((m) => ({ ...m, row: m.row + delta }))
+      .filter((m) => m.row >= 0);
+    return { ...table, header, merges };
+  }
+  const rows =
+    count >= table.rows.length
+      ? [...table.rows, ...Array.from({ length: count - table.rows.length }, blank)]
+      : table.rows.slice(0, count);
+  const last = table.header.length + count;
+  return { ...table, rows, merges: table.merges.filter((m) => m.row + m.rowspan <= last) };
 }

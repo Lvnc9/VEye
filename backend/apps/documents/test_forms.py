@@ -298,3 +298,70 @@ class TableSchemaTests(SimpleTestCase):
         columns = [{"width": 100}]
         self.assertTrue(self.messages({"columns": columns, "header": [[1]]}))
         self.assertTrue(self.messages({"columns": columns, "header": [[""]], "rows": [["ب" * 1001]]}))
+
+
+class MergeSchemaTests(SimpleTestCase):
+    BASE = {
+        "kind": "table",
+        "columns": [{"width": 25}, {"width": 25}, {"width": 50}],
+        "header": [["الف", "ب", "ج"], ["", "", ""]],
+        "rows": [["", "", ""], ["", "", ""]],
+    }
+
+    def clean(self, *merges):
+        return form_schema.clean_element({**self.BASE, "merges": list(merges)}, number=1)
+
+    def messages(self, *merges):
+        with self.assertRaises(form_schema.FormSchemaError) as caught:
+            self.clean(*merges)
+        return caught.exception.messages
+
+    def test_valid_merges(self):
+        table = self.clean({"row": 0, "col": 1, "colspan": 2}, {"row": 0, "col": 0, "rowspan": 2}, {"row": 2, "col": 0, "rowspan": 2, "colspan": 3})
+        self.assertEqual(len(table["merges"]), 3)
+        self.assertEqual(table["merges"][0], {"row": 0, "col": 1, "rowspan": 1, "colspan": 2})
+        self.assertEqual(form_schema.clean_element({"kind": "table"}, number=1)["merges"], [])
+
+    def test_out_of_the_table(self):
+        self.assertIn("بیرون", self.messages({"row": 3, "col": 0, "rowspan": 2})[0])
+        self.assertIn("بیرون", self.messages({"row": 0, "col": 2, "colspan": 2})[0])
+        self.assertTrue(self.messages({"row": 4, "col": 0, "colspan": 2}))  # blank rows cannot be merged
+
+    def test_one_cell_is_not_a_merge(self):
+        self.assertIn("دو خانه", self.messages({"row": 0, "col": 0})[0])
+
+    def test_header_and_body_stay_apart(self):
+        self.assertIn("سرستون", self.messages({"row": 1, "col": 0, "rowspan": 2})[0])
+
+    def test_overlaps_are_refused_naming_the_other_merge(self):
+        [message] = self.messages({"row": 0, "col": 0, "colspan": 2}, {"row": 0, "col": 1, "rowspan": 2})
+        self.assertIn("ادغام ۲", message)
+        self.assertIn("ادغام ۱", message)
+
+
+class StoredElementTests(DesignerTestCase):
+    """Elements saved before a property existed still load and print."""
+
+    def test_an_old_table_gains_its_new_properties_when_read(self):
+        form = new_doc(self.author, "فرم قدیمی‌تر", DocumentGroup.FORM)
+        old = form_schema.clean_element({"kind": "table"}, number=1)
+        del old["merges"]  # as stored before merged cells existed
+        Section.objects.create(document=form, position=0, type=FORM, content=old)
+        [table] = self.get_content(form)["sections"]
+        self.assertEqual(table["merges"], [])
+
+    def test_old_settings_gain_new_properties_when_read(self):
+        form = new_doc(self.author, "فرم تنظیمات قدیمی", DocumentGroup.FORM)
+        type(form).objects.filter(pk=form.pk).update(form_settings={"v": 1, "orientation": "landscape"})
+        settings = self.get_content(form)["form_settings"]
+        self.assertEqual(settings["orientation"], "landscape")
+        self.assertTrue(settings["approval_strip"])
+        self.assertEqual(settings["header"]["subtitle"], "")
+
+    def test_content_that_breaks_newer_rules_is_shown_as_stored(self):
+        form = new_doc(self.author, "فرم نامعتبر", DocumentGroup.FORM)
+        broken = {"kind": "heading", "text": "x", "level": 9}
+        Section.objects.create(document=form, position=0, type=FORM, content=broken)
+        [heading] = self.get_content(form)["sections"]
+        self.assertEqual(heading["level"], 9)
+        self.assertEqual(form_schema.normalize_stored(broken), broken)

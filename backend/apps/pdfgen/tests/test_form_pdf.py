@@ -433,3 +433,64 @@ class TableTests(SimpleTestCase):
         element = form_schema.clean_element({"kind": "table", "title": "سوابق"}, number=1)
         title = form_renderer._table(element, form_input(), form_renderer._Numbering())[0]
         self.assertTrue(title.keepWithNext)
+
+
+class MergedCellTests(SimpleTestCase):
+    def built(self, **raw):
+        element = form_schema.clean_element({"kind": "table", "blank_rows": 1, **raw}, number=1)
+        flowable = [f for f in form_renderer._table(element, form_input(), form_renderer._Numbering())
+                    if isinstance(f, form_renderer._TableFlowable)][0]
+        flowable.wrap(400, 800)
+        return flowable._table
+
+    def spans(self, table):
+        return [(cmd[1], cmd[2]) for cmd in table._spanCmds]
+
+    def test_a_logical_range_becomes_the_mirrored_platypus_span(self):
+        table = self.built(
+            columns=[{"width": 25}, {"width": 25}, {"width": 50}],
+            header=[["الف", "مدت", ""]],
+            merges=[{"row": 0, "col": 1, "colspan": 2}],
+        )
+        # Logical columns 1-2 (0-based) are platypus columns 0-1.
+        self.assertEqual(self.spans(table), [((0, 0), (1, 0))])
+        # The text moves to the span's first platypus cell, which platypus draws.
+        self.assertEqual(table._cellvalues[0][0].text, "مدت")
+        self.assertEqual(table._cellvalues[0][2].text, "الف")
+
+    def test_a_tall_merged_cell_grows_its_rows(self):
+        text = "کلمه " * 60
+        plain = self.built(columns=[{"width": 50}, {"width": 50}], header=[["", ""]], rows=[[text, ""], ["", ""]], row_height=5)
+        merged = self.built(
+            columns=[{"width": 50}, {"width": 50}], header=[["", ""]], rows=[[text, ""], ["", ""]], row_height=5,
+            merges=[{"row": 1, "col": 0, "rowspan": 2}],
+        )
+        # The two spanned rows together are exactly as tall as the text needs —
+        # the same height as the unmerged row that holds it, no taller.
+        self.assertAlmostEqual(sum(merged._argH[1:3]), plain._argH[1], delta=0.5)
+
+    def test_a_table_with_merges_renders(self):
+        items = elements({
+            "kind": "table",
+            "columns": [{"width": 10, "type": "row_number"}, {"width": 45}, {"width": 45}],
+            "header": [["ردیف", "مدت همکاری", ""], ["", "از", "تا"]],
+            "merges": [{"row": 0, "col": 1, "colspan": 2}, {"row": 0, "col": 0, "rowspan": 2}],
+            "blank_rows": 60,
+        })
+        pdf = form_renderer.render(form_input(elements=items))
+        self.assertGreaterEqual(page_count(pdf), 2)  # a spanned, repeated header across pages
+
+
+@override_settings(MEDIA_ROOT=MEDIA, FRONTEND_BASE_URL=C.FRONTEND, CACHES=LOCMEM_CACHE)
+class StoredElementPdfTests(TestCase):
+    def test_a_table_saved_before_merges_still_prints(self):
+        user = make_author()
+        form = document_services.create_document(
+            user=user, category=DocumentCategory.INSIDE, title="فرم قدیمی", group=DocumentGroup.FORM
+        )
+        old = form_schema.clean_element({"kind": "table"}, number=1)
+        del old["merges"]
+        Section.objects.create(document=form, position=0, type=SectionType.FORM_ELEMENT, content=old)
+        data = form_adapter.load(form.pk)
+        self.assertEqual(data.elements[0]["merges"], [])
+        self.assertTrue(form_renderer.render(data).startswith(b"%PDF-"))
