@@ -1,3 +1,6 @@
+import json
+
+from django.conf import settings
 from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
@@ -5,20 +8,36 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.core.pagination import DefaultPagination
 from apps.core.text import normalize_search_term
 
 from . import services
-from .access import CanManageProject, can_create_project, can_manage_project, visible_projects
-from .models import Objective, ProjectComment, ProjectDocumentLink, ProjectMember
-from .queries import overdue_q, with_progress
+from .access import CanManageProject, can_create_project, can_manage_meetings, can_manage_project, visible_projects
+from .models import (
+    MeetingAttendee,
+    Objective,
+    ObjectiveAssignee,
+    ObjectiveUpdate,
+    ProjectComment,
+    ProjectDocumentLink,
+    ProjectDraft,
+    ProjectMeeting,
+    ProjectMember,
+)
+from .queries import overdue_q, with_latest_update, with_progress
 from .serializers import (
     CommentCreateSerializer,
     DocumentLinkCreateSerializer,
+    MeetingInputSerializer,
+    MeetingSerializer,
+    MeetingUpdateSerializer,
     MemberCreateSerializer,
     MemberUpdateSerializer,
     ObjectiveInputSerializer,
+    ObjectiveProgressBodySerializer,
+    ObjectiveProgressSerializer,
     ObjectiveSerializer,
     ObjectiveUpdateSerializer,
     ProjectCommentSerializer,
@@ -149,13 +168,36 @@ class ProjectViewSet(
             raise PermissionDenied("شما مدیر این پروژه نیستید.")
 
     def _objective_context(self, request, project):
-        return {"request": request, "manage": can_manage_project(request, project)}
+        return {
+            "request": request, "manage": can_manage_project(request, project), "archived": project.is_archived,
+        }
 
     def _member_for(self, project, user):
         try:
             return project.members.get(user=user)
         except ProjectMember.DoesNotExist:
-            raise ValidationError({"assignee": ["مسئول ریزهدف باید یکی از اعضای پروژه باشد."]})
+            raise ValidationError({"assignees": ["مسئول ریزهدف باید یکی از اعضای پروژه باشد."]})
+
+    def _members_for(self, project, users):
+        return [self._member_for(project, user) for user in users]
+
+    @staticmethod
+    def _with_assignees(queryset):
+        return queryset.prefetch_related(
+            Prefetch(
+                "assignees",
+                queryset=with_latest_update(ObjectiveAssignee.objects.select_related("member__user")),
+            )
+        )
+
+    def _fetch_objective(self, project, objective_id):
+        try:
+            return self._with_assignees(Objective.objects).get(pk=objective_id, project=project)
+        except Objective.DoesNotExist:
+            raise NotFound("ریزهدف یافت نشد.")
+
+    def _is_assignee(self, objective, user) -> bool:
+        return any(a.member.user_id == user.pk for a in objective.assignees.all())
 
     @action(detail=True, methods=["get", "post"], url_path="objectives", permission_classes=[IsAuthenticated])
     def objectives(self, request, pk=None):
@@ -164,13 +206,13 @@ class ProjectViewSet(
         project = self.get_object()  # scoped: an invisible project is a 404
         context = self._objective_context(request, project)
         if request.method == "GET":
-            rows = project.objectives.select_related("assignee__user")
+            rows = self._with_assignees(project.objectives)
             params = request.query_params
             if value := params.get("status"):
                 rows = rows.filter(status=value)
             if value := params.get("assignee"):
                 who = request.user.pk if value == "me" else (int(value) if value.isdigit() else None)
-                rows = rows.filter(assignee__user_id=who) if who is not None else rows.none()
+                rows = rows.filter(assignees__member__user_id=who) if who is not None else rows.none()
             if params.get("overdue") in ("1", "true"):
                 rows = rows.filter(overdue_q())
             return Response(ObjectiveSerializer(rows, many=True, context=context).data)
@@ -179,9 +221,9 @@ class ProjectViewSet(
         serializer = ObjectiveInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
-        assignee = self._member_for(project, data.pop("assignee"))
-        objective = services.add_objective(project, actor=request.user, assignee=assignee, **data)
-        objective = Objective.objects.select_related("assignee__user").get(pk=objective.pk)
+        assignees = self._members_for(project, data.pop("assignees"))
+        objective = services.add_objective(project, actor=request.user, assignees=assignees, **data)
+        objective = self._fetch_objective(project, objective.pk)
         return Response(ObjectiveSerializer(objective, context=context).data, status=status.HTTP_201_CREATED)
 
     @action(
@@ -189,14 +231,11 @@ class ProjectViewSet(
         permission_classes=[IsAuthenticated],
     )
     def objective(self, request, pk=None, objective_id=None):
-        """Edit or remove one objective. Its assignee may change **its status** (an assignee who cannot
-        mark their own work done is a dead feature); everything else — title, deadline, weight,
-        reassigning, deleting — is for the project's مدیر or a lead."""
+        """Edit or remove one objective. Any current assignee may change **its status** (an assignee
+        who cannot mark their own work done is a dead feature); everything else — title, deadline,
+        weight, the assignee set, deleting — is for the project's مدیر or a lead."""
         project = self.get_object()
-        try:
-            objective = Objective.objects.select_related("assignee__user").get(pk=objective_id, project=project)
-        except Objective.DoesNotExist:
-            raise NotFound("ریزهدف یافت نشد.")
+        objective = self._fetch_objective(project, objective_id)
         context = self._objective_context(request, project)
 
         if request.method == "DELETE":
@@ -208,12 +247,12 @@ class ProjectViewSet(
         serializer.is_valid(raise_exception=True)
         changes = dict(serializer.validated_data)
         only_status = set(changes) <= {"status"}
-        if not (only_status and objective.assignee.user_id == request.user.pk):
+        if not (only_status and self._is_assignee(objective, request.user)):
             self._manager_only(request, project)
-        if "assignee" in changes:
-            changes["assignee"] = self._member_for(project, changes["assignee"])
+        if "assignees" in changes:
+            changes["assignees"] = self._members_for(project, changes["assignees"])
         objective = services.update_objective(objective, actor=request.user, changes=changes)
-        objective = Objective.objects.select_related("assignee__user").get(pk=objective.pk)
+        objective = self._fetch_objective(project, objective.pk)
         return Response(ObjectiveSerializer(objective, context=context).data)
 
     @action(detail=True, methods=["post"], url_path="objectives/reorder", permission_classes=[IsAuthenticated])
@@ -223,8 +262,70 @@ class ProjectViewSet(
         serializer = ReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         services.reorder_objectives(project, actor=request.user, ordered_ids=serializer.validated_data["order"])
-        rows = project.objectives.select_related("assignee__user")
+        rows = self._with_assignees(project.objectives)
         return Response(ObjectiveSerializer(rows, many=True, context=self._objective_context(request, project)).data)
+
+    # -- progress log ---------------------------------------------------------
+
+    def _fetch_progress_update(self, objective, update_id):
+        try:
+            return ObjectiveUpdate.objects.select_related("author").get(pk=update_id, objective=objective)
+        except ObjectiveUpdate.DoesNotExist:
+            raise NotFound("گزارش پیشرفت یافت نشد.")
+
+    def _my_latest_update_id(self, objective, user):
+        return (
+            objective.updates.filter(author=user).order_by("-created_at", "-id").values_list("id", flat=True).first()
+        )
+
+    @action(
+        detail=True, methods=["get", "post"], url_path=r"objectives/(?P<objective_id>\d+)/updates",
+        permission_classes=[IsAuthenticated],
+    )
+    def objective_updates(self, request, pk=None, objective_id=None):
+        """The dated progress log under one objective (`?author=<uid>`, paginated, newest first).
+        Anyone who can read the project reads it; only a *current* assignee may post."""
+        project = self.get_object()
+        objective = self._fetch_objective(project, objective_id)
+
+        if request.method == "GET":
+            rows = objective.updates.select_related("author").order_by("-created_at", "-id")
+            if value := request.query_params.get("author"):
+                who = int(value) if value.isdigit() else None
+                rows = rows.filter(author_id=who) if who is not None else rows.none()
+            page = self.paginate_queryset(rows)
+            context = {"request": request, "my_latest_id": self._my_latest_update_id(objective, request.user)}
+            return self.get_paginated_response(ObjectiveProgressSerializer(page, many=True, context=context).data)
+
+        if not self._is_assignee(objective, request.user):
+            raise PermissionDenied("فقط مسئولان این ریزهدف می‌توانند گزارش پیشرفت ثبت کنند.")
+        serializer = ObjectiveProgressBodySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        update = services.add_objective_update(objective, actor=request.user, body=serializer.validated_data["body"])
+        update = self._fetch_progress_update(objective, update.pk)
+        context = {"request": request, "my_latest_id": update.pk}
+        return Response(ObjectiveProgressSerializer(update, context=context).data, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True, methods=["patch"], url_path=r"objectives/(?P<objective_id>\d+)/updates/(?P<update_id>\d+)",
+        permission_classes=[IsAuthenticated],
+    )
+    def objective_update_entry(self, request, pk=None, objective_id=None, update_id=None):
+        """Edit one's own **latest** entry on this objective. `services.edit_objective_update`
+        re-checks "latest" under the project's row lock (two concurrent posts by the same author
+        must not both think an older row is still current); authorship is checked here, the same
+        split every other author-scoped write in this app follows (e.g. `comment`, below)."""
+        project = self.get_object()
+        objective = self._fetch_objective(project, objective_id)
+        update = self._fetch_progress_update(objective, update_id)
+        if update.author_id != request.user.pk:
+            raise PermissionDenied("فقط نویسندهٔ گزارش می‌تواند آن را ویرایش کند.")
+        serializer = ObjectiveProgressBodySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        update = services.edit_objective_update(update, actor=request.user, body=serializer.validated_data["body"])
+        update = self._fetch_progress_update(objective, update.pk)
+        context = {"request": request, "my_latest_id": update.pk}
+        return Response(ObjectiveProgressSerializer(update, context=context).data)
 
     # -- comments -------------------------------------------------------------
 
@@ -308,4 +409,122 @@ class ProjectViewSet(
         except ProjectDocumentLink.DoesNotExist:
             raise NotFound("پیوند مستند یافت نشد.")
         services.unlink_document(link, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # -- meetings -------------------------------------------------------------
+
+    #: «جدول جلسات» is one unpaginated list (the contract); a project past this many meetings shows
+    #: the newest.
+    MEETINGS_LIST_LIMIT = 200
+
+    def _meeting_context(self, request, project):
+        return {"request": request, "manage": can_manage_meetings(request, project), "archived": project.is_archived}
+
+    @staticmethod
+    def _with_attendees(queryset):
+        return queryset.prefetch_related(
+            Prefetch("attendees", queryset=MeetingAttendee.objects.select_related("member__user"))
+        )
+
+    def _fetch_meeting(self, project, meeting_id):
+        try:
+            return self._with_attendees(ProjectMeeting.objects).get(pk=meeting_id, project=project)
+        except ProjectMeeting.DoesNotExist:
+            raise NotFound("جلسه یافت نشد.")
+
+    def _meetings_manager_only(self, request, project):
+        if not can_manage_meetings(request, project):
+            if project.is_archived:
+                services.require_writable(project)  # the archived 409 says why better than a 403
+            raise PermissionDenied("فقط مدیر پروژه می‌تواند جلسه تعیین یا ویرایش کند.")
+
+    def _attendee_members(self, project, users):
+        members = {m.user_id: m for m in project.members.filter(user__in=users)}
+        missing = [u for u in users if u.pk not in members]
+        if missing:
+            raise ValidationError({"attendees": ["شرکت‌کنندگان باید از اعضای همین پروژه باشند."]})
+        return [members[u.pk] for u in users]
+
+    @action(detail=True, methods=["get", "post"], url_path="meetings", permission_classes=[IsAuthenticated])
+    def meetings(self, request, pk=None):
+        """Every reader of the project sees every meeting (newest first, unpaginated, at most
+        `MEETINGS_LIST_LIMIT`); scheduling one needs `can_manage_meetings`."""
+        project = self.get_object()
+        context = self._meeting_context(request, project)
+        if request.method == "GET":
+            rows = self._with_attendees(project.meetings.all())[: self.MEETINGS_LIST_LIMIT]
+            return Response(MeetingSerializer(rows, many=True, context=context).data)
+        self._meetings_manager_only(request, project)
+        serializer = MeetingInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        attendees = self._attendee_members(project, data.pop("attendees"))
+        meeting = services.create_meeting(project, actor=request.user, attendees=attendees, **data)
+        meeting = self._fetch_meeting(project, meeting.pk)
+        return Response(MeetingSerializer(meeting, context=context).data, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True, methods=["patch", "delete"], url_path=r"meetings/(?P<meeting_id>\d+)",
+        permission_classes=[IsAuthenticated],
+    )
+    def meeting(self, request, pk=None, meeting_id=None):
+        project = self.get_object()
+        meeting = self._fetch_meeting(project, meeting_id)
+        self._meetings_manager_only(request, project)
+        if request.method == "DELETE":
+            services.cancel_meeting(meeting, actor=request.user)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = MeetingUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        changes = dict(serializer.validated_data)
+        if "attendees" in changes:
+            changes["attendees"] = self._attendee_members(project, changes["attendees"])
+        services.update_meeting(meeting, actor=request.user, changes=changes)
+        meeting = self._fetch_meeting(project, meeting.pk)
+        return Response(MeetingSerializer(meeting, context=self._meeting_context(request, project)).data)
+
+    @action(
+        detail=True, methods=["post"], url_path=r"meetings/(?P<meeting_id>\d+)/acknowledge",
+        permission_classes=[IsAuthenticated],
+    )
+    def acknowledge_meeting(self, request, pk=None, meeting_id=None):
+        """«مشاهده شد» — invited attendees only; idempotent (the first time is kept)."""
+        project = self.get_object()
+        meeting = self._fetch_meeting(project, meeting_id)
+        services.acknowledge_meeting(meeting, user=request.user)
+        meeting = self._fetch_meeting(project, meeting.pk)
+        return Response(MeetingSerializer(meeting, context=self._meeting_context(request, project)).data)
+
+
+class ProjectDraftView(APIView):
+    """`/projects/draft/` — the caller's one half-typed new project (ADR-010), autosaved by
+    /projects/new. A separate view registered **before** the router in urls.py: the viewset has no
+    PUT, and "draft" would otherwise be read as a project pk. Only ever the caller's own draft — there
+    is no id in the URL to point at someone else's.
+
+    GET always answers 200 (`payload`/`updated_at` are null when there is none); PUT stores a JSON
+    object of at most `PROJECT_DRAFT_MAX_BYTES`; DELETE is idempotent. A successful `POST /projects/`
+    deletes it too (services.create_project)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        draft = ProjectDraft.objects.filter(user=request.user).first()
+        if draft is None:
+            return Response({"payload": None, "updated_at": None})
+        return Response({"payload": draft.payload, "updated_at": draft.updated_at})
+
+    def put(self, request):
+        payload = request.data.get("payload") if isinstance(request.data, dict) else None
+        if not isinstance(payload, dict):
+            raise ValidationError({"payload": ["پیش‌نویس باید یک شیء JSON باشد."]})
+        size = len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+        if size > settings.PROJECT_DRAFT_MAX_BYTES:
+            limit_kb = settings.PROJECT_DRAFT_MAX_BYTES // 1024
+            raise ValidationError({"payload": [f"پیش‌نویس بزرگ‌تر از حد مجاز ({limit_kb} کیلوبایت) است."]})
+        draft = services.save_draft(user=request.user, payload=payload)
+        return Response({"payload": draft.payload, "updated_at": draft.updated_at})
+
+    def delete(self, request):
+        services.delete_draft(user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -36,7 +36,8 @@ MAX_DAYS = 3650
 
 #: `from_status` / `to_status` are overloaded by kind: a ProjectStatus pair for
 #: project_status_changed, an ObjectiveStatus pair for objective_status_changed, an ISO-date pair
-#: for objective_due_changed (already frontend-ready as text, no label), and blank everywhere else.
+#: for objective_due_changed (already frontend-ready as text, no label), the meeting's day as an ISO
+#: date in `to_status` for the three meeting kinds, and blank everywhere else.
 #: Only the two status-carrying kinds get a human label — `get_..._display()` would be wrong here
 #: since the column has no single `choices=` (a CharField cannot declare two enums at once).
 _STATUS_ENUM_BY_KIND = {

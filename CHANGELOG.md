@@ -17,16 +17,151 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 - **Refactor: the designer page is split into parts a second editor can reuse.** No behaviour change. `app/(app)/documents/[id]/edit/page.tsx` now only loads the body and hands it to `components/designer/ClassicDesigner.tsx`. The load / save / conflict / preview life cycle moved into `useDesignerDocument` (generic over the editor's state, given an adapter: `fromResponse` / `toPayload` / `snapshot` / `validate`). The header card, banners, timeline and sticky save bar moved into `DesignerShell`; the logo and footnote editors into `LogoSection` and `FootnoteFields`.
 
 ### Phase 10 — A1 · setup and first run (developer account)
-- _(A1: add lines under this heading only)_
+- **SectionsStep is one card per واحد, so adding several بخش never needs re-picking a shared selection.** The step used a single `<select>` for "which واحد" plus one add form; `SectionsStep.tsx` now shows every active واحد as its own card (each with its own inline add form and بخش list), grouped under its حوزه heading, with a «مستقیم زیر شرکت» group for واحد straight under the company — built with `lib/organization.ts`'s existing `chartLayout` (the same grouping the org chart already draws). `UnitsStep` now also lists a «مستقیم زیر شرکت» group when حوزه exist, since a واحد may always sit directly under the company (`ALLOWED_PARENT_KINDS` already permitted it; the step just never showed it). `SetupWizard` no longer reloads `/setup/status/` after a node write (`AddNodeForm`/`DeleteNodeButton`/`CompanyStep`'s `onChanged`) — it now holds two reload counters, one for `/setup/status/` (bumped only when leaving `FirstStep`) and one for `/org/tree/` + `/org/company/` (bumped by node writes), where before both shared one counter.
+
+  Not a live bug on this branch: `CompanyStep`'s multi-حوزه radio (`:28`) and the shared `<select>` losing its pick both trace back to the pre-Phase-10 `useApiQuery`, which is already fixed on `main` (Phase 0.2, keeps stale data across a reload of the same path instead of unmounting). Verified by hand: saving the company name/logo, and adding three بخش in a row to the second واحد of the second حوزه, neither resets anything even without this slice's UI change — this slice is the ADR's UX redesign (one card per واحد) plus the belt-and-suspenders reload split, not a fix for a reproducing bug.
+
+- **A developer account runs first-time setup — no مدیر عامل is minted at first run at all.** `POST /setup/bootstrap/` (anonymous, rate-limited) now creates only the **one** technical developer account (`is_developer=True`, صفی/لول ۳, never `is_superuser`, no membership, no company); `POST /setup/start/` (the developer's own session) then creates the root node, its channel and `Company(pk=1)` — and deliberately writes **no membership**, so the developer itself can never sit in the org chart. The مدیر عامل is registered afterwards as ordinary personnel, through the wizard's «پرسنل» step (next slice, embeds A4's `PersonnelForm`). `manager_exists`, `is_eligible_manager`, `_MANAGER`, the promotion path and `has_users` are gone (`organization/bootstrap.py`); race safety is unchanged in shape (an insert that can fail, guarded by `uniq_developer_account` / `Company(pk=1)`), just against a different singleton. `GET /setup/status/` now answers `{developer_exists, company_exists, completed, step, has_root_lead}` (no more `needed`/`has_users`). `POST /setup/complete/` needs the **developer's session specifically** (not `manage_organization`, which the مدیر عامل holds too) and a new guard, 409 `root_lead_missing`, until an active lead `Membership` sits on the company root — `has_root_lead()` is the fact «پایان راه‌اندازی» will wait for (wired up in the next slice). The developer is kept out of `/org/people/` (and therefore `?unassigned=1`) and can never be placed in the chart (`MembershipCreateSerializer.validate_user`, a Persian 400). Tests: `organization` +47 in `test_setup.py` (status 6, no-token 3, developer bootstrap 12, developer-exists 1, start 6, complete 9, complete-without-company 2, developer-exclusion 3, bookmark 5, concurrency 4; the concurrency tests include the ADR's two-bootstraps-at-once → one developer case), 230 total; mutation-checked (dropped the `is_developer` guard and watched the "developer never appears" tests fail).
+
+  **Frontend:** `/` is now a public landing page (`proxy.ts`) reading `GET /setup/status/` alone: no developer → «شروع راه‌اندازی» → `/setup`; a developer exists but setup is unfinished → «ادامهٔ راه‌اندازی» → `/login?next=%2Fsetup`; completed → `/dashboard` if signed in (`apiGetIfSignedIn`, never bounces an anonymous visitor to `/login`) else `/login`. The wizard, `SetupBanner` and the account form are gated on `user.is_developer` everywhere `manage_organization` used to gate them — anyone else signed in sees «راه‌اندازی در حال انجام است — با توسعه‌دهنده تماس بگیرید»; `AccountStep`'s form has no company-name field any more (`lib/setup.ts` `AccountForm`/`bootstrapBody`), since the company is created afterwards by `StartSetupButton` with the existing default name and renamed in the wizard's own «شرکت و حوزه‌ها» step. `LoginScreen`'s setup branches use the developer wording. Fixed along the way: `SetupWizard`'s `FirstStep` re-checks `/auth/me/` only once per mount, so right after `AccountStep` signs the new developer in it kept showing the stale "not signed in" screen until a manual reload — now keyed by `status.developer_exists`, so a fresh mount (and a fresh session check) follows the flip from "no developer" to "developer, no company" immediately. Tests: frontend +0 net in `lib/setup.test.ts` (rewritten for the new `SetupStatus` shape and the `PEOPLE → "people"` mapping), `proxy.test.ts` (`/` is public), 172 total.
+
+- **The wizard registers personnel, and finishing needs a مدیر عامل (ADR-010 §A).** New step «پرسنل» between
+  بخش‌ها and آمادهٔ شروع (`components/setup/PeopleStep.tsx`): it embeds A4's `PersonnelForm tone="dark"` (register
+  + place in one request), lists who is registered and where, and says in amber, until it is true, that someone must
+  be «مسئول» of «خود شرکت». «ورود به نرم‌افزار» on the last step is disabled with that reason and a link back to
+  «پرسنل» until `has_root_lead`; a 409 other than `already_completed` (e.g. `root_lead_missing`) is now shown instead
+  of being treated as "already finished". Registering someone refreshes `/setup/status/`. `lib/setup.ts`:
+  `CHART_STEPS` gains `people`, new `finishBlockedReason` (+2 vitest → 198).
 
 ### Phase 10 — A2 · projects backend (assignees, progress log, meetings, draft)
-- _(A2: add lines under this heading only)_
+- **An objective can have several assignees, with no levels among them (Phase 10, ADR-010 §D, slice 1 — backend
+  only)**: new `ObjectiveAssignee(objective, member→ProjectMember)`, `unique(objective, member)`, replacing the
+  old single `Objective.assignee` FK (migration `projects/0004`, `RunPython`-copies the existing data before
+  dropping the column). "At least one assignee" is enforced in `services.py`, not the database (a `CHECK`
+  constraint cannot count sibling rows); a `PATCH .../objectives/{id}/` with `assignees` **replaces** the whole
+  set. Any current assignee, not just one, may change an objective's status
+  (`ObjectiveSerializer.can_change_status`) and post under their own name (progress updates land in slice 2).
+  Removing a project member is now a 409 `member_has_objectives` **only when they are the sole assignee of some
+  objective** — being one of several is fine. `GET .../objectives/?assignee=me|<uid>` and the dashboard's
+  «منتظر اقدام» due-objectives query both follow the new relation; `/dashboard/inbox/`'s response shape is
+  unchanged. Also (ADR-010 §A): a project's member/objective-assignee endpoints now refuse the developer
+  account (`User.is_developer`) with a Persian 400 — it is never a project member. Tests: **+11 → 915**,
+  including a case that pins a real bug the new tests caught (a `Count()` over the same relation a preceding
+  `filter()` had already joined silently restricted the count instead of totalling every assignee).
+- **A dated progress log under each assignee (Phase 10, ADR-010 §D, slice 2 — backend only)**: new
+  `ObjectiveUpdate(objective, author, author_name/author_title snapshots, body ≤4000, edited_at)` — every write
+  is a new row, the newest shows under the author's name, older ones expand; **the author may edit only their
+  own latest entry on that objective**, no delete. `GET/POST /projects/{id}/objectives/{oid}/updates/`
+  (paginated, newest first, `?author=<uid>`) and `PATCH …/updates/{uid}/`; only a *current* assignee may post
+  (not even the project's manager, if they are not one), only the author may edit, and editing anything but
+  their own latest entry is a 409 `not_latest_update` (checked under the project's row lock, so two concurrent
+  posts by the same author can't both think an older row is current). New event kind `objective_update_added`.
+  The objective payload's `assignees[]` now carries `latest_update` (`{id, body, created_at, edited_at,
+  can_edit}` or `null`) and `update_count` per assignee, plus a top-level `can_post_update` — all computed with
+  correlated subqueries (`queries.with_latest_update`), so a whole objective list costs no query per row. Tests:
+  **+18 → 933**.
+- **Every کارفرمایی account edits every project (owner, 2026-09-26)**: the مدیر عامل and the other کارفرمایی
+  levels (رئیس/عضو هیئت مدیره) now pass `projects.access.can_manage_project` with no lead membership — edit,
+  archive, members and objectives. Previously they could only *read* every project (through
+  `manage_organization`) and edited only as a lead of the company root. Checked on the roll, not as a new
+  capability, so the per-roll capability sets are unchanged; the developer (صفی/لول ۳) never gets it. Creating
+  meetings is covered by the next entry.
+- **Meetings that invited members acknowledge (ADR-010 §D, slice 3 — backend).** New `ProjectMeeting(title,
+  held_on, start_time?, location?, description, created_by_name snapshot)` and `MeetingAttendee(member →
+  ProjectMember CASCADE, acknowledged_at)` (migration `projects/0006`). `GET/POST /projects/{id}/meetings/`
+  (every reader sees every meeting, newest first, unpaginated, at most 200), `PATCH/DELETE …/meetings/{mid}/`,
+  `POST …/meetings/{mid}/acknowledge/`. **Who may schedule, edit or cancel: the project's MANAGER role or any
+  کارفرمایی account** (owner, 2026-09-26, on top of ADR-010's MANAGER-only) — not a بخش lead; exposed as
+  `can_manage_meetings` on the project detail (false once archived). Attendees must be project members; a
+  member removed from the project stops being an attendee. «مشاهده شد» is invited-attendees-only and idempotent
+  (the first time is kept); changing the day, time or place clears every acknowledgement, a title/description
+  edit does not. Events `meeting_scheduled` / `meeting_changed` / `meeting_cancelled` carry the day as an ISO date
+  in `to_status` (like `objective_due_changed`) and time · place in the note. Archived projects refuse every
+  meeting write, acknowledgements included. Tests: +16 (projects+dashboard 225); the کارفرمایی rule and the
+  acknowledgement clearing were each mutation-checked.
+- **One server-side draft of a new project per person (ADR-010 §D, slice 4 — backend).** New
+  `ProjectDraft(user one-to-one, payload JSON)` (migration `projects/0007`) behind `GET/PUT/DELETE
+  /projects/draft/` — a separate view registered before the router ("draft" is not a pk). GET always answers 200
+  (`{payload, updated_at}`, nulls when there is none); PUT takes a JSON object up to `PROJECT_DRAFT_MAX_BYTES`
+  (64 KB), else a Persian 400; DELETE is idempotent. The payload is opaque to the server. A successful
+  `POST /projects/` deletes the creator's draft in the same transaction, so a failed create keeps it. Tests: +7 →
+  956 overall; the delete-on-create was mutation-checked.
 
 ### Phase 10 — A3 · projects frontend (objective tree, timeline, meetings table, drafts)
-- _(A3: add lines under this heading only)_
+- **An objective's assignees render as a tree.** `ObjectiveTree` (replaces `ObjectivesList`) draws each
+  objective as a root card and every assignee as a leaf under it, joined by a plain-CSS connector line (RTL,
+  no drawing library, readable at 375px). A leaf shows that assignee's latest progress report, lets only that
+  assignee write a new one or edit their latest, and expands a paged «سوابق (n)» of older entries. The add
+  form and a new `ObjectiveEditDialog` (title, description, due date, weight) now pick several assignees via
+  checkboxes instead of one `<select>`. Built against ADR-010's A2↔A3 API contract (`assignees[]` replaces
+  `assignee`/`assignee_name`) ahead of the backend landing. Tests: +7 in `lib/projects.test.ts` (179 total).
+- **`/projects/new`'s ریزهدف rows take several assignees too**, and a server-side draft (`GET`/`PUT`/`DELETE
+  /projects/draft/`, one per user) autosaves the whole form 1.5s after the last change and once on unmount.
+  Opening the page with a saved draft offers «ادامهٔ پیش‌نویس» / «شروع از نو» before anything autosaves over
+  it; `/projects` shows a «پیش‌نویس پروژه» card when one exists. The payload is `{version: 1, form}` — an
+  unrecognised version is ignored, not treated as corrupt. Two bugs fixed: changing the بخش or removing a
+  member in `MemberPicker` used to leave a draft ریزهدف pointing at someone no longer selectable (now pruned
+  at the point `members` changes, not via a reactive effect); the project's creator was missing from the
+  assignee choices even though the backend always adds them as مدیر پروژه regardless of `members` (now
+  seeded in automatically when a بخش is picked). Tests: +8 in `lib/projects.test.ts` (187 total).
+- **Notes render as a vertical timeline** (`CommentsPanel`: a dot per note, a continuous line on the start/
+  right side joining them) with a multi-line composer (Ctrl/⌘+Enter sends). **New «جدول جلسات»**
+  (`MeetingsPanel`): a real `<table>` from `md` up, stacked cards below — تاریخ/ساعت/عنوان/مکان/اعضا per
+  meeting, plus «اعضای متوجه‌شده»/«هنوز ندیده‌اند» lists and «مشاهده شد» for an attendee who hasn't
+  acknowledged yet. The create/edit form (role MANAGER only) warns that changing the date, time or place
+  clears every acknowledgement. **New `lib/local-draft.ts`** (`useLocalDraft`, keys
+  `veye:draft:<userId>:<projectId>:<purpose>[:<objectiveId>]`, every access in try/catch): backs the note
+  composer, the progress-update textarea and the new-meeting form, cleared on a successful submit. The
+  activity feed now shows the four new event kinds with their own tones, and `objective_due_changed` shows
+  its دیرکرد dates (`formatJalali(from_status)` ← `formatJalali(to_status)` — that kind overloads those two
+  fields with raw ISO dates rather than a status enum, so it never had `..._label`s to show). Tests: +6 in
+  `lib/projects.test.ts`, +4 in the new `lib/local-draft.test.ts` (195 total).
+- **A one-line hint under «وزن»** in the inline «افزودن ریز هدف» form and in the objective edit dialog: the
+  weight is this objective's share of the project's progress percentage (1–100; all 1 = all equal). Linked
+  with `aria-describedby`. Owner request, 2026-09-26.
+
+- **Projects frontend wired to the real A2 endpoints (after merging A2's meetings and draft).** Three
+  mismatches with the contract, found by using the page against the live backend: the meeting form sent
+  ProjectMember ids as `attendees` (the contract, like objective assignees, takes user ids — every save was a
+  400); the new-project autosave sent the draft bare instead of `{payload: …}` (every PUT was a 400, so no draft
+  was ever kept); and after a successful create, the page's save-on-unmount put the draft straight back. Also:
+  the activity feed now reloads when a meeting is scheduled, changed or cancelled, and shows a meeting event's
+  day in Jalali (`MEETING_EVENT_KINDS`, the day travels in `to_status`). Tests: +1 vitest → 196.
 
 ### Phase 10 — A4 · personnel placement and کارتابل attachments
-- _(A4: add lines under this heading only)_
+- **Personnel registration places the person in the chart in the same request.** Decided with the owner
+  (ADR-010 §B): placement used to be a second `POST /org/memberships/` after the account existed, so it could
+  fail on its own and leave the person unplaced. `POST /personnel/` now takes an optional `placement: {node,
+  is_lead, position_label}`; the caller's `manage_membership`/lead access to that node is checked **before**
+  anything is created, and the user + membership are then created together in one transaction — any failure
+  (an archived node, a permission the server refuses) leaves nothing behind, and the response carries the new
+  membership. Frontend: `components/personnel/PersonnelForm.tsx` (contract `{ onRegistered?, tone?: "light" |
+  "dark" }`, for reuse in A1's setup wizard) replaces the inline form and the old flat `<select>`
+  (`OrgPlacement.tsx`, deleted) with a حوزه → واحد → بخش cascade that can stop at any level («خود شرکت», «در
+  سطح همین حوزه», «در سطح همین واحد», or a specific بخش); picking a level always clears the levels below it.
+  No roll/level is preselected any more (it used to default to کارفرمایی/L1, full access).
+  `components/personnel/PlacementCascade.tsx` is the shared cascade UI; `UnassignedPeople` reuses it instead of
+  its own flat `<select>`. Pure cascade logic in `lib/personnel-org.ts` (`placementOptions` /
+  `resolvePlacement`). Tests: +6 backend (`apps.accounts` 41), +23 frontend (`personnel-org.test.ts`, replacing
+  7 old ones — 188 total).
+- **کارتابل messages carry files — backend (ADR-010 §E).** New `MessageAttachment(message CASCADE, file →
+  `chat_files/<conversation>/<uuid><ext>`, original_name, kind, size, sha256)` (migration `chat/0002`). `POST
+  …/conversations/{id}/messages/` takes JSON as before or multipart `body` + `files` — at most 5 files of 20 MB each
+  (`CHAT_ATTACHMENT_MAX_FILES` / `CHAT_ATTACHMENT_MAX_BYTES`), the designer's extensions; a message may be files
+  only. Every file is validated before any byte is written, and a failure partway deletes the files already
+  written. Sends that carry files have their own limit (`CHAT_ATTACHMENT_RATELIMIT_RATE`, 20/min) on top of the
+  60/min message limit. Files download only through `GET …/messages/{mid}/attachments/{aid}/` (a participant;
+  404 for an outsider, a tombstoned message or a foreign attachment); deleting a message deletes its attachment
+  rows and, once committed, their bytes. A file-only message previews in the list as «📎 <name>».
+  `documents.files.inspect_upload` gained `max_bytes`/`field` keyword arguments (documents unchanged). Opening a
+  DM with the developer account is a Persian 400. Tests: +19 → 928; the tombstone file deletion and the
+  attachment rate limit were each mutation-checked.
+- **کارتابل attachments — the composer (ADR-010 §E).** A 📎 button picks several files; each shows as a chip
+  (name, size, ✕) and is checked in the browser first (count, 20 MB, extension — Persian message per refused
+  file; the server re-checks). Sending with files goes as multipart with a progress bar and «لغو»; Enter sends a
+  file-only message. Each message lists its files as download links. The designer's file row is now a shared
+  `components/FileRow.tsx` (+ `lib/file-size.ts`), used by the تشریحی بلند block and by chat messages. Tests:
+  +8 vitest → 196.
 
 ### Phase 10 — foundation (on main before the parallel work)
 - **The developer account exists as a kind of user** (Phase 10, ADR-010, decided with the owner 2026-09-25 — the setup flow that creates it is Phase 10 A1). `User.is_developer` (migration `accounts/0003`) marks the one technical account that runs first-time setup; a partial unique constraint (`uniq_developer_account`) allows **at most one**. Its capabilities are exactly `manage_organization`, `manage_membership` and `manage_personnel` — **no document capability (it can never sign) and no project capability**, even if its stored roll/level were the مدیر عامل's; it is deliberately not `is_superuser`, which grants everything. Its `title` is «توسعه‌دهنده», so activity/chat snapshots never call it مدیر عامل. `/auth/me/` and the personnel API expose `is_developer` read-only (it cannot be set through the API). **Only the developer may change or delete the developer account**: anyone else — a مدیر عامل included — gets a Persian 403 before validation, so the technical account cannot be locked out by a password reset or deactivation. Tests: +10 (accounts 35), both rules mutation-checked.

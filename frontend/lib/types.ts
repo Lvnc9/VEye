@@ -620,10 +620,14 @@ export type SetupStep = "COMPANY" | "DOMAINS" | "UNITS" | "SECTIONS" | "PEOPLE" 
 
 /** `GET /setup/status/` — public, and deliberately nothing more than this. */
 export interface SetupStatus {
-  /** No company exists yet: the database is fresh and bootstrap is possible. */
-  needed: boolean;
-  /** An active کارفرمایی لول ۱ account exists: the anonymous form is closed, that person signs in and starts. */
-  has_users: boolean;
+  /** The one developer account exists: the anonymous bootstrap form is closed. */
+  developer_exists: boolean;
+  /** `Company(pk=1)` exists: the developer has pressed «شروع راه‌اندازی». */
+  company_exists: boolean;
+  /** The developer has pressed «پایان راه‌اندازی». */
+  completed: boolean;
   /** Where the wizard last was; null before a company exists. */
   step: SetupStep | null;
+  /** An active lead Membership sits on the company root — what «پایان راه‌اندازی» waits for. */
+  has_root_lead: boolean;
 }

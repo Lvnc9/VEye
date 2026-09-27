@@ -11,7 +11,7 @@ from django.db.models import Count, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from .models import CLOSED_OBJECTIVE_STATUSES, Objective, ObjectiveStatus
+from .models import CLOSED_OBJECTIVE_STATUSES, Objective, ObjectiveStatus, ObjectiveUpdate
 
 
 def overdue_q(today=None) -> Q:
@@ -44,3 +44,22 @@ def progress_percent(weight_done: int, weight_total: int) -> int | None:
     if not weight_total:
         return None
     return round(100 * weight_done / weight_total)
+
+
+def with_latest_update(queryset):
+    """Annotate an `ObjectiveAssignee` queryset with that one assignee's own progress log on that one
+    objective: `latest_update_id/_body/_created_at/_edited_at` (all `None` when they have never
+    posted) and `update_count`. Same discipline as `with_progress` — correlated subqueries, one SQL
+    query for the whole list, no lookup per row."""
+    own = ObjectiveUpdate.objects.filter(
+        objective_id=OuterRef("objective_id"), author_id=OuterRef("member__user_id")
+    )
+    latest = own.order_by("-created_at", "-id")
+    count = own.order_by().values("objective").annotate(n=Count("id")).values("n")
+    return queryset.annotate(
+        latest_update_id=Subquery(latest.values("id")[:1]),
+        latest_update_body=Subquery(latest.values("body")[:1]),
+        latest_update_created_at=Subquery(latest.values("created_at")[:1]),
+        latest_update_edited_at=Subquery(latest.values("edited_at")[:1]),
+        update_count=Coalesce(Subquery(count[:1]), Value(0)),
+    )

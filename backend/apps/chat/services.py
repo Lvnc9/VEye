@@ -9,12 +9,14 @@ DMs are de-duplicated by `direct_key` under a partial unique index: a racing los
 IntegrityError, re-reads and returns the winner's row — the `get_or_create`-under-a-constraint
 idiom `documents/services.py` and `pdfgen/services.py` already use.
 """
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 from apps.core.exceptions import ConflictError
+from apps.documents.files import inspect_upload
 
 from .models import (
     DIRECT_CONVERSATION_CONSTRAINT,
@@ -24,6 +26,7 @@ from .models import (
     ConversationKind,
     ConversationParticipant,
     Message,
+    MessageAttachment,
     MessageKind,
 )
 
@@ -116,10 +119,14 @@ def open_direct(*, actor, other) -> tuple[Conversation, bool]:
     """The DM between `actor` and `other`, and whether it was created by this call.
 
     Any active person may message any other (docs/11 §5.3): the owner's flow is "click a person on
-    the chart and chat", and a chart showing people you cannot message is worse than no chart.
+    the chart and chat", and a chart showing people you cannot message is worse than no chart. The
+    developer is the one exception (ADR-010 §A): it is a technical account, not a member of the
+    company, and has no title to show as a counterpart.
     """
     if other.pk == actor.pk:
         raise ValidationError({"user": ["گفتگو با خودتان ممکن نیست."]})
+    if other.is_developer or actor.is_developer:
+        raise ValidationError({"user": ["گفتگو با توسعه‌دهنده ممکن نیست."]})
     if not other.is_active:
         raise ConflictError("این شخص غیرفعال است و نمی‌توان با او گفتگو کرد.", code="user_inactive")
 
@@ -169,9 +176,9 @@ def require_can_post(conversation: Conversation, actor) -> None:
         raise ConflictError("این شخص غیرفعال است و نمی‌توان برای او پیام فرستاد.", code="user_inactive")
 
 
-def _clean_body(body: str) -> str:
+def _clean_body(body: str, *, has_files: bool = False) -> str:
     body = (body or "").strip()
-    if not body:
+    if not body and not has_files:
         raise ValidationError({"body": ["متن پیام نمی‌تواند خالی باشد."]})
     if len(body) > MESSAGE_MAX_LENGTH:
         raise ValidationError({"body": [f"متن پیام حداکثر {MESSAGE_MAX_LENGTH} نویسه است."]})
@@ -185,11 +192,63 @@ def _append(conversation: Conversation, message: Message) -> None:
     conversation.save(update_fields=["last_message_at", "last_message_id", "updated_at"])
 
 
+def _inspect_attachments(files) -> list[tuple]:
+    """Validate every upload before writing any bytes — a bad file among several must fail with
+    nothing on disk yet, not a partial attach. Returns `[(upload, kind, sha256, size), ...]`."""
+    if len(files) > settings.CHAT_ATTACHMENT_MAX_FILES:
+        raise ValidationError(
+            {"files": [f"حداکثر {settings.CHAT_ATTACHMENT_MAX_FILES} فایل در هر پیام مجاز است."]}
+        )
+    return [
+        (upload, *inspect_upload(upload, max_bytes=settings.CHAT_ATTACHMENT_MAX_BYTES, field="files"))
+        for upload in files
+    ]
+
+
+def _delete_storage_now(field_file) -> None:
+    """Remove a stored file immediately. Used when a send is failing and its transaction is about
+    to roll back: unlike `_delete_storage_on_commit`, there is no later commit to wait for."""
+    if field_file and field_file.name:
+        field_file.storage.delete(field_file.name)
+
+
+def _delete_storage_on_commit(field_file) -> None:
+    """Remove a stored file, but only once the surrounding transaction has committed (the pattern
+    of `documents/content.py`'s function of the same name) — used when a message is tombstoned, a
+    send that is going to succeed either way."""
+    if field_file and field_file.name:
+        name, storage = field_file.name, field_file.storage
+        transaction.on_commit(lambda: storage.delete(name))
+
+
+def _attach_files(message: Message, inspected: list[tuple]) -> None:
+    """Write each upload's bytes and row against an already-saved message. If anything after that
+    fails — even this same attachment's own `.save()` — every file already written for this send
+    is deleted right away and the exception re-raised, so the caller's transaction rolls back to
+    nothing on disk either."""
+    written: list = []
+    try:
+        for upload, kind, digest, size in inspected:
+            attachment = MessageAttachment(
+                message=message, original_name=upload.name[:255], kind=kind, size=size, sha256=digest
+            )
+            attachment.file.save(upload.name, upload, save=False)
+            written.append(attachment.file)  # tracked as soon as the bytes exist, before the row is saved
+            attachment.save()
+    except Exception:
+        for field_file in written:
+            _delete_storage_now(field_file)
+        raise
+
+
 @transaction.atomic
-def send_message(conversation: Conversation, *, sender, body: str) -> Message:
-    """Post a message. The caller has already decided the sender may read the conversation. The
-    sender's own read mark moves to their message, so it never counts as unread for them."""
-    body = _clean_body(body)
+def send_message(conversation: Conversation, *, sender, body: str, files=()) -> Message:
+    """Post a message, optionally with files. The caller has already decided the sender may read
+    the conversation. The sender's own read mark moves to their message, so it never counts as
+    unread for them."""
+    files = tuple(files)
+    inspected = _inspect_attachments(files) if files else []
+    body = _clean_body(body, has_files=bool(files))
     conversation = _lock_conversation(conversation.pk)
     require_can_post(conversation, sender)
     message = Message.objects.create(
@@ -199,6 +258,8 @@ def send_message(conversation: Conversation, *, sender, body: str) -> Message:
         sender_title=sender.title,
         body=body,
     )
+    if inspected:
+        _attach_files(message, inspected)
     _append(conversation, message)
     ensure_participant(conversation, sender)
     ConversationParticipant.objects.filter(conversation=conversation, user=sender).update(
@@ -237,7 +298,8 @@ def mark_read(conversation: Conversation, *, user, up_to: int) -> int | None:
 @transaction.atomic
 def delete_message(message: Message, *, actor) -> Message:
     """Tombstone a message. **Only its sender, no exception** — not a lead, not the مدیر عامل
-    (owner's decision). Idempotent. No editing exists."""
+    (owner's decision). Idempotent. No editing exists. Its attachments' rows go with it, and their
+    bytes once the tombstone actually commits."""
     try:
         message = Message.objects.select_for_update().get(pk=message.pk)
     except Message.DoesNotExist:
@@ -252,4 +314,8 @@ def delete_message(message: Message, *, actor) -> Message:
     message.deleted_at = timezone.now()
     message.deleted_by = actor
     message.save(update_fields=["deleted_at", "deleted_by", "updated_at"])
+    attachments = list(message.attachments.all())
+    for attachment in attachments:
+        _delete_storage_on_commit(attachment.file)
+    message.attachments.all().delete()
     return message

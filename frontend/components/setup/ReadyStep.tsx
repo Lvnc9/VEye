@@ -3,13 +3,27 @@
 import { useState } from "react";
 import { ApiError, apiPost } from "@/lib/api-client";
 import { countByKind, type OrgNode } from "@/lib/organization";
+import { finishBlockedReason } from "@/lib/setup";
+import type { SetupStatus } from "@/lib/types";
 import { OrgTreeList } from "@/components/OrgTreeList";
 import { DarkError, StepCard, ghostButton, primaryButton } from "./ui";
 
-/** Step 4: the finished chart and «ورود به نرم‌افزار». Finishing needs nothing structural — a company
- *  with only its root is a valid chart, and the manager can keep drawing it from the app. */
-export function ReadyStep({ nodes, onBack }: { nodes: OrgNode[]; onBack: () => void }) {
+/** Step 5: the finished chart and «ورود به نرم‌افزار». Finishing needs nothing structural — a company
+ *  with only its root is a valid chart — but it does need a مدیر عامل: an active lead on the company
+ *  root (ADR-010). Until then the button is disabled, says why, and points back to «پرسنل». */
+export function ReadyStep({
+  nodes,
+  status,
+  onBack,
+  onPeople,
+}: {
+  nodes: OrgNode[];
+  status: SetupStatus;
+  onBack: () => void;
+  onPeople: () => void;
+}) {
   const counts = countByKind(nodes);
+  const blocked = finishBlockedReason(status);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,8 +33,10 @@ export function ReadyStep({ nodes, onBack }: { nodes: OrgNode[]; onBack: () => v
     try {
       await apiPost("/setup/complete/");
     } catch (err) {
-      // "already completed" (another tab, another browser) is fine: the goal is reached.
-      if (!(err instanceof ApiError && err.status === 409)) {
+      // "already completed" (another tab, another browser) is fine: the goal is reached. Any other
+      // 409 (root_lead_missing — the lead was removed in another tab) is a real refusal.
+      const code = err instanceof ApiError ? (err.data as { code?: string } | undefined)?.code : undefined;
+      if (!(err instanceof ApiError && err.status === 409 && code === "already_completed")) {
         setError(err instanceof ApiError ? err.message : "پایان راه‌اندازی ممکن نشد.");
         setBusy(false);
         return;
@@ -48,12 +64,20 @@ export function ReadyStep({ nodes, onBack }: { nodes: OrgNode[]; onBack: () => v
       <div className="max-h-72 overflow-y-auto rounded-xl border border-line p-3">
         <OrgTreeList nodes={nodes} tone="dark" />
       </div>
+      {blocked && (
+        <div role="status" className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-200">
+          <p>{blocked}</p>
+          <button type="button" onClick={onPeople} className="underline hover:text-amber-100">
+            رفتن به مرحلهٔ «پرسنل»
+          </button>
+        </div>
+      )}
       {error && <DarkError message={error} />}
       <div className="flex justify-between">
         <button type="button" onClick={onBack} disabled={busy} className={ghostButton}>
           بازگشت
         </button>
-        <button type="button" onClick={finish} disabled={busy} className={primaryButton}>
+        <button type="button" onClick={finish} disabled={busy || blocked !== null} className={primaryButton}>
           {busy ? "لحظه‌ای صبر کنید..." : "ورود به نرم‌افزار"}
         </button>
       </div>

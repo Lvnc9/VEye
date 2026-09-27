@@ -1,7 +1,11 @@
+import os
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.db.models import CheckConstraint, Index, Q, UniqueConstraint
 
+from apps.core.constants import FileKind
 from apps.core.models import TimeStampedModel
 from apps.organization.models import OrgNode
 
@@ -128,3 +132,29 @@ class Message(TimeStampedModel):
 
     def __str__(self):
         return f"{self.sender_name}: {self.body[:40]}"
+
+
+def message_attachment_upload_to(instance, filename):
+    # A random name on disk, never the sender's own filename: in DEBUG, `/media/` is served with
+    # no auth, so nothing guessable belongs in the path (mirrors documents' document_file_upload_to).
+    extension = os.path.splitext(filename)[1].lower()
+    return f"chat_files/{instance.message.conversation_id}/{uuid.uuid4().hex}{extension}"
+
+
+class MessageAttachment(TimeStampedModel):
+    """A file on a کارتابل message. Modeled on `apps.documents.models.DocumentFile`, minus its
+    content-hash dedup: a document's Long Explanation block is a shared pool worth deduplicating,
+    a message's attachments are not."""
+
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="attachments")
+    file = models.FileField(upload_to=message_attachment_upload_to, max_length=255)
+    original_name = models.CharField(max_length=255)
+    kind = models.CharField(max_length=16, choices=FileKind.choices)
+    size = models.PositiveBigIntegerField()
+    sha256 = models.CharField(max_length=64)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.message_id}: {self.original_name}"

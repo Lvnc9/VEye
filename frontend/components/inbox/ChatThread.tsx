@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api-client";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
+import { ApiError, apiDelete, apiGet, apiPost, apiUploadWithProgress } from "@/lib/api-client";
 import {
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_KIND_LABEL,
   MESSAGE_MAX_LENGTH,
   THREAD_POLL_MS,
+  addAttachments,
   canSend,
   conversationSubtitle,
   mergeMessages,
@@ -19,6 +22,7 @@ import {
 } from "@/lib/chat";
 import { formatJalaliDateTime } from "@/lib/jalali";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { FileRow, formatSize } from "@/components/FileRow";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -41,6 +45,11 @@ export function ChatThread({
   const [actionError, setActionError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  /** 0..1 while a send with files is uploading; null otherwise. */
+  const [progress, setProgress] = useState<number | null>(null);
+  const uploadRef = useRef<AbortController | null>(null);
+  const pickerRef = useRef<HTMLInputElement>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const messages = loaded?.messages ?? [];
 
@@ -121,22 +130,49 @@ export function ChatThread({
 
   async function send(event?: FormEvent) {
     event?.preventDefault();
-    if (!canSend(draft) || sending) return;
+    if (!canSend(draft, files.length) || sending) return;
     setSending(true);
     setActionError(null);
     try {
-      const message = await apiPost<ChatMessage>(base, { body: draft.trim() });
+      let message: ChatMessage;
+      if (files.length === 0) {
+        message = await apiPost<ChatMessage>(base, { body: draft.trim() });
+      } else {
+        const form = new FormData();
+        form.append("body", draft.trim());
+        for (const file of files) form.append("files", file);
+        const controller = new AbortController();
+        uploadRef.current = controller;
+        setProgress(0);
+        message = await apiUploadWithProgress<ChatMessage>(base, form, {
+          signal: controller.signal,
+          onProgress: setProgress,
+        });
+      }
       stickToBottom.current = true;
       setDraft("");
+      setFiles([]);
       markRef.current = message.id;
       newestRef.current = Math.max(newestRef.current ?? 0, message.id);
       setLoaded((current) => (current ? { ...current, messages: mergeMessages(current.messages, [message]) } : current));
       onActivity();
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return; // cancelled on purpose; files stay picked
       setActionError(err instanceof ApiError ? err.message : "ارسال پیام ممکن نشد.");
     } finally {
+      uploadRef.current = null;
+      setProgress(null);
       setSending(false);
     }
+  }
+
+  function pick(event: ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(event.target.files ?? []);
+    event.target.value = ""; // picking the same file again must fire onChange again
+    if (picked.length === 0) return;
+    const result = addAttachments(files, picked);
+    setFiles(result.files);
+    setActionError(result.errors.length > 0 ? result.errors.join("\n") : null);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -213,24 +249,84 @@ export function ChatThread({
       {closed ? (
         <p className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-500">{closed}</p>
       ) : (
-        <form onSubmit={send} className="flex items-end gap-2 border-t border-slate-200 px-5 py-3">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onKeyDown}
-            rows={2}
-            maxLength={MESSAGE_MAX_LENGTH}
-            placeholder="پیام خود را بنویسید… (Enter برای ارسال، Shift+Enter برای خط جدید)"
-            aria-label="متن پیام"
-            className="min-h-[2.75rem] flex-1 resize-none rounded border border-slate-300 bg-white px-3 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={sending || !canSend(draft)}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
-          >
-            ارسال
-          </button>
+        <form onSubmit={send} className="border-t border-slate-200 px-3 py-3 sm:px-5">
+          {files.length > 0 && (
+            <ul aria-label="فایل‌های پیوست" className="mb-2 flex flex-wrap gap-1.5">
+              {files.map((file, index) => (
+                <li
+                  key={`${file.name}-${index}`}
+                  className="flex max-w-full items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs text-slate-700"
+                >
+                  <span className="truncate" title={file.name}>
+                    📎 {file.name}
+                  </span>
+                  <bdi dir="ltr" className="shrink-0 text-slate-500">
+                    {formatSize(file.size)}
+                  </bdi>
+                  {!sending && (
+                    <button
+                      type="button"
+                      onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
+                      aria-label={`حذف ${file.name}`}
+                      className="shrink-0 text-slate-500 hover:text-red-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {progress !== null && (
+            <div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
+              <div className="h-1.5 flex-1 overflow-hidden rounded bg-slate-200">
+                <div className="h-full bg-green-600 transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
+              </div>
+              <span>{Math.round(progress * 100)}٪</span>
+              <button type="button" onClick={() => uploadRef.current?.abort()} className="underline hover:text-slate-900">
+                لغو
+              </button>
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <input
+              ref={pickerRef}
+              type="file"
+              multiple
+              accept={ATTACHMENT_ACCEPT}
+              onChange={pick}
+              className="hidden"
+              aria-hidden="true"
+              tabIndex={-1}
+            />
+            <button
+              type="button"
+              onClick={() => pickerRef.current?.click()}
+              disabled={sending}
+              aria-label="پیوست فایل"
+              title="پیوست فایل (حداکثر ۵ فایل، هر کدام ۲۰ مگابایت)"
+              className="shrink-0 rounded border border-slate-300 bg-white px-2.5 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+            >
+              📎
+            </button>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={onKeyDown}
+              rows={2}
+              maxLength={MESSAGE_MAX_LENGTH}
+              placeholder="پیام خود را بنویسید… (Enter برای ارسال، Shift+Enter برای خط جدید)"
+              aria-label="متن پیام"
+              className="min-h-[2.75rem] min-w-0 flex-1 resize-none rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={sending || !canSend(draft, files.length)}
+              className="shrink-0 rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              ارسال
+            </button>
+          </div>
         </form>
       )}
     </section>
@@ -267,9 +363,25 @@ function MessageRow({
             {message.sender_title && <span className="font-normal"> ({message.sender_title})</span>}
           </p>
         )}
-        <p className={`whitespace-pre-wrap break-words ${message.is_deleted ? "italic opacity-60" : ""}`}>
-          {messageText(message)}
-        </p>
+        {(message.is_deleted || message.body) && (
+          <p className={`whitespace-pre-wrap break-words ${message.is_deleted ? "italic opacity-60" : ""}`}>
+            {messageText(message)}
+          </p>
+        )}
+        {message.attachments.length > 0 && (
+          <ul className={`space-y-1 ${message.body ? "mt-1.5" : ""}`}>
+            {message.attachments.map((attachment) => (
+              <FileRow
+                key={attachment.id}
+                name={attachment.name}
+                href={attachment.download_url}
+                size={attachment.size}
+                kindLabel={ATTACHMENT_KIND_LABEL[attachment.kind]}
+                tone={message.is_mine ? "dark" : "light"}
+              />
+            ))}
+          </ul>
+        )}
         <div className={`mt-1 flex items-center gap-2 text-[11px] ${message.is_mine ? "text-slate-300" : "text-slate-400"}`}>
           <span>{formatJalaliDateTime(message.created_at)}</span>
           {message.can_delete && (

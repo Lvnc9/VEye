@@ -166,7 +166,7 @@ class DashboardInboxView(APIView):
         horizon = today + timedelta(days=settings.INBOX_DUE_SOON_DAYS)
         due = (
             Objective.objects.filter(
-                assignee__user=user, due_on__lte=horizon, project__archived_at__isnull=True
+                assignees__member__user=user, due_on__lte=horizon, project__archived_at__isnull=True
             )
             .exclude(status__in=CLOSED_OBJECTIVE_STATUSES)
             .select_related("project")

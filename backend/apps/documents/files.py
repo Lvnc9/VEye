@@ -35,26 +35,30 @@ def _megabytes(size: int) -> str:
     return f"{size / (1024 * 1024):.0f}"
 
 
-def inspect_upload(upload) -> tuple[str, str, int]:
-    """Validate an uploaded document file. Returns (kind, sha256, size).
+def inspect_upload(upload, *, max_bytes: int | None = None, field: str = "file") -> tuple[str, str, int]:
+    """Validate an uploaded file. Returns (kind, sha256, size).
 
     The file is hashed in chunks (videos can be large) and then rewound so the
     caller can store it.
+
+    `max_bytes` defaults to `DOCUMENT_FILE_MAX_BYTES`, and `field` to `"file"` — a caller that
+    passes neither (every existing one) gets exactly today's behaviour and error keys. Chat
+    attachments pass `max_bytes=CHAT_ATTACHMENT_MAX_BYTES, field="files"`.
     """
+    limit = settings.DOCUMENT_FILE_MAX_BYTES if max_bytes is None else max_bytes
     name = os.path.basename(upload.name or "")
     if not name:
-        raise ValidationError({"file": ["فایلی ارسال نشده است."]})
+        raise ValidationError({field: ["فایلی ارسال نشده است."]})
 
     kind = kind_for(name)
     if kind is None:
         allowed = "، ".join(sorted({e for exts in FILE_EXTENSIONS.values() for e in exts}))
-        raise ValidationError({"file": [f"این نوع فایل مجاز نیست. فرمت‌های مجاز: {allowed}"]})
+        raise ValidationError({field: [f"این نوع فایل مجاز نیست. فرمت‌های مجاز: {allowed}"]})
 
-    limit = settings.DOCUMENT_FILE_MAX_BYTES
     if upload.size > limit:
-        raise ValidationError({"file": [f"حجم فایل نباید بیش از {_megabytes(limit)} مگابایت باشد."]})
+        raise ValidationError({field: [f"حجم فایل نباید بیش از {_megabytes(limit)} مگابایت باشد."]})
     if upload.size == 0:
-        raise ValidationError({"file": ["فایل خالی است."]})
+        raise ValidationError({field: ["فایل خالی است."]})
 
     digest = hashlib.sha256()
     for chunk in upload.chunks():

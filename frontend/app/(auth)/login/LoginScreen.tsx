@@ -20,9 +20,10 @@ const inputClass =
 /**
  * Dark, two-column sign-in: the brand on the right (RTL first), the card on the left.
  *
- * On a database with no company yet (`/setup/status/` says `needed`) the card offers «شروع راه‌اندازی».
- * If an active مدیر عامل account already exists (an install that predates setup, or the importer),
- * the sign-in form stays and a quiet line says to sign in as them: setup then starts from one button.
+ * On a database with no developer account yet (`/setup/status/` says `!developer_exists`) the card
+ * offers «شروع راه‌اندازی» straight to `/setup`'s account form. Once the developer exists but has not
+ * started the company yet, the sign-in form stays and a quiet line says to sign in as them: setup
+ * then continues from one button (Phase 10, ADR-010 §A — this used to be the مدیر عامل's job).
  */
 export function LoginScreen() {
   const router = useRouter();
@@ -47,8 +48,8 @@ export function LoginScreen() {
     };
   }, []);
 
-  const freshWithNoAccounts = status?.needed === true && !status.has_users;
-  const setupAvailable = status?.needed === true && status.has_users;
+  const freshWithNoAccounts = status?.developer_exists === false;
+  const setupAvailable = status?.developer_exists === true && status.company_exists === false;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,7 +128,7 @@ export function LoginScreen() {
               <div>
                 <h2 className="text-2xl font-bold">به وی‌آی خوش آمدید</h2>
                 <p className="mt-2 text-sm leading-7 text-slate-400">
-                  این سامانه هنوز راه‌اندازی نشده است. با چند مرحلهٔ ساده، حساب مدیر عامل و ساختار سازمان خود را بسازید.
+                  این سامانه هنوز راه‌اندازی نشده است. با چند مرحلهٔ ساده، حساب توسعه‌دهنده و ساختار سازمان را بسازید.
                 </p>
               </div>
               <Link
@@ -194,7 +195,7 @@ export function LoginScreen() {
 
               {setupAvailable && (
                 <p className="border-t border-line pt-5 text-center text-sm leading-7 text-slate-400">
-                  ساختار سازمان هنوز تعریف نشده است. با حساب مدیر عامل وارد شوید و «شروع راه‌اندازی» را بزنید.
+                  ساختار سازمان هنوز تعریف نشده است. با حساب توسعه‌دهنده وارد شوید و «شروع راه‌اندازی» را بزنید.
                 </p>
               )}
             </form>

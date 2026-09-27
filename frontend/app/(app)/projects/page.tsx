@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { apiGet } from "@/lib/api-client";
 import { DebouncedInput } from "@/components/history/DebouncedInput";
 import { Pager } from "@/components/Pager";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { EmptyBanner, ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
-import { PROJECT_STATUS_LABELS, type Project, type ProjectStatus } from "@/lib/projects";
+import { PROJECT_STATUS_LABELS, parseDraftPayload, type Project, type ProjectStatus } from "@/lib/projects";
 import { usePagedQuery } from "@/lib/use-paged-query";
 
 const PAGE_SIZE = 20;
@@ -55,6 +56,8 @@ export default function ProjectsPage() {
           پروژهٔ جدید
         </Link>
       </header>
+
+      <DraftProjectCard />
 
       <section className="flex flex-wrap items-center gap-3">
         <DebouncedInput
@@ -120,5 +123,32 @@ export default function ProjectsPage() {
 
       <Pager page={page} totalPages={totalPages} onChange={setPage} />
     </div>
+  );
+}
+
+/** «پیش‌نویس پروژه»: shown only once the draft has been confirmed as a well-shaped, current-version
+ *  one — otherwise the link would land on /projects/new with nothing to continue. Errors are swallowed:
+ *  a failed check just means the card doesn't appear, never a page-blocking error. */
+function DraftProjectCard() {
+  const [hasDraft, setHasDraft] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiGet<{ payload: unknown; updated_at: string | null }>("/projects/draft/")
+      .then((res) => !cancelled && setHasDraft(Boolean(parseDraftPayload(res.payload))))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!hasDraft) return null;
+  return (
+    <Link
+      href="/projects/new"
+      className="block rounded-lg border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100"
+    >
+      پیش‌نویس پروژه — برای ادامه کلیک کنید
+    </Link>
   );
 }

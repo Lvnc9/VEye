@@ -5,6 +5,7 @@ import Link from "next/link";
 import { OrgTreeList } from "@/components/OrgTreeList";
 import { AccountStep } from "@/components/setup/AccountStep";
 import { CompanyStep } from "@/components/setup/CompanyStep";
+import { PeopleStep } from "@/components/setup/PeopleStep";
 import { ReadyStep } from "@/components/setup/ReadyStep";
 import { SectionsStep } from "@/components/setup/SectionsStep";
 import { StartSetupButton } from "@/components/setup/StartSetupButton";
@@ -14,7 +15,7 @@ import { apiGetIfSignedIn } from "@/lib/api-client";
 import { useApiQuery } from "@/lib/use-api-query";
 import type { Company, OrgTreeResponse } from "@/lib/organization";
 import { CHART_STEPS, wizardStepFor, type WizardStep } from "@/lib/setup";
-import { hasCapability, type SetupStatus, type User } from "@/lib/types";
+import type { SetupStatus, User } from "@/lib/types";
 
 /**
  * The first-run wizard. There is **no draft state**: every step writes real rows through the
@@ -22,9 +23,11 @@ import { hasCapability, type SetupStatus, type User } from "@/lib/types";
  * browser lands back on the right step from `GET /setup/status/` + `GET /org/tree/`.
  */
 export function SetupWizard() {
-  const [reload, setReload] = useState(0);
-  const status = useApiQuery<SetupStatus>("/setup/status/", reload);
-  const refresh = () => setReload((n) => n + 1);
+  const [statusReload, setStatusReload] = useState(0);
+  const [nodeReload, setNodeReload] = useState(0);
+  const status = useApiQuery<SetupStatus>("/setup/status/", statusReload);
+  const refreshStatus = () => setStatusReload((n) => n + 1);
+  const refreshNodes = () => setNodeReload((n) => n + 1);
 
   return (
     <main className="min-h-screen bg-surface text-slate-100">
@@ -35,7 +38,7 @@ export function SetupWizard() {
           </span>
           <div>
             <h1 className="text-lg font-bold">راه‌اندازی وی‌آی</h1>
-            <p className="text-xs text-slate-500">حساب مدیر عامل و ساختار سازمان</p>
+            <p className="text-xs text-slate-500">حساب توسعه‌دهنده و ساختار سازمان</p>
           </div>
         </header>
 
@@ -43,12 +46,21 @@ export function SetupWizard() {
           <p className="text-sm text-slate-400">در حال بارگذاری...</p>
         ) : status.error || !status.data ? (
           <DarkError message={status.error ?? "دریافت وضعیت راه‌اندازی ممکن نشد."} />
-        ) : status.data.needed ? (
+        ) : !status.data.company_exists ? (
           <div className="mx-auto max-w-xl">
-            <FirstStep status={status.data} onDone={refresh} />
+            {/* A fresh mount re-checks the session — bootstrap just signed a new one in. */}
+            <FirstStep key={String(status.data.developer_exists)} status={status.data} onDone={refreshStatus} />
           </div>
         ) : (
-          <SignedInWizard status={status.data} reload={reload} refresh={refresh} />
+          <SignedInWizard
+            status={status.data}
+            reload={nodeReload}
+            refresh={refreshNodes}
+            onPeopleChanged={() => {
+              refreshNodes();
+              refreshStatus(); // has_root_lead may have flipped
+            }}
+          />
         )}
       </div>
     </main>
@@ -56,9 +68,11 @@ export function SetupWizard() {
 }
 
 /**
- * No company yet. A signed-in مدیر عامل gets one button; a visitor with no session gets the form
- * that creates the first مدیر عامل (or, if one exists, a pointer to sign in). No setup token anywhere.
- * The session check must not bounce that visitor to /login, hence apiGetIfSignedIn.
+ * No company yet. Three doors, decided by `status.developer_exists` and who (if anyone) is signed
+ * in: the form that creates the **one** developer account; the developer's own «شروع راه‌اندازی»
+ * once they are signed in; or, for anyone else, a pointer to sign in (or, if they already are
+ * someone else, the Persian notice the ADR fixes: راه‌اندازی در حال انجام است — با توسعه‌دهنده
+ * تماس بگیرید). The session check must not bounce a visitor to /login, hence apiGetIfSignedIn.
  */
 function FirstStep({ status, onDone }: { status: SetupStatus; onDone: () => void }) {
   const [me, setMe] = useState<User | null | undefined>(undefined);
@@ -73,21 +87,51 @@ function FirstStep({ status, onDone }: { status: SetupStatus; onDone: () => void
     };
   }, []);
 
+  if (!status.developer_exists) return <AccountStep onDone={onDone} />;
   if (me === undefined) return <p className="text-sm text-slate-400">در حال بارگذاری...</p>;
-  if (!me || !hasCapability(me, "manage_organization")) return <AccountStep status={status} onDone={onDone} />;
+
+  if (me?.is_developer) {
+    return (
+      <StepCard
+        title="راه‌اندازی شرکت"
+        intro={`با حساب ${me.full_name} وارد شده‌اید. در گام بعد نام شرکت، لوگو و حوزه‌ها را تعیین می‌کنید.`}
+      >
+        <StartSetupButton onStarted={onDone} className={`${primaryButton} w-full`} errorClassName="text-sm text-red-300" />
+      </StepCard>
+    );
+  }
+
+  if (!me) {
+    return (
+      <StepCard title="ادامهٔ راه‌اندازی" intro="راه‌اندازی شرکت را فقط توسعه‌دهنده می‌تواند ادامه دهد.">
+        <Link href="/login?next=%2Fsetup" className={`${primaryButton} inline-block`}>
+          رفتن به صفحهٔ ورود
+        </Link>
+      </StepCard>
+    );
+  }
 
   return (
-    <StepCard
-      title="راه‌اندازی شرکت"
-      intro={`با حساب ${me.full_name} وارد شده‌اید؛ شما مدیر عامل و ریشهٔ ساختار سازمان خواهید بود. در گام بعد نام شرکت، لوگو و حوزه‌ها را تعیین می‌کنید.`}
-    >
-      <StartSetupButton onStarted={onDone} className={`${primaryButton} w-full`} errorClassName="text-sm text-red-300" />
+    <StepCard title="راه‌اندازی در جریان است" intro="راه‌اندازی در حال انجام است — با توسعه‌دهنده تماس بگیرید.">
+      <Link href="/dashboard" className={`${primaryButton} inline-block`}>
+        رفتن به نرم‌افزار
+      </Link>
     </StepCard>
   );
 }
 
 /** Mounted only once a company exists, so its (authenticated) requests never run on a fresh database. */
-function SignedInWizard({ status, reload, refresh }: { status: SetupStatus; reload: number; refresh: () => void }) {
+function SignedInWizard({
+  status,
+  reload,
+  refresh,
+  onPeopleChanged,
+}: {
+  status: SetupStatus;
+  reload: number;
+  refresh: () => void;
+  onPeopleChanged: () => void;
+}) {
   const me = useApiQuery<User>("/auth/me/");
   const tree = useApiQuery<OrgTreeResponse>("/org/tree/", reload);
   const company = useApiQuery<Company>("/org/company/", reload);
@@ -113,7 +157,7 @@ function SignedInWizard({ status, reload, refresh }: { status: SetupStatus; relo
   if (!signedIn || step === "login") {
     return (
       <div className="mx-auto max-w-xl">
-        <StepCard title="راه‌اندازی در جریان است" intro="برای ادامه، با حساب مدیر عامل وارد شوید.">
+        <StepCard title="راه‌اندازی در جریان است" intro="برای ادامه، با حساب توسعه‌دهنده وارد شوید.">
           <Link href="/login?next=%2Fsetup" className={`${primaryButton} inline-block`}>
             رفتن به صفحهٔ ورود
           </Link>
@@ -122,10 +166,10 @@ function SignedInWizard({ status, reload, refresh }: { status: SetupStatus; relo
     );
   }
 
-  if (!hasCapability(me.data, "manage_organization")) {
+  if (!me.data?.is_developer) {
     return (
       <div className="mx-auto max-w-xl">
-        <StepCard title="دسترسی لازم را ندارید" intro="راه‌اندازی ساختار سازمان را فقط مدیر عامل می‌تواند ادامه دهد. با آن حساب وارد شوید.">
+        <StepCard title="راه‌اندازی در جریان است" intro="راه‌اندازی در حال انجام است — با توسعه‌دهنده تماس بگیرید.">
           <Link href="/dashboard" className={`${primaryButton} inline-block`}>
             رفتن به نرم‌افزار
           </Link>
@@ -141,7 +185,7 @@ function SignedInWizard({ status, reload, refresh }: { status: SetupStatus; relo
   }
 
   const go = (next: WizardStep) => () => setChosen(next);
-  const current = step === "account" ? "company" : step;
+  const current = step;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -179,8 +223,11 @@ function SignedInWizard({ status, reload, refresh }: { status: SetupStatus; relo
             onNext={go("sections")}
           />
         )}
-        {current === "sections" && <SectionsStep nodes={nodes} onChanged={refresh} onBack={go("units")} onNext={go("ready")} />}
-        {current === "ready" && <ReadyStep nodes={nodes} onBack={go("sections")} />}
+        {current === "sections" && <SectionsStep nodes={nodes} onChanged={refresh} onBack={go("units")} onNext={go("people")} />}
+        {current === "people" && (
+          <PeopleStep status={status} onRegistered={onPeopleChanged} onBack={go("sections")} onNext={go("ready")} />
+        )}
+        {current === "ready" && <ReadyStep nodes={nodes} status={status} onBack={go("people")} onPeople={go("people")} />}
       </div>
 
       <aside aria-label="پیش‌نمایش ساختار" className="h-fit rounded-2xl border border-line bg-surface-raised p-4 lg:sticky lg:top-6">

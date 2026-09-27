@@ -9,26 +9,27 @@ import type { SetupStatus } from "@/lib/types";
 
 const BUTTON = "rounded bg-sky-600 px-3 py-1.5 font-medium text-white hover:bg-sky-700";
 
-/** A nudge for the manager while first-run setup is unfinished: the wizard is resumable from any
+/** A nudge for the developer while first-run setup is unfinished: the wizard is resumable from any
  *  browser, so this is how someone who closed the tab (or signed in elsewhere) finds their way back.
- *  Hidden for everyone who could not act on it, and once setup is complete. */
+ *  Hidden for everyone else (Phase 10: the wizard is the developer's job, not `manage_organization`'s
+ *  — the مدیر عامل holds that capability too but never runs the wizard), and once setup is complete. */
 export function SetupBanner() {
   const router = useRouter();
-  const { can } = useCurrentUser();
+  const { user } = useCurrentUser();
   const status = useApiQuery<SetupStatus>("/setup/status/");
   const data = status.data;
-  if (!data || !can("manage_organization")) return null;
-  if (!data.needed && data.step === "DONE") return null;
+  if (!data || !user?.is_developer) return null;
+  if (data.completed) return null;
 
   return (
     <div role="status" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
       <span>
-        {data.needed
+        {!data.company_exists
           ? "ساختار سازمان و شرکت هنوز تعریف نشده است."
           : "راه‌اندازی ساختار سازمان هنوز به پایان نرسیده است."}
       </span>
-      {data.needed ? (
-        // Already signed in as the مدیر عامل: one press, straight into the wizard.
+      {!data.company_exists ? (
+        // Already signed in as the developer: one press, straight into the wizard.
         <StartSetupButton
           onStarted={() => router.push("/setup")}
           className={`${BUTTON} disabled:opacity-50`}

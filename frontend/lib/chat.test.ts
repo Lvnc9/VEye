@@ -4,6 +4,10 @@ import {
   MESSAGE_MAX_LENGTH,
   NODE_PRIVACY_NOTE,
   canOpenNodeChannel,
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_MAX_FILES,
+  addAttachments,
   canSend,
   conversationSubtitle,
   lastMessageLine,
@@ -33,6 +37,7 @@ function msg(id: number, extra: Partial<ChatMessage> = {}): ChatMessage {
     is_deleted: false,
     is_mine: false,
     can_delete: false,
+    attachments: [],
     created_at: "2026-09-23T10:00:00Z",
     ...extra,
   };
@@ -127,6 +132,14 @@ describe("rules", () => {
     expect(canSend("x".repeat(MESSAGE_MAX_LENGTH + 1))).toBe(false);
   });
 
+  it("sends files alone, but never too much text even with files", () => {
+    expect(canSend("", 1)).toBe(true);
+    expect(canSend("  ", ATTACHMENT_MAX_FILES)).toBe(true);
+    expect(canSend("", ATTACHMENT_MAX_FILES + 1)).toBe(false);
+    expect(canSend("", 0)).toBe(false);
+    expect(canSend("x".repeat(MESSAGE_MAX_LENGTH + 1), 1)).toBe(false);
+  });
+
   it("moves the read mark only forward", () => {
     expect(shouldMarkRead(null, null)).toBe(false);
     expect(shouldMarkRead(5, null)).toBe(true);
@@ -166,5 +179,49 @@ describe("inbox tab and chart affordance", () => {
     expect(canOpenNodeChannel(section, ancestors, [{ node: 9, is_lead: true }])).toBe(false); // lead elsewhere
     expect(canOpenNodeChannel({ id: 1, kind: "COMPANY" }, [], [{ node: 9, is_lead: false }])).toBe(true);
     expect(canOpenNodeChannel({ id: 1, kind: "COMPANY" }, [], [])).toBe(false);
+  });
+});
+
+describe("attachments", () => {
+  const file = (name: string, size = 10) => ({ name, size });
+
+  it("keeps allowed files and explains each refusal in Persian", () => {
+    const { files, errors } = addAttachments(
+      [],
+      [file("a.PDF"), file("b.exe"), file("c.txt", 0), file("d.png", ATTACHMENT_MAX_BYTES + 1), file("noext")],
+    );
+    expect(files.map((f) => f.name)).toEqual(["a.PDF"]);
+    expect(errors).toHaveLength(4);
+    expect(errors[0]).toContain("b.exe");
+    expect(errors.every((line) => /[\u0600-\u06FF]/.test(line))).toBe(true);
+  });
+
+  it("accepts a file of exactly the size limit", () => {
+    expect(addAttachments([], [file("big.mp4", ATTACHMENT_MAX_BYTES)]).files).toHaveLength(1);
+  });
+
+  it("stops at the per-message count, first picked wins", () => {
+    const current = [file("1.txt"), file("2.txt"), file("3.txt"), file("4.txt")];
+    const { files, errors } = addAttachments(current, [file("5.txt"), file("6.txt")]);
+    expect(files.map((f) => f.name)).toEqual(["1.txt", "2.txt", "3.txt", "4.txt", "5.txt"]);
+    expect(files).toHaveLength(ATTACHMENT_MAX_FILES);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("6.txt");
+  });
+
+  it("does not change the list it was given", () => {
+    const current = [file("1.txt")];
+    addAttachments(current, [file("2.txt")]);
+    expect(current).toHaveLength(1);
+  });
+
+  it("filters the picker to the server's extensions", () => {
+    expect(ATTACHMENT_ACCEPT.split(",")).toContain(".xlsx");
+    expect(ATTACHMENT_ACCEPT).not.toContain(".exe");
+  });
+
+  it("shows a file-only message's preview as the server words it", () => {
+    const last = { id: 1, kind: "TEXT", sender_name: "علی", preview: "📎 a.pdf", is_deleted: false };
+    expect(lastMessageLine({ last_message: last } as never)).toBe("علی: 📎 a.pdf");
   });
 });

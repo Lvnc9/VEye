@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate, get_user_model
+from django.db import transaction
 from django.db.models import ProtectedError
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -6,7 +7,7 @@ from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,7 +22,7 @@ from apps.core.permissions import HasCapability
 
 from .authentication import blacklist_jti, is_blacklisted
 from .models import Capability, User
-from .serializers import LoginSerializer, UserSerializer
+from .serializers import LoginSerializer, PlacementSerializer, UserSerializer
 
 # NOTE on CSRF (see also apps/accounts/authentication.py docstring):
 # - LoginView is deliberately left without an explicit csrf_protect: at
@@ -188,6 +189,67 @@ class PersonnelViewSet(viewsets.ModelViewSet):
                 "حساب توسعه‌دهنده را فقط خود توسعه‌دهنده می‌تواند تغییر دهد یا حذف کند.",
                 code="developer_protected",
             )
+
+    def create(self, request, *args, **kwargs):
+        """Register a person and, optionally, place them in the org chart in one request
+        (ADR-010 §B). Placement used to be a second `POST /org/memberships/` that could fail on
+        its own, leaving an unplaced account behind; now either both happen or neither does.
+
+        Order matters: validate the user fields, then resolve the node and check
+        `can_manage_members` on it *before* creating anything, so a caller who may register
+        personnel but not manage that node's members learns that without side effects. Only
+        after that do the user and the membership get created, together, in one transaction.
+
+        `apps.organization` is imported here, not at module level: accounts is the lower-level
+        app (organization imports it), and a module-level import the other way round would be a
+        real circular-import risk the moment organization needs something from accounts at
+        import time (MeView.get above does the same for `org_context`, for the same reason).
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        placement_data = request.data.get("placement")
+        node = None
+        placement = None
+        if placement_data:
+            placement_serializer = PlacementSerializer(data=placement_data)
+            placement_serializer.is_valid(raise_exception=True)
+            placement = placement_serializer.validated_data
+
+            from apps.organization.access import access_for
+            from apps.organization.models import OrgNode
+
+            try:
+                node = OrgNode.objects.get(pk=placement["node"])
+            except OrgNode.DoesNotExist:
+                raise NotFound("گره سازمانی یافت نشد.")
+            if not access_for(request).can_manage_members(node):
+                raise PermissionDenied(
+                    "شما اجازهٔ افزودن عضو به این گره یا گره‌های بالادستی آن را ندارید."
+                )
+
+        membership = None
+        with transaction.atomic():
+            self.perform_create(serializer)
+            if node is not None:
+                from apps.organization import memberships
+
+                membership = memberships.add_membership(
+                    user=serializer.instance,
+                    node=node,
+                    is_lead=placement["is_lead"],
+                    position_label=placement["position_label"],
+                    added_by=request.user,
+                )
+
+        data = dict(serializer.data)
+        if membership is not None:
+            from apps.organization.serializers import MembershipSerializer
+
+            data["membership"] = MembershipSerializer(membership).data
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
         # Before validation, so a refused caller learns nothing from field errors.

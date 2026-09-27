@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import Link from "next/link";
 import { ApiError, apiPost } from "@/lib/api-client";
 import {
   EMPTY_ACCOUNT_FORM,
@@ -10,16 +9,16 @@ import {
   type AccountErrors,
   type AccountForm,
 } from "@/lib/setup";
-import type { SetupStatus } from "@/lib/types";
 import { DarkError, Field, StepCard, darkInput, primaryButton } from "./ui";
 
 /**
- * Step 0 for a visitor with no session: the company's name and the first مدیر عامل account — no
- * setup token (removed by the owner, 2026-09-25). If an active مدیر عامل already exists the server
- * refuses a second one from this form, so that person is sent to sign in instead; signed in,
- * SetupWizard's FirstStep gives them StartSetupButton.
+ * The developer account's form (Phase 10, ADR-010 §A) — no setup token (removed 2026-09-25), and no
+ * company name here either: the developer creates the company afterwards with one press
+ * («شروع راه‌اندازی»), and names it in the wizard's own «شرکت و حوزه‌ها» step. `SetupWizard` renders
+ * this only while `status.developer_exists` is false, so there is nothing to check here about who
+ * else might already exist.
  */
-export function AccountStep({ status, onDone }: { status: SetupStatus; onDone: () => void }) {
+export function AccountStep({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState<AccountForm>(EMPTY_ACCOUNT_FORM);
   const [errors, setErrors] = useState<AccountErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -37,7 +36,7 @@ export function AccountStep({ status, onDone }: { status: SetupStatus; onDone: (
     setBusy(true);
     try {
       await apiPost("/setup/bootstrap/", bootstrapBody(form));
-      onDone(); // the new account is signed in; the wizard continues under it
+      onDone(); // the new developer account is signed in; the wizard continues under it
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : "راه‌اندازی ممکن نشد. اتصال را بررسی و دوباره تلاش کنید.");
     } finally {
@@ -45,36 +44,13 @@ export function AccountStep({ status, onDone }: { status: SetupStatus; onDone: (
     }
   }
 
-  if (status.has_users) {
-    return (
-      <StepCard title="ورود با حساب مدیر عامل" intro="حساب مدیر عامل از قبل در سامانه هست.">
-        <p className="text-sm leading-7 text-slate-300">
-          با همان حساب وارد شوید تا با یک کلیک «شروع راه‌اندازی» شرکت را بسازید.
-        </p>
-        <Link href="/login?next=%2Fsetup" className={`${primaryButton} inline-block`}>
-          رفتن به صفحهٔ ورود
-        </Link>
-      </StepCard>
-    );
-  }
-
   return (
     <StepCard
-      title="ایجاد حساب مدیر عامل"
-      intro="نام شرکت و حساب مدیر عامل را بسازید. پس از آن، ساختار سازمان را گام‌به‌گام تعریف می‌کنید."
+      title="ایجاد حساب توسعه‌دهنده"
+      intro="حساب توسعه‌دهنده، یک حساب فنی برای راه‌اندازی اولیه است: در نمودار سازمان نیست و سندی امضا نمی‌کند. پس از این حساب، ساختار سازمان را گام‌به‌گام تعریف می‌کنید و در پایان، مدیر عامل را به‌عنوان پرسنل ثبت می‌کنید."
     >
       <form onSubmit={submit} className="space-y-5" noValidate>
         {serverError && <DarkError message={serverError} />}
-
-        <Field id="company-name" label="نام شرکت" error={errors.companyName}>
-          <input
-            id="company-name"
-            value={form.companyName}
-            onChange={(e) => set("companyName", e.target.value)}
-            maxLength={255}
-            className={darkInput}
-          />
-        </Field>
 
         <Field id="full-name" label="نام و نام خانوادگی" error={errors.fullName}>
           <input
