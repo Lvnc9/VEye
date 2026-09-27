@@ -158,6 +158,60 @@ export const MAX_CELL = 1000;
 /** Narrowest column, percent (form_schema.MIN_COLUMN_WIDTH). */
 export const MIN_COLUMN_WIDTH = 4;
 
+export interface ChoicesProps {
+  kind: "choices";
+  label: string;
+  options: string[];
+  shape: "square" | "circle";
+  layout: "inline" | "vertical" | "columns";
+  /** For layout "columns": 2–4. */
+  columns: number;
+  /** Adds «سایر: ______». */
+  other: boolean;
+}
+
+export interface MatrixProps {
+  kind: "matrix";
+  title: string;
+  items: string[];
+  scale: string[];
+  item_title: string;
+  /** Percent of the table for the items column. */
+  item_width: number;
+  numbered: boolean;
+  comment: boolean;
+  comment_title: string;
+  shape: "circle" | "square";
+}
+
+export type AnswerKind = "lines" | "box" | "yes_no" | "none";
+
+export const ANSWER_KIND_LABELS: Record<AnswerKind, string> = {
+  lines: "چند خط",
+  box: "کادر",
+  yes_no: "بله / خیر",
+  none: "بدون جای پاسخ",
+};
+
+export interface QuestionItem {
+  text: string;
+  answer: AnswerKind;
+  lines: number;
+  /** Millimetres, for a box answer. */
+  height: number;
+}
+
+export interface QuestionsProps {
+  kind: "questions";
+  items: QuestionItem[];
+  numbered: boolean;
+}
+
+export const MAX_OPTIONS = 20;
+export const MAX_MATRIX_ITEMS = 40;
+export const MAX_SCALE = 7;
+export const MAX_QUESTIONS = 100;
+
 export const MAX_FIELD_ROWS = 40;
 export const MAX_FIELDS_PER_ROW = 6;
 export const MAX_SIGNATURE_BOXES = 4;
@@ -173,7 +227,10 @@ export type ElementProps =
   | FieldsProps
   | AnswerBoxProps
   | SignaturesProps
-  | TableProps;
+  | TableProps
+  | ChoicesProps
+  | MatrixProps
+  | QuestionsProps;
 export type ElementKind = ElementProps["kind"];
 
 /** An element being edited: its props plus a React key and, once saved, its id. */
@@ -209,6 +266,9 @@ export const ELEMENT_KINDS: { kind: ElementKind; label: string; group: "structur
   { kind: "fields", label: "فیلدها", group: "input" },
   { kind: "answer_box", label: "کادر پاسخ", group: "input" },
   { kind: "table", label: "جدول", group: "input" },
+  { kind: "choices", label: "گزینه‌ای", group: "input" },
+  { kind: "questions", label: "پرسش‌ها", group: "input" },
+  { kind: "matrix", label: "جدول ارزیابی", group: "input" },
   { kind: "signatures", label: "امضا", group: "sign" },
 ];
 
@@ -278,6 +338,24 @@ export function newElement(kind: ElementKind): FormElement {
         repeat_header: true,
         merges: [],
       };
+    case "choices":
+      return { key, kind, label: "پرسش", options: ["بله", "خیر"], shape: "square", layout: "inline", columns: 2, other: false };
+    case "matrix":
+      return {
+        key,
+        kind,
+        title: "",
+        items: ["کیفیت کار", "نظم و انضباط", "همکاری"],
+        scale: ["عالی", "خوب", "متوسط", "ضعیف"],
+        item_title: "شرح",
+        item_width: 40,
+        numbered: true,
+        comment: false,
+        comment_title: "توضیحات",
+        shape: "circle",
+      };
+    case "questions":
+      return { key, kind, items: [{ text: "پرسش اول", answer: "lines", lines: 2, height: 25 }], numbered: true };
   }
 }
 

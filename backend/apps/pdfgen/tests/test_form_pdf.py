@@ -10,6 +10,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen.canvas import Canvas
+from reportlab.platypus import KeepTogether
 from rest_framework.test import APIClient
 
 from apps.core.constants import DocumentCategory, DocumentGroup, SectionType, SignOffRole
@@ -494,3 +495,64 @@ class StoredElementPdfTests(TestCase):
         data = form_adapter.load(form.pk)
         self.assertEqual(data.elements[0]["merges"], [])
         self.assertTrue(form_renderer.render(data).startswith(b"%PDF-"))
+
+
+class QuestionElementTests(SimpleTestCase):
+    def group(self, **raw):
+        element = form_schema.clean_element({"kind": "choices", **raw}, number=1)
+        group = form_renderer.ChoiceGroup(element, 10)
+        group.wrap(300, 800)
+        return group
+
+    def test_inline_options_run_right_to_left_and_wrap(self):
+        group = self.group(label="وضعیت", options=["اول", "دوم"])
+        (line1, x1, _, _), (line2, x2, _, _) = group._placed
+        self.assertEqual((line1, line2), (0, 0))
+        self.assertGreater(x1, x2)
+        many = self.group(label="بلند", options=[f"گزینهٔ شمارهٔ {i}" for i in range(12)])
+        self.assertGreater(max(line for line, *_ in many._placed), 0)
+        for line, x_right, text, _ in many._placed:
+            self.assertGreaterEqual(x_right - many._option_width(text, False), -0.01)
+
+    def test_columns_fill_right_to_left_then_down(self):
+        group = self.group(label="", options=["الف", "ب", "ج"], layout="columns", columns=2)
+        (l1, x1, _, _), (l2, x2, _, _), (l3, x3, _, _) = group._placed
+        self.assertEqual((l1, l2, l3), (0, 0, 1))
+        self.assertGreater(x1, x2)
+        self.assertEqual(x3, x1)
+
+    def test_vertical_with_other(self):
+        group = self.group(label="سؤال", options=["الف", "ب"], layout="vertical", other=True)
+        self.assertEqual([line for line, *_ in group._placed], [1, 2, 3])
+        self.assertTrue(group._placed[-1][3])  # «سایر» comes last
+
+    def test_the_matrix_puts_the_items_on_the_right(self):
+        element = form_schema.clean_element({"kind": "matrix", "comment": True}, number=1)
+        flowable = form_renderer.MatrixFlowable(element, form_input())
+        flowable.wrap(500, 800)
+        header = flowable._table._cellvalues[0]
+        self.assertEqual(header[-1].text, "شرح")
+        self.assertEqual(header[0].text, "توضیحات")
+        self.assertEqual(flowable._table.repeatRows, 1)
+        self.assertIsInstance(flowable._table._cellvalues[1][1], form_renderer.CheckCell)
+
+    def test_a_question_stays_with_its_answer(self):
+        element = form_schema.clean_element(
+            {"kind": "questions", "items": [{"text": "چرا؟", "answer": "lines", "lines": 3}, {"text": "بله؟", "answer": "yes_no"}]},
+            number=1,
+        )
+        flowables = form_renderer._questions(element, form_input(), form_renderer._Numbering(), 200 * form_renderer.mm)
+        keeps = [f for f in flowables if isinstance(f, KeepTogether)]
+        self.assertEqual(len(keeps), 2)
+        self.assertEqual(keeps[0]._content[0].text, "1. چرا؟")
+        self.assertIsInstance(keeps[1]._content[1], form_renderer.ChoiceGroup)
+
+    def test_a_questionnaire_renders(self):
+        items = elements(
+            {"kind": "choices", "label": "x", "options": ["a", "b"], "other": True},
+            {"kind": "matrix", "items": [f"مورد {i}" for i in range(40)]},
+            {"kind": "questions", "items": [{"text": "پرسش", "answer": "box", "height": 150}] * 5},
+        )
+        for orientation in ("portrait", "landscape"):
+            with self.subTest(orientation=orientation):
+                self.assertTrue(form_renderer.render(form_input(orientation=orientation, elements=items)).startswith(b"%PDF-"))

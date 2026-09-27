@@ -11,7 +11,7 @@ import {
   PHOTO_WIDTH,
   SIGNATURE_GAP,
 } from "@/lib/form-layout";
-import type { FieldCell, FieldsProps, FormElement, HeadingProps } from "@/lib/form-designer";
+import type { ChoicesProps, FieldCell, FieldsProps, FormElement, HeadingProps, MatrixProps } from "@/lib/form-designer";
 import { TableView } from "./TableView";
 import { mm, pt } from "./units";
 
@@ -155,6 +155,33 @@ export function ElementView({
       return <FieldsView element={element} />;
     case "table":
       return <TableView element={element} baseSize={baseSize} editing={editing} update={update} />;
+    case "choices":
+      return <ChoicesView element={element} />;
+    case "matrix":
+      return <MatrixView element={element} baseSize={baseSize} />;
+    case "questions":
+      return (
+        <div style={{ marginBottom: mm(1.5) }}>
+          {element.items.map((item, i) => (
+            <div key={i} style={{ marginBottom: mm(1.5) }}>
+              <div style={{ lineHeight: LEADING }}>
+                {element.numbered && `${(i + 1).toLocaleString("fa-IR")}. `}
+                <RichText text={item.text} inline />
+              </div>
+              {item.answer === "lines" &&
+                Array.from({ length: item.lines }, (_, j) => (
+                  <div key={j} style={{ height: mm(ANSWER_LINE), borderBottom: "0.4pt dotted #333" }} />
+                ))}
+              {item.answer === "box" && <div style={{ height: mm(item.height), border: "0.6pt solid #333", marginTop: mm(1) }} />}
+              {item.answer === "yes_no" && (
+                <ChoicesView
+                  element={{ kind: "choices", label: "", options: ["بله", "خیر"], shape: "square", layout: "inline", columns: 2, other: false }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      );
     case "answer_box":
       return (
         <div style={{ marginBottom: mm(2) }}>
@@ -275,6 +302,108 @@ function FieldsView({ element }: { element: FieldsProps }) {
           <span>ابعاد ۳ در ۴</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function Mark({ shape }: { shape: "square" | "circle" }) {
+  return (
+    <span
+      className={`inline-block shrink-0 ${shape === "circle" ? "rounded-full" : ""}`}
+      style={{ width: mm(3.2), height: mm(3.2), border: "0.6pt solid #333" }}
+    />
+  );
+}
+
+function ChoicesView({ element }: { element: ChoicesProps }) {
+  const options = element.options.map((text, i) => (
+    <span key={i} className="inline-flex items-center" style={{ gap: mm(1.5) }}>
+      <Mark shape={element.shape} />
+      {text}
+    </span>
+  ));
+  if (element.other) {
+    options.push(
+      <span key="__other" className="inline-flex items-end" style={{ gap: mm(1.5) }}>
+        <Mark shape={element.shape} />
+        سایر:
+        <span style={{ width: mm(30), borderBottom: "0.5pt dotted #333", marginBottom: "0.3em" }} />
+      </span>,
+    );
+  }
+  const label = element.label.trim() && <span className="font-bold">{element.label}:</span>;
+  const line = { lineHeight: 1.9 };
+  if (element.layout === "inline") {
+    return (
+      <div className="flex flex-wrap items-center" style={{ ...line, columnGap: mm(6), marginBottom: mm(1.5) }}>
+        {label}
+        {options}
+      </div>
+    );
+  }
+  return (
+    <div style={{ ...line, marginBottom: mm(1.5) }}>
+      {label && <div>{label}</div>}
+      <div
+        className={element.layout === "columns" ? "grid" : "flex flex-col"}
+        style={{
+          paddingInlineStart: mm(4),
+          ...(element.layout === "columns" ? { gridTemplateColumns: `repeat(${element.columns}, minmax(0, 1fr))` } : {}),
+        }}
+      >
+        {options}
+      </div>
+    </div>
+  );
+}
+
+function MatrixView({ element, baseSize }: { element: MatrixProps; baseSize: number }) {
+  const commentWidth = element.comment ? 20 : 0;
+  const gradeWidth = (100 - element.item_width - commentWidth) / element.scale.length;
+  const cell = { border: "0.5pt solid #333", padding: "2pt 3pt" };
+  return (
+    <div style={{ marginBottom: mm(2.5), fontSize: pt(baseSize - 1) }}>
+      {element.title.trim() && (
+        <div className="font-bold" style={{ fontSize: pt(baseSize), lineHeight: LEADING, marginBottom: mm(1) }}>
+          {element.title}
+        </div>
+      )}
+      <table className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col style={{ width: `${element.item_width}%` }} />
+          {element.scale.map((_, i) => (
+            <col key={i} style={{ width: `${gradeWidth}%` }} />
+          ))}
+          {element.comment && <col style={{ width: `${commentWidth}%` }} />}
+        </colgroup>
+        <thead>
+          <tr style={{ background: "#e6e8ed", height: mm(6) }}>
+            <th style={cell}>{element.item_title}</th>
+            {element.scale.map((grade, i) => (
+              <th key={i} style={cell}>
+                {grade}
+              </th>
+            ))}
+            {element.comment && <th style={cell}>{element.comment_title}</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {element.items.map((item, r) => (
+            <tr key={r} style={{ height: mm(7) }}>
+              <td style={cell}>
+                {element.numbered && `${(r + 1).toLocaleString("fa-IR")}. `}
+                {item}
+              </td>
+              {element.scale.map((_, i) => (
+                <td key={i} style={{ ...cell, textAlign: "center" }}>
+                  <Mark shape={element.shape} />
+                </td>
+              ))}
+              {element.comment && <td style={cell} />}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

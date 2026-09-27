@@ -356,6 +356,68 @@ def _table(r: _Reader) -> dict:
     }
 
 
+def _strings(r: _Reader, key: str, *, label: str, max_items: int, min_items: int, default: list[str], max_length=MAX_LABEL) -> list[str]:
+    values = []
+    for number, value in enumerate(r.items(key, label=label, max_items=max_items, min_items=min_items, default=default), start=1):
+        if not isinstance(value, str):
+            r.fail(f"«{label}» — مورد {_fa(number)} باید متن باشد.")
+            continue
+        if len(value) > max_length:
+            r.fail(f"«{label}» — مورد {_fa(number)} نباید بیشتر از {_fa(max_length)} نویسه باشد.")
+            value = value[:max_length]
+        values.append(value)
+    return values
+
+
+def _choices(r: _Reader) -> dict:
+    """A question answered by ticking: «جنسیت: ☐ زن ☐ مرد»."""
+    return {
+        "label": r.text("label", label="پرسش"),
+        "options": _strings(r, "options", label="گزینه‌ها", max_items=20, min_items=1, default=["بله", "خیر"]),
+        "shape": r.choice("shape", ("square", "circle"), label="شکل گزینه"),
+        "layout": r.choice("layout", ("inline", "vertical", "columns"), label="چیدمان"),
+        "columns": r.number("columns", label="تعداد ستون", low=2, high=4, default=2, integer=True),
+        "other": r.boolean("other"),
+    }
+
+
+def _matrix(r: _Reader) -> dict:
+    """A rating grid: one row per item, one column per grade."""
+    return {
+        "title": r.text("title", label="عنوان"),
+        "items": _strings(
+            r, "items", label="موارد", max_items=40, min_items=1, default=["کیفیت کار", "نظم و انضباط", "همکاری"]
+        ),
+        "scale": _strings(r, "scale", label="درجه‌ها", max_items=7, min_items=2, default=["عالی", "خوب", "متوسط", "ضعیف"]),
+        "item_title": r.text("item_title", label="عنوان ستون موارد", default="شرح"),
+        "item_width": r.number("item_width", label="پهنای ستون موارد", low=20, high=70, default=40),
+        "numbered": r.boolean("numbered", default=True),
+        "comment": r.boolean("comment"),
+        "comment_title": r.text("comment_title", label="عنوان ستون توضیحات", default="توضیحات"),
+        "shape": r.choice("shape", ("circle", "square"), label="شکل گزینه"),
+    }
+
+
+ANSWER_KINDS = ("lines", "box", "yes_no", "none")
+
+
+def _questions(r: _Reader) -> dict:
+    """Numbered questions, each with room for its answer."""
+    default_items = [{"text": "پرسش اول", "answer": "lines", "lines": 2}]
+    items = []
+    for number, raw in enumerate(r.items("items", label="پرسش‌ها", max_items=100, min_items=1, default=default_items), start=1):
+        item = r.nested(raw, f"پرسش {_fa(number)}")
+        items.append(
+            {
+                "text": item.text("text", label="متن پرسش", max_length=2000),
+                "answer": item.choice("answer", ANSWER_KINDS, label="نوع پاسخ"),
+                "lines": item.number("lines", label="تعداد خط", low=1, high=15, default=2, integer=True),
+                "height": item.number("height", label="ارتفاع کادر", low=10, high=150, default=25),
+            }
+        )
+    return {"items": items, "numbered": r.boolean("numbered", default=True)}
+
+
 #: kind → (Persian name, cleaner). The Persian name is how errors refer to it.
 ELEMENTS: dict[str, tuple[str, Callable[[_Reader], dict]]] = {
     "heading": ("عنوان بخش", _heading),
@@ -367,6 +429,9 @@ ELEMENTS: dict[str, tuple[str, Callable[[_Reader], dict]]] = {
     "answer_box": ("کادر پاسخ", _answer_box),
     "signatures": ("امضا", _signatures),
     "table": ("جدول", _table),
+    "choices": ("گزینه‌ای", _choices),
+    "matrix": ("جدول ارزیابی", _matrix),
+    "questions": ("پرسش‌ها", _questions),
 }
 
 

@@ -365,3 +365,38 @@ class StoredElementTests(DesignerTestCase):
         [heading] = self.get_content(form)["sections"]
         self.assertEqual(heading["level"], 9)
         self.assertEqual(form_schema.normalize_stored(broken), broken)
+
+
+class QuestionElementSchemaTests(SimpleTestCase):
+    def clean(self, raw):
+        return form_schema.clean_element(raw, number=5)
+
+    def messages(self, raw):
+        with self.assertRaises(form_schema.FormSchemaError) as caught:
+            self.clean(raw)
+        return caught.exception.messages
+
+    def test_choices(self):
+        self.assertEqual(self.clean({"kind": "choices"})["options"], ["بله", "خیر"])
+        self.assertTrue(self.messages({"kind": "choices", "options": []}))
+        self.assertTrue(self.messages({"kind": "choices", "options": ["x"] * 21}))
+        [message] = self.messages({"kind": "choices", "options": ["الف", 3]})
+        self.assertIn("گزینه‌ها» — مورد ۲", message)
+        self.assertTrue(self.messages({"kind": "choices", "layout": "grid"}))
+        self.assertTrue(self.messages({"kind": "choices", "columns": 5}))
+
+    def test_matrix(self):
+        matrix = self.clean({"kind": "matrix"})
+        self.assertEqual(matrix["scale"], ["عالی", "خوب", "متوسط", "ضعیف"])
+        self.assertEqual(len(matrix["items"]), 3)
+        self.assertTrue(self.messages({"kind": "matrix", "scale": ["فقط یکی"]}))
+        self.assertTrue(self.messages({"kind": "matrix", "scale": ["x"] * 8}))
+        self.assertTrue(self.messages({"kind": "matrix", "item_width": 90}))
+
+    def test_questions(self):
+        [item] = self.clean({"kind": "questions"})["items"]
+        self.assertEqual(item, {"text": "پرسش اول", "answer": "lines", "lines": 2, "height": 25.0})
+        [message] = self.messages({"kind": "questions", "items": [{"text": "x", "answer": "essay"}]})
+        self.assertIn("پرسش ۱", message)
+        self.assertTrue(self.messages({"kind": "questions", "items": []}))
+        self.assertTrue(self.messages({"kind": "questions", "items": [{"text": "x", "lines": 20}]}))

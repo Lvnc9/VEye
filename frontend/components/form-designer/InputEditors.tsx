@@ -1,6 +1,15 @@
 "use client";
 
 import {
+  ANSWER_KIND_LABELS,
+  MAX_MATRIX_ITEMS,
+  MAX_OPTIONS,
+  MAX_QUESTIONS,
+  MAX_SCALE,
+  type AnswerKind,
+  type ChoicesProps,
+  type MatrixProps,
+  type QuestionsProps,
   COLUMN_TYPE_LABELS,
   FIELD_TYPE_LABELS,
   MAX_COLUMNS,
@@ -387,6 +396,214 @@ export function TableEditor({ element, disabled, set }: { element: TableProps; d
       </div>
       <Check label="سرستون با زمینهٔ رنگی" checked={element.header_shade} disabled={disabled} onChange={(header_shade) => set({ header_shade })} />
       <Check label="تکرار سرستون در هر صفحه" checked={element.repeat_header} disabled={disabled} onChange={(repeat_header) => set({ repeat_header })} />
+    </div>
+  );
+}
+
+/** An editable list of short texts: options, items, grades. */
+function StringList({
+  values,
+  min,
+  max,
+  disabled,
+  addLabel,
+  onChange,
+}: {
+  values: string[];
+  min: number;
+  max: number;
+  disabled: boolean;
+  addLabel: string;
+  onChange: (values: string[]) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      {values.map((value, i) => (
+        <div key={i} className="flex gap-1">
+          <input
+            value={value}
+            maxLength={MAX_LABEL}
+            disabled={disabled}
+            aria-label={`مورد ${(i + 1).toLocaleString("fa-IR")}`}
+            onChange={(event) => onChange(values.map((v, j) => (j === i ? event.target.value : v)))}
+            className={`${inputClass} py-1`}
+          />
+          <button type="button" className={smallButton} disabled={disabled || i === 0} aria-label="بالا" onClick={() => onChange(moveElement(values, i, i - 1))}>
+            ↑
+          </button>
+          <button
+            type="button"
+            className={`${smallButton} text-red-600`}
+            disabled={disabled || values.length <= min}
+            aria-label="حذف"
+            onClick={() => onChange(values.filter((_, j) => j !== i))}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <button type="button" className={smallButton} disabled={disabled || values.length >= max} onClick={() => onChange([...values, ""])}>
+        + {addLabel}
+      </button>
+    </div>
+  );
+}
+
+export function ChoicesEditor({ element, disabled, set }: { element: ChoicesProps; disabled: boolean; set: Patch<ChoicesProps> }) {
+  return (
+    <div className="space-y-4">
+      <Field label="پرسش">
+        <input value={element.label} maxLength={MAX_LABEL} disabled={disabled} onChange={(event) => set({ label: event.target.value })} className={inputClass} />
+      </Field>
+      <div>
+        <p className="mb-1 text-sm font-medium text-slate-700">گزینه‌ها</p>
+        <StringList values={element.options} min={1} max={MAX_OPTIONS} disabled={disabled} addLabel="گزینه" onChange={(options) => set({ options })} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="چیدمان">
+          <Select
+            value={element.layout}
+            disabled={disabled}
+            options={[
+              ["inline", "پشت سر هم"],
+              ["vertical", "زیر هم"],
+              ["columns", "چند ستونی"],
+            ]}
+            onChange={(layout) => set({ layout })}
+          />
+        </Field>
+        <Field label="شکل">
+          <Select
+            value={element.shape}
+            disabled={disabled}
+            options={[
+              ["square", "مربع (چندگزینه‌ای)"],
+              ["circle", "دایره (تک‌گزینه‌ای)"],
+            ]}
+            onChange={(shape) => set({ shape })}
+          />
+        </Field>
+      </div>
+      {element.layout === "columns" && (
+        <Field label="تعداد ستون">
+          <NumberInput value={element.columns} min={2} max={4} disabled={disabled} onChange={(columns) => set({ columns })} />
+        </Field>
+      )}
+      <Check label="گزینهٔ «سایر: ……»" checked={element.other} disabled={disabled} onChange={(other) => set({ other })} />
+    </div>
+  );
+}
+
+export function MatrixEditor({ element, disabled, set }: { element: MatrixProps; disabled: boolean; set: Patch<MatrixProps> }) {
+  return (
+    <div className="space-y-4">
+      <Field label="عنوان (اختیاری)">
+        <input value={element.title} maxLength={MAX_LABEL} disabled={disabled} placeholder="مثال: ارزیابی عملکرد" onChange={(event) => set({ title: event.target.value })} className={inputClass} />
+      </Field>
+      <div>
+        <p className="mb-1 text-sm font-medium text-slate-700">موارد (ردیف‌ها)</p>
+        <StringList values={element.items} min={1} max={MAX_MATRIX_ITEMS} disabled={disabled} addLabel="مورد" onChange={(items) => set({ items })} />
+      </div>
+      <div>
+        <p className="mb-1 text-sm font-medium text-slate-700">درجه‌ها (ستون‌ها)</p>
+        <StringList values={element.scale} min={2} max={MAX_SCALE} disabled={disabled} addLabel="درجه" onChange={(scale) => set({ scale })} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="عنوان ستون موارد">
+          <input value={element.item_title} maxLength={MAX_LABEL} disabled={disabled} onChange={(event) => set({ item_title: event.target.value })} className={inputClass} />
+        </Field>
+        <Field label="پهنای ستون موارد (درصد)">
+          <NumberInput value={element.item_width} min={20} max={70} disabled={disabled} onChange={(item_width) => set({ item_width })} />
+        </Field>
+        <Field label="شکل">
+          <Select
+            value={element.shape}
+            disabled={disabled}
+            options={[
+              ["circle", "دایره"],
+              ["square", "مربع"],
+            ]}
+            onChange={(shape) => set({ shape })}
+          />
+        </Field>
+      </div>
+      <Check label="شماره‌گذاری موارد" checked={element.numbered} disabled={disabled} onChange={(numbered) => set({ numbered })} />
+      <Check label="ستون توضیحات" checked={element.comment} disabled={disabled} onChange={(comment) => set({ comment })} />
+      {element.comment && (
+        <Field label="عنوان ستون توضیحات">
+          <input value={element.comment_title} maxLength={MAX_LABEL} disabled={disabled} onChange={(event) => set({ comment_title: event.target.value })} className={inputClass} />
+        </Field>
+      )}
+    </div>
+  );
+}
+
+export function QuestionsEditor({ element, disabled, set }: { element: QuestionsProps; disabled: boolean; set: Patch<QuestionsProps> }) {
+  const setItem = (i: number, patch: Partial<QuestionsProps["items"][number]>) =>
+    set({ items: element.items.map((item, j) => (j === i ? { ...item, ...patch } : item)) });
+  return (
+    <div className="space-y-3">
+      <Check label="شماره‌گذاری پرسش‌ها" checked={element.numbered} disabled={disabled} onChange={(numbered) => set({ numbered })} />
+      {element.items.map((item, i) => (
+        <fieldset key={i} className="space-y-2 rounded border border-slate-200 p-2">
+          <legend className="flex w-full items-center gap-1 px-1 text-xs font-medium text-slate-600">
+            <span className="flex-1">پرسش {(i + 1).toLocaleString("fa-IR")}</span>
+            <button type="button" className={smallButton} disabled={disabled || i === 0} aria-label="بالا" onClick={() => set({ items: moveElement(element.items, i, i - 1) })}>
+              ↑
+            </button>
+            <button
+              type="button"
+              className={smallButton}
+              disabled={disabled || i === element.items.length - 1}
+              aria-label="پایین"
+              onClick={() => set({ items: moveElement(element.items, i, i + 1) })}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              className={`${smallButton} text-red-600`}
+              disabled={disabled || element.items.length === 1}
+              aria-label="حذف پرسش"
+              onClick={() => set({ items: element.items.filter((_, j) => j !== i) })}
+            >
+              ✕
+            </button>
+          </legend>
+          <textarea
+            value={item.text}
+            maxLength={2000}
+            rows={2}
+            disabled={disabled}
+            aria-label="متن پرسش"
+            onChange={(event) => setItem(i, { text: event.target.value })}
+            className={inputClass}
+          />
+          <div className="grid grid-cols-[1fr_5rem] gap-1">
+            <Select<AnswerKind>
+              value={item.answer}
+              disabled={disabled}
+              options={Object.entries(ANSWER_KIND_LABELS) as [AnswerKind, string][]}
+              onChange={(answer) => setItem(i, { answer })}
+            />
+            {item.answer === "lines" && (
+              <NumberInput value={item.lines} min={1} max={15} disabled={disabled} onChange={(lines) => setItem(i, { lines })} />
+            )}
+            {item.answer === "box" && (
+              <NumberInput value={item.height} min={10} max={150} disabled={disabled} onChange={(height) => setItem(i, { height })} />
+            )}
+          </div>
+        </fieldset>
+      ))}
+      <button
+        type="button"
+        className={smallButton}
+        disabled={disabled || element.items.length >= MAX_QUESTIONS}
+        onClick={() => set({ items: [...element.items, { text: "", answer: "lines", lines: 2, height: 25 }] })}
+      >
+        + پرسش
+      </button>
+      <p className="text-xs text-slate-500">عدد کنار نوع پاسخ: تعداد خط، یا ارتفاع کادر به میلی‌متر.</p>
     </div>
   );
 }

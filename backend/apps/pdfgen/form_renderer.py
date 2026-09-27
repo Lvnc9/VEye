@@ -492,22 +492,33 @@ class SignatureRow(Flowable):
             x_right = x_left - SIGNATURE_GAP * mm
 
 
+def _mark(c, x, y, size, shape="square"):
+    """An empty tick box (or circle) with its bottom-left corner at (x, y)."""
+    c.saveState()
+    c.setStrokeColorRGB(*LINE_COLOR)
+    c.setLineWidth(0.6)
+    if shape == "circle":
+        c.circle(x + size / 2, y + size / 2, size / 2)
+    else:
+        c.rect(x, y, size, size)
+    c.restoreState()
+
+
 class CheckCell(Flowable):
-    """A tick box centred in a table cell."""
+    """A tick box (or circle) centred in a table cell."""
 
     SIZE = 3.4 * mm
+
+    def __init__(self, shape="square"):
+        super().__init__()
+        self.shape = shape
 
     def wrap(self, avail_width, avail_height):
         self.width, self.height = avail_width, self.SIZE
         return self.width, self.height
 
     def draw(self):
-        c = self.canv
-        c.saveState()
-        c.setStrokeColorRGB(*LINE_COLOR)
-        c.setLineWidth(0.6)
-        c.rect((self.width - self.SIZE) / 2, 0, self.SIZE, self.SIZE)
-        c.restoreState()
+        _mark(self.canv, (self.width - self.SIZE) / 2, 0, self.SIZE, self.shape)
 
 
 class DateCell(Flowable):
@@ -685,6 +696,155 @@ class _TableFlowable(Flowable):
         self._table.draw()
 
 
+class ChoiceGroup(Flowable):
+    """A question answered by ticking: the question on the right, then its
+    options right to left — on one flowing line, one per line, or in columns."""
+
+    MARK = 3.2 * mm
+    GAP = 1.5 * mm
+    SPACING = 6 * mm
+    OTHER_BLANK = 30 * mm
+
+    def __init__(self, element: dict, base_size: int):
+        super().__init__()
+        self.element = element
+        self.font = _fonts(base_size)
+        self.line_height = self.font.size * 1.9
+        self.gap_after = 1.5 * mm
+        self.options = [(text, False) for text in element["options"]]
+        if element["other"]:
+            self.options.append(("سایر:", True))
+
+    def _option_width(self, text, is_other):
+        return self.MARK + self.GAP + self.font.width(text) + (self.GAP + self.OTHER_BLANK if is_other else 0)
+
+    def _layout(self, width):
+        """[(line, x_right, text, is_other)] for each option, and the line count."""
+        label = self.element["label"].strip()
+        placed = []
+        layout = self.element["layout"]
+        if layout == "inline":
+            line = 0
+            x = width
+            if label:
+                x -= self.font.width(f"{label}:", rtl.BOLD) + self.SPACING
+            for text, is_other in self.options:
+                needed = self._option_width(text, is_other)
+                if x - needed < 0 and x < width:
+                    line, x = line + 1, width
+                placed.append((line, x, text, is_other))
+                x -= needed + self.SPACING
+            return placed, line + 1
+        first = 1 if label else 0
+        indent = 4 * mm
+        if layout == "vertical":
+            for index, (text, is_other) in enumerate(self.options):
+                placed.append((first + index, width - indent, text, is_other))
+            return placed, first + len(self.options)
+        columns = self.element["columns"]
+        column_width = (width - indent) / columns
+        for index, (text, is_other) in enumerate(self.options):
+            row, column = divmod(index, columns)
+            placed.append((first + row, width - indent - column * column_width, text, is_other))
+        rows = -(-len(self.options) // columns)
+        return placed, first + rows
+
+    def wrap(self, avail_width, avail_height):
+        self.width = avail_width
+        self._placed, lines = self._layout(avail_width)
+        self.height = lines * self.line_height + self.gap_after
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        top = self.height
+        baseline = lambda line: top - (line + 1) * self.line_height + self.line_height * 0.32  # noqa: E731
+        c.setFillColorRGB(0, 0, 0)
+        label = self.element["label"].strip()
+        if label:
+            rtl.draw_line(c, [(f"{label}:", rtl.BOLD)], self.font, x_right=self.width, y=baseline(0))
+        for line, x_right, text, is_other in self._placed:
+            y = baseline(line)
+            _mark(c, x_right - self.MARK, y - 0.6 * mm, self.MARK, self.element["shape"])
+            text_right = x_right - self.MARK - self.GAP
+            rtl.draw_line(c, [(text, rtl.NORMAL)], self.font, x_right=text_right, y=y)
+            if is_other:
+                blank_right = text_right - self.font.width(text) - self.GAP
+                _blank_line(c, blank_right - self.OTHER_BLANK, blank_right, y, "dotted")
+
+
+def _matrix_table(element, data):
+    font = _fonts(data.base_font_size - 1)
+    scale = element["scale"]
+    comment = element["comment"]
+    item_width = element["item_width"]
+    comment_width = 20 if comment else 0
+    grade_width = (100 - item_width - comment_width) / len(scale)
+    widths = [item_width] + [grade_width] * len(scale) + ([comment_width] if comment else [])
+
+    header = [RTLParagraph(element["item_title"], font, align="center", bold=True)]
+    header += [RTLParagraph(grade, font, align="center", bold=True) for grade in scale]
+    if comment:
+        header.append(RTLParagraph(element["comment_title"], font, align="center", bold=True))
+    grid = [header]
+    for number, item in enumerate(element["items"], start=1):
+        text = f"{number}. {item}" if element["numbered"] else item
+        row = [RTLParagraph(text, font)] + [CheckCell(element["shape"]) for _ in scale]
+        if comment:
+            row.append("")
+        grid.append(row)
+    return grid, widths
+
+
+class MatrixFlowable(Flowable):
+    """The rating grid, built at the frame's width; the item column on the right."""
+
+    def __init__(self, element, data):
+        super().__init__()
+        self.grid, self.widths = _matrix_table(element, data)
+        self._table = None
+
+    def _build(self, width):
+        widths = [width * w / 100 for w in self.widths]
+        heights = []
+        for index, row in enumerate(self.grid):
+            needed = 0
+            for cell, column_width in zip(row, widths):
+                if isinstance(cell, Flowable):
+                    needed = max(needed, cell.wrap(column_width - 2 * TABLE_PAD_X, 10_000)[1])
+            heights.append(max(needed + 2 * TABLE_PAD_Y, 7 * mm if index else 6 * mm))
+        table = Table([list(reversed(row)) for row in self.grid], colWidths=list(reversed(widths)), rowHeights=heights, repeatRows=1)
+        table.setStyle(
+            TableStyle(
+                [
+                    ("GRID", (0, 0), (-1, -1), 0.5, LINE_COLOR),
+                    ("BACKGROUND", (0, 0), (-1, 0), BAND_FILL),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), TABLE_PAD_X),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), TABLE_PAD_X),
+                    ("TOPPADDING", (0, 0), (-1, -1), TABLE_PAD_Y),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), TABLE_PAD_Y),
+                ]
+            )
+        )
+        return table
+
+    def wrap(self, avail_width, avail_height):
+        if self._table is None or self._width != avail_width:
+            self._table, self._width = self._build(avail_width), avail_width
+        return self._table.wrap(avail_width, avail_height)
+
+    def split(self, avail_width, avail_height):
+        self.wrap(avail_width, avail_height)
+        return self._table.split(avail_width, avail_height)
+
+    def drawOn(self, canvas, x, y, _sW=0):
+        self._table.drawOn(canvas, x, y, _sW)
+
+    def draw(self):  # pragma: no cover - drawOn is used
+        self._table.draw()
+
+
 # --------------------------------------------------------------------------
 # Elements → flowables
 # --------------------------------------------------------------------------
@@ -757,6 +917,46 @@ def _signatures(element, data, numbering):
     return [SignatureRow(element, data.base_font_size)]
 
 
+def _choices(element, data, numbering):
+    return [ChoiceGroup(element, data.base_font_size)]
+
+
+def _matrix(element, data, numbering):
+    flowables = []
+    if element["title"].strip():
+        title = RTLParagraph(element["title"], _fonts(data.base_font_size), bold=True)
+        title.keepWithNext = True
+        flowables += [title, Spacer(1, 1 * mm)]
+    return flowables + [MatrixFlowable(element, data), Spacer(1, 2.5 * mm)]
+
+
+def _questions(element, data, numbering, max_height):
+    font = _fonts(data.base_font_size)
+    flowables = []
+    for number, item in enumerate(element["items"], start=1):
+        text = f"{number}. {item['text']}" if element["numbered"] else item["text"]
+        block = [RTLParagraph(text, font)]
+        answer = item["answer"]
+        if answer == "lines":
+            block.append(AnswerBox(
+                {"label": "", "lines": item["lines"], "height": 0, "line_style": "dotted", "framed": False},
+                data.base_font_size, max_height,
+            ))
+        elif answer == "box":
+            block.append(AnswerBox(
+                {"label": "", "lines": 0, "height": item["height"], "line_style": "dotted", "framed": True},
+                data.base_font_size, max_height - 20 * mm,
+            ))
+        elif answer == "yes_no":
+            block.append(ChoiceGroup(
+                {"label": "", "options": ["بله", "خیر"], "shape": "square", "layout": "inline", "columns": 2, "other": False},
+                data.base_font_size,
+            ))
+        # A question is never parted from the room for its answer.
+        flowables += [KeepTogether(block), Spacer(1, 1.5 * mm)]
+    return flowables
+
+
 BUILDERS = {
     "heading": _heading,
     "text": _text,
@@ -766,11 +966,14 @@ BUILDERS = {
     "fields": _fields,
     "signatures": _signatures,
     "table": lambda element, data, numbering: _table(element, data, numbering),
+    "choices": _choices,
+    "matrix": _matrix,
 }
 
 #: Builders that need the frame's height (to never exceed a page).
 SIZED_BUILDERS = {
     "answer_box": _answer_box,
+    "questions": _questions,
 }
 
 
