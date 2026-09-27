@@ -373,3 +373,63 @@ class InputElementTests(SimpleTestCase):
             with self.subTest(orientation=orientation):
                 pdf = form_renderer.render(form_input(orientation=orientation, elements=items))
                 self.assertTrue(pdf.startswith(b"%PDF-"))
+
+
+class TableTests(SimpleTestCase):
+    def table(self, **raw):
+        element = form_schema.clean_element({"kind": "table", **raw}, number=1)
+        flowables = form_renderer._table(element, form_input(), form_renderer._Numbering())
+        return [f for f in flowables if isinstance(f, form_renderer._TableFlowable)][0]
+
+    def texts(self, row):
+        return [getattr(cell, "text", None) for cell in row]
+
+    def test_column_one_is_on_the_right(self):
+        flowable = self.table(
+            columns=[{"width": 20}, {"width": 30}, {"width": 50}], header=[["اول", "دوم", "سوم"]], blank_rows=0
+        )
+        flowable.wrap(500, 800)
+        platypus = flowable._table
+        self.assertEqual(self.texts(platypus._cellvalues[0]), ["سوم", "دوم", "اول"])
+        self.assertEqual([round(w) for w in platypus._colWidths], [250, 150, 100])
+
+    def test_body_rows_are_numbered_and_blank_rows_keep_their_height(self):
+        flowable = self.table(row_height=10)
+        flowable.wrap(500, 800)
+        platypus = flowable._table
+        self.assertEqual(len(platypus._cellvalues), 1 + 5)
+        # «ردیف» is column 1, so the last one after reversal.
+        self.assertEqual([row[-1].text for row in platypus._cellvalues[1:]], ["1", "2", "3", "4", "5"])
+        for height in platypus._argH[1:]:
+            self.assertAlmostEqual(height, 10 * form_renderer.mm)
+
+    def test_long_text_grows_its_row(self):
+        flowable = self.table(columns=[{"width": 100}], header=[["متن"]], rows=[["کلمه " * 80]], blank_rows=0, row_height=8)
+        flowable.wrap(300, 800)
+        self.assertGreater(flowable._table._argH[1], 8 * form_renderer.mm * 2)
+
+    def test_checkbox_and_date_columns_draw_their_blanks(self):
+        flowable = self.table(
+            columns=[{"width": 50, "type": "checkbox"}, {"width": 50, "type": "date"}], header=[["تأیید", "تاریخ"]], blank_rows=1
+        )
+        flowable.wrap(500, 800)
+        date_cell, check_cell = flowable._table._cellvalues[1]
+        self.assertIsInstance(check_cell, form_renderer.CheckCell)
+        self.assertIsInstance(date_cell, form_renderer.DateCell)
+
+    def test_the_header_repeats_only_when_asked(self):
+        self.table().wrap(500, 800)
+        for repeat, expected in ((True, 2), (False, 0)):
+            flowable = self.table(header=[["", "", ""], ["ردیف", "عنوان", "توضیحات"]], repeat_header=repeat)
+            flowable.wrap(500, 800)
+            self.assertEqual(flowable._table.repeatRows, expected)
+
+    def test_a_long_table_flows_onto_more_pages_with_its_header(self):
+        items = elements({"kind": "table", "blank_rows": 120})
+        pdf = form_renderer.render(form_input(elements=items))
+        self.assertGreaterEqual(page_count(pdf), 3)
+
+    def test_the_title_stays_with_the_table(self):
+        element = form_schema.clean_element({"kind": "table", "title": "سوابق"}, number=1)
+        title = form_renderer._table(element, form_input(), form_renderer._Numbering())[0]
+        self.assertTrue(title.keepWithNext)

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  addColumn,
+  dragToDelta,
+  moveColumn,
+  removeColumn,
+  setCell,
+  widthsWithColumnAdded,
+  widthsWithColumnRemoved,
   ELEMENT_KINDS,
   FORM_ELEMENT,
   MAX_ELEMENTS,
@@ -206,6 +213,65 @@ describe("widths", () => {
     if (fields.kind !== "fields") throw new Error("unreachable");
     expect(validate({ ...state, elements: [fields] })).toEqual([]);
     const broken = { ...fields, rows: [{ cells: [{ ...fields.rows[0].cells[0], width: 30 }] }] };
+    expect(validate({ ...state, elements: [broken] })).toHaveLength(1);
+  });
+});
+
+describe("tables", () => {
+  const table = () => {
+    const element = newElement("table");
+    if (element.kind !== "table") throw new Error("unreachable");
+    return { ...element, rows: [["", "کارشناسی", "تهران"]] };
+  };
+
+  it("drags a border in RTL: moving it left widens the column on its right", () => {
+    expect(dragToDelta(-50, 500)).toBe(10);
+    expect(dragToDelta(50, 500)).toBe(-10);
+    expect(dragToDelta(10, 0)).toBe(0);
+  });
+
+  it("adds a column taking half of the widest one", () => {
+    expect(widthsWithColumnAdded([10, 60, 30], 4)).toEqual([10, 30, 30, 30]);
+    expect(widthsWithColumnAdded([], 4)).toEqual([100]);
+    expect(widthsWithColumnAdded([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 4], 4)).toHaveLength(21);
+  });
+
+  it("gives a removed column's width to its neighbour", () => {
+    expect(widthsWithColumnRemoved([10, 60, 30], 0)).toEqual([70, 30]);
+    expect(widthsWithColumnRemoved([10, 60, 30], 2)).toEqual([10, 90]);
+    expect(widthsWithColumnRemoved([100], 0)).toEqual([100]);
+  });
+
+  it("keeps header and rows in step when columns are added, removed or moved", () => {
+    const added = addColumn(table());
+    expect(added.columns).toHaveLength(4);
+    expect(added.header[0]).toEqual(["ردیف", "عنوان", "توضیحات", ""]);
+    expect(added.rows[0]).toEqual(["", "کارشناسی", "تهران", ""]);
+    expect(added.columns.reduce((sum, c) => sum + c.width, 0)).toBe(100);
+
+    const removed = removeColumn(table(), 1);
+    expect(removed.header[0]).toEqual(["ردیف", "توضیحات"]);
+    expect(removed.rows[0]).toEqual(["", "تهران"]);
+    expect(removed.columns.map((c) => c.width)).toEqual([10, 90]);
+
+    const moved = moveColumn(table(), 2, 1);
+    expect(moved.header[0]).toEqual(["ردیف", "توضیحات", "عنوان"]);
+    expect(moved.rows[0]).toEqual(["", "تهران", "کارشناسی"]);
+    expect(moved.columns.map((c) => c.width)).toEqual([10, 30, 60]);
+    const unchanged = table();
+    expect(moveColumn(unchanged, 0, -1)).toBe(unchanged); // no column left of the edge
+  });
+
+  it("edits one cell", () => {
+    const edited = setCell(table(), "rows", 0, 2, "شیراز");
+    expect(edited.rows[0]).toEqual(["", "کارشناسی", "شیراز"]);
+    expect(setCell(table(), "header", 0, 0, "#").header[0][0]).toBe("#");
+  });
+
+  it("validate reports columns that do not add up", () => {
+    const state = fromResponse(response([]));
+    const broken = { ...table(), columns: table().columns.map((c) => ({ ...c, width: 10 })) };
+    expect(validate({ ...state, elements: [table()] })).toEqual([]);
     expect(validate({ ...state, elements: [broken] })).toHaveLength(1);
   });
 });

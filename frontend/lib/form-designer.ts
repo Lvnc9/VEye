@@ -107,6 +107,48 @@ export interface SignaturesProps {
   height: number;
 }
 
+export type ColumnType = "text" | "row_number" | "checkbox" | "date";
+
+export const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
+  text: "متن",
+  row_number: "شمارهٔ ردیف",
+  checkbox: "گزینهٔ تیک‌زدنی",
+  date: "تاریخ (…/…/…)",
+};
+
+export interface TableColumn {
+  /** Percent of the table; the columns add up to 100. */
+  width: number;
+  align: Align;
+  type: ColumnType;
+}
+
+export interface TableProps {
+  kind: "table";
+  title: string;
+  columns: TableColumn[];
+  /** 1–3 header rows, one text per column. */
+  header: string[][];
+  /** Rows written in advance (printed text), one text per column. */
+  rows: string[][];
+  /** Empty rows after them, to fill in by hand. */
+  blank_rows: number;
+  /** Millimetres; the least height of a body row. */
+  row_height: number;
+  /** 0 = one point under the form's base size. */
+  font_size: number;
+  borders: "all" | "outer" | "horizontal" | "none";
+  header_shade: boolean;
+  repeat_header: boolean;
+}
+
+export const MAX_COLUMNS = 20;
+export const MAX_TABLE_ROWS = 300;
+export const MAX_HEADER_ROWS = 3;
+export const MAX_CELL = 1000;
+/** Narrowest column, percent (form_schema.MIN_COLUMN_WIDTH). */
+export const MIN_COLUMN_WIDTH = 4;
+
 export const MAX_FIELD_ROWS = 40;
 export const MAX_FIELDS_PER_ROW = 6;
 export const MAX_SIGNATURE_BOXES = 4;
@@ -121,7 +163,8 @@ export type ElementProps =
   | PageBreakProps
   | FieldsProps
   | AnswerBoxProps
-  | SignaturesProps;
+  | SignaturesProps
+  | TableProps;
 export type ElementKind = ElementProps["kind"];
 
 /** An element being edited: its props plus a React key and, once saved, its id. */
@@ -156,6 +199,7 @@ export const ELEMENT_KINDS: { kind: ElementKind; label: string; group: "structur
   { kind: "page_break", label: "شکست صفحه", group: "structure" },
   { kind: "fields", label: "فیلدها", group: "input" },
   { kind: "answer_box", label: "کادر پاسخ", group: "input" },
+  { kind: "table", label: "جدول", group: "input" },
   { kind: "signatures", label: "امضا", group: "sign" },
 ];
 
@@ -205,6 +249,25 @@ export function newElement(kind: ElementKind): FormElement {
         stamp: false,
         height: 28,
       };
+    case "table":
+      return {
+        key,
+        kind,
+        title: "",
+        columns: [
+          { width: 10, align: "center", type: "row_number" },
+          { width: 60, align: "right", type: "text" },
+          { width: 30, align: "right", type: "text" },
+        ],
+        header: [["ردیف", "عنوان", "توضیحات"]],
+        rows: [],
+        blank_rows: 5,
+        row_height: 8,
+        font_size: 0,
+        borders: "all",
+        header_shade: true,
+        repeat_header: true,
+      };
   }
 }
 
@@ -236,6 +299,38 @@ export function moveBoundary(widths: number[], index: number, delta: number, min
   const next = widths.slice();
   next[index] = round1(a + clamped);
   next[index + 1] = round1(a + b - next[index]);
+  return next;
+}
+
+/**
+ * Converts a horizontal drag of a border into a width change of the column on
+ * its right (in RTL, column `index` sits right of column `index + 1`): dragging
+ * the border left (dx < 0) widens that column.
+ */
+export function dragToDelta(dx: number, tableWidthPx: number): number {
+  if (tableWidthPx <= 0) return 0;
+  return (-dx / tableWidthPx) * 100;
+}
+
+/** Widths after adding a column at the end: it takes half of the widest column
+ *  (or everything is evened out when that would be too narrow). */
+export function widthsWithColumnAdded(widths: number[], min: number): number[] {
+  if (widths.length === 0) return [100];
+  const widest = widths.indexOf(Math.max(...widths));
+  const half = round1(widths[widest] / 2);
+  if (half < min) return evenWidths(widths.length + 1);
+  const next = widths.slice();
+  next[widest] = round1(widths[widest] - half);
+  return [...next, half];
+}
+
+/** Widths after removing column `index`: its width goes to its neighbour. */
+export function widthsWithColumnRemoved(widths: number[], index: number): number[] {
+  if (widths.length <= 1) return widths;
+  const next = widths.slice();
+  const [gone] = next.splice(index, 1);
+  const neighbour = Math.min(index, next.length - 1);
+  next[neighbour] = round1(next[neighbour] + gone);
   return next;
 }
 
@@ -317,6 +412,13 @@ export function validate(state: FormState): string[] {
   }
   state.elements.forEach((element, index) => {
     const where = `جزء ${(index + 1).toLocaleString("fa-IR")} (${elementLabel(element.kind)})`;
+    if (element.kind === "table") {
+      const total = element.columns.reduce((sum, column) => sum + column.width, 0);
+      if (Math.abs(total - 100) > 0.5) problems.push(`${where}: مجموع پهنای ستون‌ها باید ۱۰۰ درصد باشد.`);
+      if (element.rows.length + element.blank_rows > MAX_TABLE_ROWS) {
+        problems.push(`${where}: یک جدول نمی‌تواند بیش از ${MAX_TABLE_ROWS.toLocaleString("fa-IR")} ردیف داشته باشد.`);
+      }
+    }
     if (element.kind === "fields") {
       element.rows.forEach((row, r) => {
         const total = row.cells.reduce((sum, cell) => sum + cell.width, 0);
@@ -369,4 +471,55 @@ export function headingNumbers(elements: FormElement[]): Map<string, string> {
     numbers.set(element.key, counters.slice(0, element.level).join(".") + ". ");
   }
   return numbers;
+}
+
+// ---------------------------------------------------------------------------
+// Tables: column operations keep the header and rows in step with the columns
+// ---------------------------------------------------------------------------
+
+type TableShape = Pick<TableProps, "columns" | "header" | "rows">;
+
+export function addColumn<T extends TableShape>(table: T): T {
+  if (table.columns.length >= MAX_COLUMNS) return table;
+  const widths = widthsWithColumnAdded(table.columns.map((c) => c.width), MIN_COLUMN_WIDTH);
+  return {
+    ...table,
+    columns: [...table.columns, { width: 0, align: "right", type: "text" } as TableColumn].map((c, i) => ({ ...c, width: widths[i] })),
+    header: table.header.map((row) => [...row, ""]),
+    rows: table.rows.map((row) => [...row, ""]),
+  };
+}
+
+export function removeColumn<T extends TableShape>(table: T, index: number): T {
+  if (table.columns.length <= 1) return table;
+  const widths = widthsWithColumnRemoved(table.columns.map((c) => c.width), index);
+  const drop = <X,>(row: X[]) => row.filter((_, i) => i !== index);
+  return {
+    ...table,
+    columns: drop(table.columns).map((c, i) => ({ ...c, width: widths[i] })),
+    header: table.header.map(drop),
+    rows: table.rows.map(drop),
+  };
+}
+
+export function moveColumn<T extends TableShape>(table: T, from: number, to: number): T {
+  if (to < 0 || to >= table.columns.length) return table;
+  return {
+    ...table,
+    columns: moveElement(table.columns, from, to),
+    header: table.header.map((row) => moveElement(row, from, to)),
+    rows: table.rows.map((row) => moveElement(row, from, to)),
+  };
+}
+
+export function setColumnWidths<T extends TableShape>(table: T, widths: number[]): T {
+  return { ...table, columns: table.columns.map((c, i) => ({ ...c, width: widths[i] })) };
+}
+
+/** Replaces the text of one cell: `part` "header" or "rows", then row and column. */
+export function setCell<T extends TableShape>(table: T, part: "header" | "rows", row: number, column: number, text: string): T {
+  return {
+    ...table,
+    [part]: table[part].map((cells, r) => (r === row ? cells.map((cell, c) => (c === column ? text : cell)) : cells)),
+  };
 }

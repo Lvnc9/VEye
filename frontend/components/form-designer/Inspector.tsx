@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { MAX_LABEL, MAX_TEXT, elementLabel, type FormElement, type FormSettings } from "@/lib/form-designer";
 import { RichTextArea } from "@/components/designer/RichTextArea";
 import { FieldLabel, inputClass } from "@/components/designer/ui";
-import { AnswerBoxEditor, FieldsEditor, SignaturesEditor } from "./InputEditors";
+import { AnswerBoxEditor, FieldsEditor, SignaturesEditor, TableEditor } from "./InputEditors";
 
 export type ElementUpdate = (updater: (element: FormElement) => FormElement) => void;
 
@@ -242,6 +242,7 @@ export function ElementInspector({
       {element.kind === "fields" && <FieldsEditor element={element} disabled={disabled} set={set} />}
       {element.kind === "answer_box" && <AnswerBoxEditor element={element} disabled={disabled} set={set} />}
       {element.kind === "signatures" && <SignaturesEditor element={element} disabled={disabled} set={set} />}
+      {element.kind === "table" && <TableEditor element={element} disabled={disabled} set={set} />}
     </div>
   );
 }

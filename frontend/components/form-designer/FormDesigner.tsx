@@ -121,7 +121,7 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
           onMove={(index, direction) => edit((current) => ({ ...current, elements: moveElement(current.elements, index, index + direction) }))}
           onRemove={remove}
           onReorder={(from, to) => edit((current) => ({ ...current, elements: moveElement(current.elements, from, to) }))}
-          onHeadingText={(key, text) => updateElement(key, (e) => ({ ...e, text }) as FormElement)}
+          onUpdate={updateElement}
         />
 
         <aside className="rounded-lg border border-slate-200 bg-white shadow-sm xl:sticky xl:top-4">

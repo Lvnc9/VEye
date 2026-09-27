@@ -257,3 +257,44 @@ class InputElementSchemaTests(SimpleTestCase):
         self.assertTrue(self.messages({"kind": "answer_box", "lines": 26}))
         self.assertTrue(self.messages({"kind": "answer_box", "lines": 2.5}))
         self.assertTrue(self.messages({"kind": "answer_box", "height": 500}))
+
+
+class TableSchemaTests(SimpleTestCase):
+    def clean(self, raw):
+        return form_schema.clean_element({"kind": "table", **raw}, number=2)
+
+    def messages(self, raw):
+        with self.assertRaises(form_schema.FormSchemaError) as caught:
+            self.clean(raw)
+        return caught.exception.messages
+
+    def test_a_default_table(self):
+        table = self.clean({})
+        self.assertEqual([c["type"] for c in table["columns"]], ["row_number", "text", "text"])
+        self.assertEqual(table["header"], [["ردیف", "عنوان", "توضیحات"]])
+        self.assertEqual(table["blank_rows"], 5)
+
+    def test_rows_must_match_the_columns(self):
+        columns = [{"width": 50}, {"width": 50}]
+        [message] = self.messages({"columns": columns, "header": [["الف", "ب"]], "rows": [["فقط یکی"]]})
+        self.assertIn("ردیف‌های متن‌دار — ردیف ۱", message)
+        self.assertIn("(۲)", message)
+        self.assertTrue(self.messages({"columns": columns, "header": [["الف"]]}))
+
+    def test_widths_and_column_caps(self):
+        self.assertTrue(self.messages({"columns": [{"width": 50}, {"width": 20}], "header": [["", ""]]}))
+        self.assertTrue(self.messages({"columns": [{"width": 3}, {"width": 97}], "header": [["", ""]]}))
+        many = [{"width": 100 / 21}] * 21
+        self.assertTrue(self.messages({"columns": many, "header": [[""] * 21]}))
+
+    def test_header_rows_and_the_row_cap(self):
+        columns = [{"width": 100}]
+        self.assertTrue(self.messages({"columns": columns, "header": [[""]] * 4}))
+        self.assertTrue(self.messages({"columns": columns, "header": []}))
+        self.assertTrue(self.messages({"columns": columns, "header": [[""]], "rows": [[""]] * 200, "blank_rows": 101}))
+        self.clean({"columns": columns, "header": [[""]], "rows": [[""]] * 200, "blank_rows": 100})
+
+    def test_cells_are_text_of_bounded_length(self):
+        columns = [{"width": 100}]
+        self.assertTrue(self.messages({"columns": columns, "header": [[1]]}))
+        self.assertTrue(self.messages({"columns": columns, "header": [[""]], "rows": [["ب" * 1001]]}))

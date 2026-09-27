@@ -492,6 +492,166 @@ class SignatureRow(Flowable):
             x_right = x_left - SIGNATURE_GAP * mm
 
 
+class CheckCell(Flowable):
+    """A tick box centred in a table cell."""
+
+    SIZE = 3.4 * mm
+
+    def wrap(self, avail_width, avail_height):
+        self.width, self.height = avail_width, self.SIZE
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        c.saveState()
+        c.setStrokeColorRGB(*LINE_COLOR)
+        c.setLineWidth(0.6)
+        c.rect((self.width - self.SIZE) / 2, 0, self.SIZE, self.SIZE)
+        c.restoreState()
+
+
+class DateCell(Flowable):
+    """«/  /» — the slashes of a Jalali date to fill in, centred."""
+
+    def __init__(self, font: rtl.Font):
+        super().__init__()
+        self.font = font
+
+    def wrap(self, avail_width, avail_height):
+        self.width, self.height = avail_width, self.font.size
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        c.setFillColorRGB(*MUTED)
+        c.setFont(self.font.regular, self.font.size)
+        step = min(8 * mm, self.width / 3)
+        middle = self.width / 2
+        c.drawCentredString(middle - step / 2, 1, "/")
+        c.drawCentredString(middle + step / 2, 1, "/")
+
+
+TABLE_PAD_X = 3
+TABLE_PAD_Y = 2
+
+
+def _table_cell(text: str, column: dict, font: rtl.Font, *, header: bool):
+    if header:
+        return RTLParagraph(text, font, align="center", bold=True) if text.strip() else ""
+    if text.strip():
+        return RTLParagraph(text, font, align=column["align"])
+    return ""
+
+
+def _table(element, data, numbering):
+    columns = element["columns"]
+    count = len(columns)
+    font = _fonts(element["font_size"] or data.base_font_size - 1)
+    header_rows = len(element["header"])
+
+    # Logical grid: header rows, rows written in advance, blank rows.
+    body = [list(row) for row in element["rows"]] + [[""] * count for _ in range(element["blank_rows"])]
+    grid = []
+    for row in element["header"]:
+        grid.append([_table_cell(text, column, font, header=True) for text, column in zip(row, columns)])
+    for number, row in enumerate(body, start=1):
+        cells = []
+        for text, column in zip(row, columns):
+            if column["type"] == "row_number":
+                cells.append(RTLParagraph(text or str(number), font, align="center"))
+            elif column["type"] == "checkbox" and not text.strip():
+                cells.append(CheckCell())
+            elif column["type"] == "date" and not text.strip():
+                cells.append(DateCell(font))
+            else:
+                cells.append(_table_cell(text, column, font, header=False))
+        grid.append(cells)
+
+    flowables = []
+    if element["title"].strip():
+        title = RTLParagraph(element["title"], _fonts(data.base_font_size), bold=True)
+        title.keepWithNext = True
+        flowables += [title, Spacer(1, 1 * mm)]
+    flowables.append(_TableFlowable(element, grid, header_rows))
+    flowables.append(Spacer(1, 2.5 * mm))
+    return flowables
+
+
+class _TableFlowable(Flowable):
+    """Builds the platypus Table once the frame width is known (widths are
+    percentages), with column 1 on the right."""
+
+    def __init__(self, element, grid, header_rows):
+        super().__init__()
+        self.element = element
+        self.grid = grid
+        self.header_rows = header_rows
+        self._table = None
+
+    def _build(self, width):
+        element = self.element
+        widths = [width * column["width"] / 100 for column in element["columns"]]
+        min_body = element["row_height"] * mm
+        heights = []
+        for index, row in enumerate(self.grid):
+            needed = 0
+            for cell, column_width in zip(row, widths):
+                if isinstance(cell, Flowable):
+                    _, h = cell.wrap(column_width - 2 * TABLE_PAD_X, 10_000)
+                    needed = max(needed, h)
+            needed += 2 * TABLE_PAD_Y
+            heights.append(max(needed, 6 * mm) if index < self.header_rows else max(needed, min_body))
+        # Reverse every row and the widths: platypus lays column 0 on the left.
+        data = [list(reversed(row)) for row in self.grid]
+        table = Table(
+            data,
+            colWidths=list(reversed(widths)),
+            rowHeights=heights,
+            repeatRows=self.header_rows if element["repeat_header"] else 0,
+        )
+        table.setStyle(TableStyle(self._style()))
+        return table
+
+    def _style(self):
+        element = self.element
+        last_header = self.header_rows - 1
+        style = [
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), TABLE_PAD_X),
+            ("RIGHTPADDING", (0, 0), (-1, -1), TABLE_PAD_X),
+            ("TOPPADDING", (0, 0), (-1, -1), TABLE_PAD_Y),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), TABLE_PAD_Y),
+        ]
+        if element["header_shade"]:
+            style.append(("BACKGROUND", (0, 0), (-1, last_header), BAND_FILL))
+        borders = element["borders"]
+        if borders == "all":
+            style.append(("GRID", (0, 0), (-1, -1), 0.5, LINE_COLOR))
+        elif borders == "outer":
+            style += [("BOX", (0, 0), (-1, -1), 0.8, LINE_COLOR), ("LINEBELOW", (0, last_header), (-1, last_header), 0.6, LINE_COLOR)]
+        elif borders == "horizontal":
+            style += [("LINEABOVE", (0, 0), (-1, 0), 0.6, LINE_COLOR), ("LINEBELOW", (0, 0), (-1, -1), 0.4, LINE_COLOR)]
+        else:
+            style.append(("LINEBELOW", (0, last_header), (-1, last_header), 0.6, LINE_COLOR))
+        return style
+
+    def wrap(self, avail_width, avail_height):
+        if self._table is None or self._table_width != avail_width:
+            self._table = self._build(avail_width)
+            self._table_width = avail_width
+        return self._table.wrap(avail_width, avail_height)
+
+    def split(self, avail_width, avail_height):
+        self.wrap(avail_width, avail_height)
+        return self._table.split(avail_width, avail_height)
+
+    def drawOn(self, canvas, x, y, _sW=0):
+        self._table.drawOn(canvas, x, y, _sW)
+
+    def draw(self):  # pragma: no cover - drawOn is used
+        self._table.draw()
+
+
 # --------------------------------------------------------------------------
 # Elements → flowables
 # --------------------------------------------------------------------------
@@ -572,6 +732,7 @@ BUILDERS = {
     "page_break": _page_break,
     "fields": _fields,
     "signatures": _signatures,
+    "table": lambda element, data, numbering: _table(element, data, numbering),
 }
 
 #: Builders that need the frame's height (to never exceed a page).

@@ -12,6 +12,7 @@ import {
   SIGNATURE_GAP,
 } from "@/lib/form-layout";
 import type { FieldCell, FieldsProps, FormElement, HeadingProps } from "@/lib/form-designer";
+import { TableView } from "./TableView";
 import { mm, pt } from "./units";
 
 const ALIGN: Record<string, CSSProperties["textAlign"]> = { right: "right", center: "center", left: "left" };
@@ -50,22 +51,23 @@ function headingBox(element: HeadingProps): CSSProperties {
 }
 
 /**
- * One element as it will print. `editing` turns a heading's text into an input
- * in place (the selected element, when the form is editable).
+ * One element as it will print. `editing` (the selected element, when the form
+ * is editable) turns a heading's text and a table's cells into inputs in place
+ * and shows the table's column-resize handles.
  */
 export function ElementView({
   element,
   baseSize,
   number,
   editing,
-  onText,
+  update,
 }: {
   element: FormElement;
   baseSize: number;
   /** «2.1. » when the heading is numbered. */
   number?: string;
   editing: boolean;
-  onText: (text: string) => void;
+  update: (updater: (element: FormElement) => FormElement) => void;
 }) {
   switch (element.kind) {
     case "heading": {
@@ -82,7 +84,10 @@ export function ElementView({
                 <input
                   value={element.text}
                   maxLength={300}
-                  onChange={(event) => onText(event.target.value)}
+                  onChange={(event) => {
+                    const text = event.target.value;
+                    update((current) => ({ ...current, text }) as FormElement);
+                  }}
                   onClick={(event) => event.stopPropagation()}
                   aria-label="متن عنوان"
                   className="w-full min-w-0 bg-transparent font-bold outline-none"
@@ -148,6 +153,8 @@ export function ElementView({
       );
     case "fields":
       return <FieldsView element={element} />;
+    case "table":
+      return <TableView element={element} baseSize={baseSize} editing={editing} update={update} />;
     case "answer_box":
       return (
         <div style={{ marginBottom: mm(2) }}>

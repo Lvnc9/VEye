@@ -42,7 +42,7 @@ export function FormCanvas({
   onMove,
   onRemove,
   onReorder,
-  onHeadingText,
+  onUpdate,
 }: {
   header: CanvasHeader;
   settings: FormSettings;
@@ -53,7 +53,8 @@ export function FormCanvas({
   onMove: (index: number, direction: -1 | 1) => void;
   onRemove: (key: string) => void;
   onReorder: (from: number, to: number) => void;
-  onHeadingText: (key: string, text: string) => void;
+  /** Edits made on the canvas itself (heading text, table cells, column widths). */
+  onUpdate: (key: string, updater: (element: FormElement) => FormElement) => void;
 }) {
   const page = PAGE[settings.orientation];
   const numbers = headingNumbers(elements);
@@ -167,7 +168,7 @@ export function FormCanvas({
                     baseSize={settings.base_font_size}
                     number={numbers.get(element.key)}
                     editing={selected && !locked}
-                    onText={(text) => onHeadingText(element.key, text)}
+                    update={(updater) => onUpdate(element.key, updater)}
                   />
                 </div>
               );

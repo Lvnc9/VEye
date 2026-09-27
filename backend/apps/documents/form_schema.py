@@ -242,6 +242,82 @@ def _signatures(r: _Reader) -> dict:
     }
 
 
+MAX_COLUMNS = 20
+MAX_TABLE_ROWS = 300
+MAX_HEADER_ROWS = 3
+MAX_CELL = 1000
+MIN_COLUMN_WIDTH = 4
+COLUMN_TYPES = ("text", "row_number", "checkbox", "date")
+
+
+def _text_grid(r: _Reader, key: str, *, label: str, columns: int, max_rows: int, min_rows: int, default) -> list[list[str]]:
+    """Rows of cell texts, each exactly `columns` long."""
+    grid = []
+    for row_number, raw_row in enumerate(
+        r.items(key, label=label, max_items=max_rows, min_items=min_rows, default=default), start=1
+    ):
+        where = f"{label} — ردیف {_fa(row_number)}"
+        if not isinstance(raw_row, list):
+            r.fail(f"{where}: ساختار نامعتبر است.")
+            continue
+        if len(raw_row) != columns:
+            r.fail(f"{where}: تعداد خانه‌ها باید با تعداد ستون‌ها ({_fa(columns)}) برابر باشد.")
+            continue
+        row = []
+        for column_number, value in enumerate(raw_row, start=1):
+            if not isinstance(value, str):
+                r.fail(f"{where}، ستون {_fa(column_number)}: متن خانه باید متن باشد.")
+                value = ""
+            elif len(value) > MAX_CELL:
+                r.fail(f"{where}، ستون {_fa(column_number)}: متن خانه نباید بیشتر از {_fa(MAX_CELL)} نویسه باشد.")
+                value = value[:MAX_CELL]
+            row.append(value)
+        grid.append(row)
+    return grid
+
+
+def _table(r: _Reader) -> dict:
+    """A table with a 1–3 row header, rows written in advance, and blank rows
+    to fill by hand. Column 1 is the rightmost."""
+    default_columns = [
+        {"width": 10, "type": "row_number", "align": "center"},
+        {"width": 60},
+        {"width": 30},
+    ]
+    columns = []
+    for number, raw in enumerate(
+        r.items("columns", label="ستون‌ها", max_items=MAX_COLUMNS, min_items=1, default=default_columns), start=1
+    ):
+        column = r.nested(raw, f"ستون {_fa(number)}")
+        columns.append(
+            {
+                "width": column.number("width", label="پهنا", low=MIN_COLUMN_WIDTH, high=100, default=100),
+                "align": column.choice("align", ALIGNMENTS, label="چینش"),
+                "type": column.choice("type", COLUMN_TYPES, label="نوع ستون"),
+            }
+        )
+    _widths(r, [c["width"] for c in columns], label="ستون‌ها")
+    count = len(columns)
+    default_header = [["ردیف", "عنوان", "توضیحات"]] if count == 3 else [[""] * count]
+    header = _text_grid(r, "header", label="سرستون", columns=count, max_rows=MAX_HEADER_ROWS, min_rows=1, default=default_header)
+    rows = _text_grid(r, "rows", label="ردیف‌های متن‌دار", columns=count, max_rows=MAX_TABLE_ROWS, min_rows=0, default=[])
+    blank_rows = r.number("blank_rows", label="ردیف‌های خالی", low=0, high=MAX_TABLE_ROWS, default=5, integer=True)
+    if len(rows) + blank_rows > MAX_TABLE_ROWS:
+        r.fail(f"یک جدول نمی‌تواند بیش از {_fa(MAX_TABLE_ROWS)} ردیف داشته باشد.")
+    return {
+        "title": r.text("title", label="عنوان جدول"),
+        "columns": columns,
+        "header": header,
+        "rows": rows,
+        "blank_rows": blank_rows,
+        "row_height": r.number("row_height", label="ارتفاع ردیف", low=5, high=30, default=8),
+        "font_size": r.number("font_size", label="اندازه قلم", low=0, high=14, default=0, integer=True),
+        "borders": r.choice("borders", ("all", "outer", "horizontal", "none"), label="خطوط جدول"),
+        "header_shade": r.boolean("header_shade", default=True),
+        "repeat_header": r.boolean("repeat_header", default=True),
+    }
+
+
 #: kind → (Persian name, cleaner). The Persian name is how errors refer to it.
 ELEMENTS: dict[str, tuple[str, Callable[[_Reader], dict]]] = {
     "heading": ("عنوان بخش", _heading),
@@ -252,6 +328,7 @@ ELEMENTS: dict[str, tuple[str, Callable[[_Reader], dict]]] = {
     "fields": ("فیلدها", _fields),
     "answer_box": ("کادر پاسخ", _answer_box),
     "signatures": ("امضا", _signatures),
+    "table": ("جدول", _table),
 }
 
 
