@@ -69,6 +69,13 @@ class CompanyUpdateSerializer(serializers.Serializer):
     national_id = serializers.CharField(max_length=32, required=False, allow_blank=True)
 
 
+class DocumentDefaultsSerializer(serializers.Serializer):
+    doc_footnote1 = serializers.CharField(max_length=255, required=False, allow_blank=True, trim_whitespace=False)
+    doc_footnote2 = serializers.CharField(max_length=255, required=False, allow_blank=True, trim_whitespace=False)
+    form_subtitle = serializers.CharField(max_length=255, required=False, allow_blank=True, trim_whitespace=False)
+    form_show_letter_box = serializers.BooleanField(required=False)
+
+
 def company_payload(company: Company, request) -> dict:
     logo_url = None
     if company.logo:
@@ -82,6 +89,12 @@ def company_payload(company: Company, request) -> dict:
         "legal_name": company.legal_name,
         "national_id": company.national_id,
         "logo_url": logo_url,
+        "document_defaults": {
+            "doc_footnote1": company.doc_footnote1,
+            "doc_footnote2": company.doc_footnote2,
+            "form_subtitle": company.form_subtitle,
+            "form_show_letter_box": company.form_show_letter_box,
+        },
         "setup_step": company.setup_step,
         "setup_step_label": company.get_setup_step_display(),
         "setup_completed_at": company.setup_completed_at,

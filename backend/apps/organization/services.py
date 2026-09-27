@@ -39,6 +39,22 @@ def update_company(
     return _locked(company.pk)
 
 
+DOCUMENT_DEFAULT_FIELDS = ("doc_footnote1", "doc_footnote2", "form_subtitle", "form_show_letter_box")
+
+
+@transaction.atomic
+def update_document_defaults(company: Company, **values) -> Company:
+    """The defaults new documents start from (Phase 11). Unlike the profile, this is not a
+    setup step, so it never moves the setup bookmark."""
+    company = _locked(company.pk)
+    fields = [field for field in DOCUMENT_DEFAULT_FIELDS if field in values]
+    for field in fields:
+        setattr(company, field, values[field])
+    if fields:
+        company.save(update_fields=[*fields, "updated_at"])
+    return _locked(company.pk)
+
+
 @transaction.atomic
 def set_logo(company: Company, *, upload) -> Company:
     company = _locked(company.pk)

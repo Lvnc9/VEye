@@ -19,6 +19,7 @@ from .access import CanEditNode, CanManageMembership, access_for
 from .models import Company, Membership, OrgNode
 from .serializers import (
     CompanyUpdateSerializer,
+    DocumentDefaultsSerializer,
     MembershipCreateSerializer,
     MembershipSerializer,
     MembershipUpdateSerializer,
@@ -173,6 +174,21 @@ class CompanyView(APIView):
         serializer = CompanyUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         company = services.update_company(company, **serializer.validated_data)
+        return Response(company_payload(company, request))
+
+
+class DocumentDefaultsView(APIView):
+    """`/org/company/document-defaults/` — what every new document starts with (Phase 11):
+    footnotes, and a form's header subtitle and letter box. Read with the company; edited
+    with `manage_organization`."""
+
+    permission_classes = [IsAuthenticated, HasCapability]
+    write_capability = Capability.MANAGE_ORGANIZATION
+
+    def patch(self, request):
+        serializer = DocumentDefaultsSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        company = services.update_document_defaults(_get_company(), **serializer.validated_data)
         return Response(company_payload(company, request))
 
 

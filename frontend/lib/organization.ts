@@ -44,6 +44,13 @@ export interface OrgMembership {
   position_label: string;
 }
 
+export interface DocumentDefaults {
+  doc_footnote1: string;
+  doc_footnote2: string;
+  form_subtitle: string;
+  form_show_letter_box: boolean;
+}
+
 export interface Company {
   id: number;
   root: number;
@@ -51,6 +58,8 @@ export interface Company {
   legal_name: string;
   national_id: string;
   logo_url: string | null;
+  /** What every new document starts with (Phase 11); set in «تنظیمات». */
+  document_defaults: DocumentDefaults;
   setup_step: string;
   setup_step_label: string;
   setup_completed_at: string | null;

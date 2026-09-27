@@ -168,7 +168,7 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
                 <section className="space-y-2 border-t border-slate-200 pt-4">
                   <h3 className="text-sm font-semibold text-slate-800">لوگو</h3>
                   <LogoSection
-                    documentId={document.id}
+                    endpoint={`/documents/${document.id}/logo/`}
                     logoUrl={content.logo_url}
                     canEdit={canEdit}
                     onChange={(logoUrl) => doc.setContent((current) => ({ ...current, logo_url: logoUrl }))}

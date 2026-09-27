@@ -5,6 +5,8 @@ The two paths there — "new title" and "new revision of an existing title" — 
 split into two explicit operations here instead of being inferred from whether
 the typed title happens to exist.
 """
+from collections.abc import Callable
+
 from django.db import transaction
 from rest_framework.exceptions import NotFound
 
@@ -14,6 +16,13 @@ from apps.core.text import normalize_title
 
 from . import content, form_schema
 from .models import MAX_REVISION, Document, DocumentSequence
+
+#: Called with every brand-new document (revision 1) inside its creating transaction,
+#: to fill in defaults kept by another app — the company's logo, footnotes and form
+#: header (Phase 11), registered by the organisation app when it loads. Inverted on
+#: purpose: nothing in this app reads the organisation's tables (a structural test
+#: guards that). A revision copies its predecessor instead and runs no hook.
+NEW_DOCUMENT_HOOKS: list[Callable[[Document], None]] = []
 
 
 def _allocate_number(group: str) -> int:
@@ -59,7 +68,7 @@ def create_document(*, user, category: str, title: str, group: str) -> Document:
     # fixed here and inherited by revisions, so older فرم documents (made before
     # the form designer, or imported from V_1.0) keep their blocks.
     is_form = group == DocumentGroup.FORM
-    return Document.objects.create(
+    document = Document.objects.create(
         category=category,
         title=title,
         group=group,
@@ -69,6 +78,9 @@ def create_document(*, user, category: str, title: str, group: str) -> Document:
         form_settings=form_schema.default_settings() if is_form else {},
         created_by=user,
     )
+    for hook in NEW_DOCUMENT_HOOKS:
+        hook(document)
+    return document
 
 
 @transaction.atomic

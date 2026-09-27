@@ -2,7 +2,15 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from .setup_views import SetupBootstrapView, SetupCompleteView, SetupStartView, SetupStatusView
-from .views import CompanyLogoView, CompanyView, MembershipViewSet, OrgNodeViewSet, OrgTreeView, PeopleView
+from .views import (
+    CompanyLogoView,
+    CompanyView,
+    DocumentDefaultsView,
+    MembershipViewSet,
+    OrgNodeViewSet,
+    OrgTreeView,
+    PeopleView,
+)
 
 # SimpleRouter, not DefaultRouter: the other apps' routers already own the API root view.
 router = SimpleRouter()
@@ -17,6 +25,7 @@ urlpatterns = [
     path("org/tree/", OrgTreeView.as_view(), name="org-tree"),
     path("org/company/", CompanyView.as_view(), name="org-company"),
     path("org/company/logo/", CompanyLogoView.as_view(), name="org-company-logo"),
+    path("org/company/document-defaults/", DocumentDefaultsView.as_view(), name="org-company-document-defaults"),
     path("org/people/", PeopleView.as_view(), name="org-people"),
     path("", include(router.urls)),
 ]

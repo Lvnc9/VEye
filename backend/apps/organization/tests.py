@@ -617,7 +617,7 @@ class CompanyEndpointTests(ApiTestCase):
         self.assertIsNone(response.data["logo_url"])
         self.assertEqual(set(response.data), {
             "id", "root", "name", "legal_name", "national_id", "logo_url",
-            "setup_step", "setup_step_label", "setup_completed_at",
+            "document_defaults", "setup_step", "setup_step_label", "setup_completed_at",
         })
 
     def test_a_manager_edits_the_profile(self):

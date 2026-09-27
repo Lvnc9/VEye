@@ -2,20 +2,23 @@
 
 import { useRef, useState } from "react";
 import { ApiError, apiDelete, apiUpload } from "@/lib/api-client";
-import type { ContentResponse } from "@/lib/types";
 
-/** «سربرگ»: the document's logo. It is saved as soon as it is picked or removed,
- *  independently of the body's «ذخیره». */
+/** A logo picker: saved as soon as a file is picked or removed, independently of
+ *  any «ذخیره». `endpoint` takes POST (multipart `logo`) and DELETE, and answers
+ *  with the new `logo_url` — a document's (`/documents/{id}/logo/`) or the
+ *  company's default (`/org/company/logo/`). */
 export function LogoSection({
-  documentId,
+  endpoint,
   logoUrl,
   canEdit,
   onChange,
+  alt = "لوگوی مستند",
 }: {
-  documentId: number;
+  endpoint: string;
   logoUrl: string | null;
   canEdit: boolean;
   onChange: (logoUrl: string | null) => void;
+  alt?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +31,7 @@ export function LogoSection({
     try {
       const form = new FormData();
       form.append("logo", file);
-      const response = await apiUpload<ContentResponse>(`/documents/${documentId}/logo/`, form);
+      const response = await apiUpload<{ logo_url: string | null }>(endpoint, form);
       onChange(response.logo_url);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "بارگذاری لوگو ممکن نشد.");
@@ -42,7 +45,7 @@ export function LogoSection({
     setBusy(true);
     setError(null);
     try {
-      const response = await apiDelete<ContentResponse>(`/documents/${documentId}/logo/`);
+      const response = await apiDelete<{ logo_url: string | null }>(endpoint);
       onChange(response.logo_url);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "حذف لوگو ممکن نشد.");
@@ -56,7 +59,7 @@ export function LogoSection({
       <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded border border-slate-200 bg-slate-50">
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- an authenticated API image, not a static asset
-          <img src={logoUrl} alt="لوگوی مستند" className="max-h-full max-w-full object-contain" />
+          <img src={logoUrl} alt={alt} className="max-h-full max-w-full object-contain" />
         ) : (
           <span className="text-xs text-slate-400">بدون لوگو</span>
         )}

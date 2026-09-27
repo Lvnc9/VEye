@@ -53,7 +53,7 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-3 text-lg font-semibold text-slate-900">سربرگ</h2>
         <LogoSection
-          documentId={document.id}
+          endpoint={`/documents/${document.id}/logo/`}
           logoUrl={content.logo_url}
           canEdit={canEdit}
           onChange={(logoUrl) => doc.setContent((current) => ({ ...current, logo_url: logoUrl }))}

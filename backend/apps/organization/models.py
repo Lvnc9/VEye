@@ -152,6 +152,13 @@ class Company(TimeStampedModel):
     #: شناسه ملی
     national_id = models.CharField(max_length=32, blank=True)
     logo = models.ImageField(upload_to=company_logo_upload_to, blank=True)
+    # Document defaults (Phase 11, ADR-011), set once in «تنظیمات» and copied into every
+    # new document when it is created — never read later, so changing them never alters
+    # an existing or issued document. The logo is `logo` above; the name line is the root's.
+    doc_footnote1 = models.CharField(max_length=255, blank=True)
+    doc_footnote2 = models.CharField(max_length=255, blank=True)
+    form_subtitle = models.CharField(max_length=255, blank=True)
+    form_show_letter_box = models.BooleanField(default=False)
     setup_step = models.CharField(max_length=16, choices=SetupStep.choices, default=SetupStep.COMPANY)
     setup_completed_at = models.DateTimeField(null=True, blank=True)
 
