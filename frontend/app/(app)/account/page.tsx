@@ -8,6 +8,7 @@ import {
 import { formatJalali } from "@/lib/jalali";
 import { useCurrentUser } from "@/lib/current-user";
 import { LoadingBanner, ErrorBanner } from "@/components/StatusBanner";
+import { Avatar } from "@/components/ui/Avatar";
 
 export default function AccountPage() {
   const { user, loading } = useCurrentUser();
@@ -26,27 +27,33 @@ export default function AccountPage() {
   ];
 
   return (
-    <div className="max-w-xl space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">اکانت</h1>
+    <div className="mx-auto max-w-xl space-y-6">
+      <h1 className="text-2xl font-bold leading-10 text-slate-900">اکانت</h1>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card">
+        <Avatar name={user.full_name} size="lg" className="size-14 text-base" />
+        <div className="min-w-0">
+          <p className="truncate text-lg font-bold text-slate-900">{user.full_name}</p>
+          <p className="truncate text-sm text-slate-500">{user.title}</p>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
         <dl>
           {rows.map(([label, value], idx) => (
             <div
               key={label}
-              className={`flex justify-between px-6 py-3 text-sm ${
-                idx % 2 === 0 ? "bg-white" : "bg-slate-50"
-              }`}
+              className={`flex justify-between gap-4 px-5 py-3 text-sm sm:px-6 ${idx > 0 ? "border-t border-slate-100" : ""}`}
             >
-              <dt className="font-medium text-slate-500">{label}</dt>
-              <dd className="text-slate-900">{value}</dd>
+              <dt className="text-slate-500">{label}</dt>
+              <dd className="text-end font-bold text-slate-900">{value}</dd>
             </div>
           ))}
         </dl>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold text-slate-900">دسترسی‌های شما</h2>
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
+        <h2 className="mb-3 text-lg font-bold text-slate-900">دسترسی‌های شما</h2>
         {user.capabilities.length === 0 ? (
           <p className="text-sm text-slate-500">دسترسی خاصی تعریف نشده است.</p>
         ) : (
@@ -54,7 +61,7 @@ export default function AccountPage() {
             {user.capabilities.map((capability) => (
               <li
                 key={capability}
-                className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
+                className="rounded-full bg-brand-50 px-3 py-1 text-sm text-brand-800 ring-1 ring-inset ring-brand-600/15"
               >
                 {CAPABILITY_LABELS[capability] ?? capability}
               </li>

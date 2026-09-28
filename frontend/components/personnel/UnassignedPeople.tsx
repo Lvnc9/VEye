@@ -8,6 +8,7 @@ import type { Paginated } from "@/lib/types";
 import { useApiQuery } from "@/lib/use-api-query";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { PlacementCascade } from "@/components/personnel/PlacementCascade";
+import { buttonClass } from "@/components/ui/Button";
 
 /** People with no place in the chart yet, each with the same حوزه → واحد → بخش cascade as
  *  `PersonnelForm` — the quick way to give existing personnel (the importer's, or registered
@@ -48,15 +49,15 @@ export function UnassignedPeople({ nodes, reload, onPlaced }: { nodes: OrgNode[]
   }
 
   return (
-    <section aria-label="افراد بدون جایگاه سازمانی" className="space-y-3 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+    <section aria-label="افراد بدون جایگاه سازمانی" className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
       <div>
-        <h2 className="text-base font-semibold text-slate-900">افراد بدون جایگاه سازمانی</h2>
+        <h2 className="text-base font-bold text-slate-900">افراد بدون جایگاه سازمانی</h2>
         <p className="mt-1 text-xs text-slate-500">تا جایی در ساختار نداشته باشند، در هیچ بخشی دیده نمی‌شوند.</p>
       </div>
       {error && <ErrorBanner message={error} />}
       <ul className="space-y-3">
         {rows.map((person) => (
-          <li key={person.id} className="space-y-2 rounded border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
+          <li key={person.id} className="space-y-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
             <span className="block min-w-0">
               <span className="block truncate font-medium text-slate-900">{person.full_name}</span>
               <span className="block truncate text-xs text-slate-500">{person.title}</span>
@@ -70,7 +71,7 @@ export function UnassignedPeople({ nodes, reload, onPlaced }: { nodes: OrgNode[]
               type="button"
               disabled={!hasPlacement(nodes, placementOf(person.id)) || busy === person.id}
               onClick={() => place(person)}
-              className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+              className={buttonClass({ variant: "primary", size: "sm" })}
             >
               قرار بده
             </button>

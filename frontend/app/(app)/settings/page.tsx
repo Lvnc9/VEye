@@ -8,6 +8,8 @@ import type { Company, DocumentDefaults } from "@/lib/organization";
 import { EmptyBanner, LoadingBanner } from "@/components/StatusBanner";
 import { LogoSection } from "@/components/designer/LogoSection";
 import { FieldLabel, inputClass } from "@/components/designer/ui";
+import { Save } from "lucide-react";
+import { buttonClass } from "@/components/ui/Button";
 
 /**
  * «تنظیمات». V_1.0 had the button but never wired it (main.py:938). It now holds
@@ -19,7 +21,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">تنظیمات</h1>
+      <h1 className="text-2xl font-bold leading-10 text-slate-900">تنظیمات</h1>
       {company.loading ? (
         <LoadingBanner />
       ) : !company.data ? (
@@ -74,9 +76,9 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
   );
 
   return (
-    <section className="space-y-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="space-y-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
       <header>
-        <h2 className="text-lg font-semibold text-slate-900">پیش‌فرض‌های مستندات</h2>
+        <h2 className="text-lg font-bold text-slate-900">پیش‌فرض‌های مستندات</h2>
         <p className="mt-1 text-sm text-slate-500">
           هر مستندِ تازه با این لوگو و پاورقی‌ها شروع می‌شود و در هر فرمِ تازه، سربرگ هم از اینجا پر می‌شود. پس از ایجاد، در خود مستند
           قابل تغییرند؛ تغییر این پیش‌فرض‌ها مستندهای موجود را تغییر نمی‌دهد.
@@ -84,7 +86,7 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
       </header>
 
       {!canEdit && (
-        <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-800">
           تغییر این تنظیمات فقط با دسترسی «مدیریت ساختار سازمانی» ممکن است.
         </p>
       )}
@@ -100,11 +102,12 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
       </div>
 
       <div className="space-y-3 border-t border-slate-200 pt-4">
-        <h3 className="text-sm font-semibold text-slate-800">سربرگ فرم‌ها</h3>
+        <h3 className="text-sm font-bold text-slate-800">سربرگ فرم‌ها</h3>
         {text("form_subtitle", "زیرعنوان سربرگ", "مثال: واحد منابع انسانی")}
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
+            className="size-4 rounded"
             checked={draft.form_show_letter_box}
             disabled={!canEdit || saving}
             onChange={(event) => set({ form_show_letter_box: event.target.checked })}
@@ -119,11 +122,12 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
             type="button"
             onClick={() => void save()}
             disabled={!dirty || saving}
-            className="rounded bg-purple-800 px-6 py-2 text-sm font-semibold text-white hover:bg-purple-900 disabled:cursor-not-allowed disabled:opacity-50"
+            className={buttonClass({ variant: "primary", className: "px-6" })}
           >
+            <Save />
             {saving ? "در حال ذخیره..." : "ذخیره"}
           </button>
-          {message && <span className={`text-sm ${message.ok ? "text-green-700" : "text-red-700"}`}>{message.text}</span>}
+          {message && <span className={`text-sm ${message.ok ? "text-emerald-700" : "text-rose-700"}`}>{message.text}</span>}
         </div>
       )}
     </section>

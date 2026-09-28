@@ -17,15 +17,17 @@ import { normalizeNationalCode } from "@/lib/login";
 import type { OrgTreeResponse } from "@/lib/organization";
 import { EMPTY_PLACEMENT, placedMessage, placementPayload, type PlacementForm, type RegisteredPerson } from "@/lib/personnel-org";
 import { useApiQuery } from "@/lib/use-api-query";
+import { buttonClass } from "@/components/ui/Button";
+import { inputClass, selectClass } from "@/components/ui/Field";
 
 const LIGHT = {
-  wrap: "space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm",
-  label: "mb-1 block text-sm font-medium text-slate-700",
-  input: "w-full rounded border border-slate-300 px-3 py-2 text-sm",
-  select: "w-full rounded border border-slate-300 px-3 py-2 text-sm",
-  primaryButton: "w-full rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50",
-  secondaryButton: "rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50",
-  success: "rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700",
+  wrap: "space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6",
+  label: "mb-1.5 block text-sm text-slate-700",
+  input: inputClass,
+  select: `${selectClass} w-full`,
+  primaryButton: buttonClass({ variant: "primary", size: "md", className: "w-full" }),
+  secondaryButton: buttonClass({ variant: "secondary", size: "md" }),
+  success: "rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2 text-sm text-emerald-700",
   hint: "text-sm text-slate-600",
 };
 
@@ -197,7 +199,7 @@ export function PersonnelForm({
         </button>
         {previewTitle && (
           <span className={t.hint}>
-            سمت: <span className="font-semibold">{previewTitle}</span>
+            سمت: <span className="font-bold">{previewTitle}</span>
           </span>
         )}
       </div>

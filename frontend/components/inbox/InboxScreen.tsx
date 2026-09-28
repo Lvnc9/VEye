@@ -5,6 +5,9 @@ import { parseConversationParam, parseInboxTab, unreadBadge, type InboxTab } fro
 import { useInboxSummary } from "@/lib/use-inbox-summary";
 import { AwaitingTab } from "./AwaitingTab";
 import { ConversationsTab } from "./ConversationsTab";
+import { CountBadge } from "@/components/ui/Badge";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 
 const TAB_SUMMARY_POLL_MS = 15000;
 
@@ -25,31 +28,17 @@ export function InboxScreen() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">کارتابل</h1>
-        <p className="mt-1 text-sm text-slate-500">گفتگوهای شما و کارهایی که منتظر اقدام شماست</p>
-      </header>
+      <PageHeader title="کارتابل" subtitle="گفتگوهای شما و کارهایی که منتظر اقدام شماست" />
 
-      <div role="tablist" aria-label="بخش‌های کارتابل" className="flex gap-1 border-b border-slate-200">
-        {tabs.map((item) => {
+      <Tabs
+        label="بخش‌های کارتابل"
+        items={tabs.map((item) => {
           const badge = unreadBadge(item.count);
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === item.id}
-              onClick={() => router.replace(item.id === "awaiting" ? "/inbox?tab=awaiting" : "/inbox", { scroll: false })}
-              className={`-mb-px flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium ${
-                tab === item.id ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              {item.label}
-              {badge && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{badge}</span>}
-            </button>
-          );
+          return { id: item.id, label: item.label, extra: badge ? <CountBadge>{badge}</CountBadge> : null };
         })}
-      </div>
+        value={tab}
+        onChange={(id) => router.replace(id === "awaiting" ? "/inbox?tab=awaiting" : "/inbox", { scroll: false })}
+      />
 
       {tab === "conversations" ? (
         <ConversationsTab

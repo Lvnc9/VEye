@@ -41,7 +41,7 @@ function Row({ node, tone, selectedId, onSelect, renderExtra }: { node: OrgTreeN
     selected
       ? dark
         ? "bg-accent/15 ring-1 ring-accent/40"
-        : "bg-sky-50 ring-1 ring-sky-300"
+        : "bg-brand-50 ring-1 ring-brand-300"
       : dark
         ? "hover:bg-white/5"
         : "hover:bg-slate-100"

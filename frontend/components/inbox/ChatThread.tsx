@@ -23,6 +23,9 @@ import {
 import { formatJalaliDateTime } from "@/lib/jalali";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { FileRow, formatSize } from "@/components/FileRow";
+import { buttonClass } from "@/components/ui/Button";
+import { controlClass } from "@/components/ui/Field";
+import { Paperclip, SendHorizontal, X } from "lucide-react";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -199,12 +202,12 @@ export function ChatThread({
   return (
     <section aria-label={`گفتگو با ${conversation.title}`} className="flex h-full min-h-0 flex-col">
       <header className="border-b border-slate-200 px-5 py-3">
-        <h2 className="font-semibold text-slate-900">{conversation.title}</h2>
+        <h2 className="font-bold text-slate-900">{conversation.title}</h2>
         <p className="text-xs text-slate-500">{conversationSubtitle(conversation)}</p>
       </header>
 
       <div
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4"
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-slate-50/60 px-4 py-4 sm:px-5"
         onScroll={(e) => {
           const el = e.currentTarget;
           stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -255,10 +258,11 @@ export function ChatThread({
               {files.map((file, index) => (
                 <li
                   key={`${file.name}-${index}`}
-                  className="flex max-w-full items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs text-slate-700"
+                  className="flex max-w-full items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs text-brand-900 ring-1 ring-inset ring-brand-600/15 animate-fade-in"
                 >
+                  <Paperclip className="size-3.5 text-brand-600" />
                   <span className="truncate" title={file.name}>
-                    📎 {file.name}
+                    {file.name}
                   </span>
                   <bdi dir="ltr" className="shrink-0 text-slate-500">
                     {formatSize(file.size)}
@@ -268,9 +272,9 @@ export function ChatThread({
                       type="button"
                       onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
                       aria-label={`حذف ${file.name}`}
-                      className="shrink-0 text-slate-500 hover:text-red-600"
+                      className="flex size-5 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-rose-100 hover:text-rose-600"
                     >
-                      ✕
+                      <X className="size-3.5" />
                     </button>
                   )}
                 </li>
@@ -279,8 +283,8 @@ export function ChatThread({
           )}
           {progress !== null && (
             <div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
-              <div className="h-1.5 flex-1 overflow-hidden rounded bg-slate-200">
-                <div className="h-full bg-green-600 transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+                <div className="h-full rounded-full bg-brand-600 transition-[width] duration-300" style={{ width: `${Math.round(progress * 100)}%` }} />
               </div>
               <span>{Math.round(progress * 100)}٪</span>
               <button type="button" onClick={() => uploadRef.current?.abort()} className="underline hover:text-slate-900">
@@ -305,9 +309,9 @@ export function ChatThread({
               disabled={sending}
               aria-label="پیوست فایل"
               title="پیوست فایل (حداکثر ۵ فایل، هر کدام ۲۰ مگابایت)"
-              className="shrink-0 rounded border border-slate-300 bg-white px-2.5 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+              className="flex size-11 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
             >
-              📎
+              <Paperclip className="size-5" />
             </button>
             <textarea
               value={draft}
@@ -317,13 +321,14 @@ export function ChatThread({
               maxLength={MESSAGE_MAX_LENGTH}
               placeholder="پیام خود را بنویسید… (Enter برای ارسال، Shift+Enter برای خط جدید)"
               aria-label="متن پیام"
-              className="min-h-[2.75rem] min-w-0 flex-1 resize-none rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+              className={`${controlClass} min-h-[2.75rem] min-w-0 flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm`}
             />
             <button
               type="submit"
               disabled={sending || !canSend(draft, files.length)}
-              className="shrink-0 rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+              className={buttonClass({ variant: "primary", size: "md", className: "h-11 shrink-0 rounded-xl" })}
             >
+              <SendHorizontal className="rtl-flip size-4" />
               ارسال
             </button>
           </div>
@@ -344,8 +349,10 @@ function MessageRow({
 }) {
   if (message.kind === "SYSTEM") {
     return (
-      <p className="py-1 text-center text-xs text-slate-400">
-        {message.body} · {formatJalaliDateTime(message.created_at)}
+      <p className="py-1 text-center">
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">
+          {message.body} · {formatJalaliDateTime(message.created_at)}
+        </span>
       </p>
     );
   }
@@ -353,12 +360,14 @@ function MessageRow({
   return (
     <div className={`flex ${message.is_mine ? "justify-start" : "justify-end"}`}>
       <div
-        className={`group max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-          message.is_mine ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-900"
+        className={`group max-w-[80%] px-3.5 py-2 text-sm shadow-xs animate-fade-in sm:max-w-[75%] ${
+          message.is_mine
+            ? "rounded-2xl rounded-tr-md bg-brand-700 text-white"
+            : "rounded-2xl rounded-tl-md border border-slate-200 bg-white text-slate-900"
         }`}
       >
         {showSender && !message.is_mine && (
-          <p className="mb-0.5 text-xs font-medium text-slate-500">
+          <p className="mb-0.5 text-xs font-bold text-brand-700">
             {message.sender_name}
             {message.sender_title && <span className="font-normal"> ({message.sender_title})</span>}
           </p>
@@ -382,7 +391,7 @@ function MessageRow({
             ))}
           </ul>
         )}
-        <div className={`mt-1 flex items-center gap-2 text-[11px] ${message.is_mine ? "text-slate-300" : "text-slate-400"}`}>
+        <div className={`mt-1 flex items-center gap-2 text-[11px] ${message.is_mine ? "text-white/70" : "text-slate-400"}`}>
           <span>{formatJalaliDateTime(message.created_at)}</span>
           {message.can_delete && (
             <button

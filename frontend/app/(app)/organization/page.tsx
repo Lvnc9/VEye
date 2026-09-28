@@ -35,25 +35,25 @@ export default function OrganizationPage() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{company.data?.name ?? "ساختار سازمان"}</h1>
+          <h1 className="text-2xl font-bold leading-10 text-slate-900">{company.data?.name ?? "ساختار سازمان"}</h1>
           <p className="mt-1 text-sm text-slate-500">
             {counts.DOMAIN} حوزه · {counts.UNIT} واحد · {counts.SECTION} بخش
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700">
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+          <label className="flex h-9 items-center gap-2 rounded-lg px-3 ring-1 ring-inset ring-slate-200 transition-colors hover:bg-slate-50 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-800 has-[:checked]:ring-brand-300">
+            <input type="checkbox" className="size-4 rounded" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
             نمایش بایگانی‌شده‌ها
           </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={compact} onChange={(e) => setCompact(e.target.checked)} />
+          <label className="flex h-9 items-center gap-2 rounded-lg px-3 ring-1 ring-inset ring-slate-200 transition-colors hover:bg-slate-50 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-800 has-[:checked]:ring-brand-300">
+            <input type="checkbox" className="size-4 rounded" checked={compact} onChange={(e) => setCompact(e.target.checked)} />
             نمای فشرده
           </label>
         </div>
       </header>
 
       {tree.data.truncated && (
-        <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-800">
           ساختار بسیار بزرگ است و فقط دو سطح بالا نمایش داده می‌شود.
         </p>
       )}
@@ -61,7 +61,7 @@ export default function OrganizationPage() {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <div>
           {compact ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card">
               <OrgTreeList
                 nodes={showArchived ? nodes : nodes.filter((n) => n.is_active || n.kind === "COMPANY")}
                 selectedId={selectedId}

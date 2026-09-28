@@ -3,11 +3,12 @@
 import { darkInput } from "@/components/setup/ui";
 import { type OrgNode } from "@/lib/organization";
 import { pickDomain, pickSection, pickUnit, placementOptions, resolvePlacement, type PlacementForm } from "@/lib/personnel-org";
+import { controlClass } from "@/components/ui/Field";
 
 const LIGHT = {
   fieldset: "space-y-3 rounded-lg border border-slate-200 p-4",
   legend: "px-2 text-sm font-medium text-slate-700",
-  field: "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm",
+  field: `${controlClass} w-full px-3 py-2 text-sm`,
   checkboxLabel: "flex items-center gap-2 text-sm text-slate-700",
 };
 

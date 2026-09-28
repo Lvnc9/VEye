@@ -10,10 +10,13 @@ import {
   type Conversation,
 } from "@/lib/chat";
 import { formatJalaliDateTime } from "@/lib/jalali";
-import { initials } from "@/lib/organization";
 import type { Paginated } from "@/lib/types";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { ChatThread } from "./ChatThread";
+import { ArrowRight, Hash, MessagesSquare } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
+import { CountBadge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const LIST_PAGE_SIZE = 200;
@@ -95,7 +98,7 @@ export function ConversationsTab({
   const open = selectedId !== null;
 
   return (
-    <div className="flex h-[calc(100vh-13rem)] min-h-[28rem] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="flex h-[calc(100dvh-15.5rem)] min-h-[26rem] overflow-hidden md:h-[calc(100vh-13rem)] md:min-h-[28rem] rounded-2xl border border-slate-200/80 bg-white shadow-card">
       {/* Side by side from `md` up; on a phone one at a time — the list, or (with ?c=) the thread. */}
       <aside
         aria-label="فهرست گفتگوها"
@@ -111,9 +114,13 @@ export function ConversationsTab({
             <LoadingBanner />
           </div>
         ) : rows.length === 0 ? (
-          <p className="p-5 text-sm leading-7 text-slate-500">
-            هنوز گفتگویی ندارید. از صفحهٔ ساختار سازمان روی یک شخص یا گره بزنید و «گفتگو» را انتخاب کنید.
-          </p>
+          <div className="p-4">
+            <EmptyState
+              compact
+              icon={<MessagesSquare />}
+              message="هنوز گفتگویی ندارید. از صفحهٔ ساختار سازمان روی یک شخص یا گره بزنید و «گفتگو» را انتخاب کنید."
+            />
+          </div>
         ) : (
           <ul className="flex-1 overflow-y-auto">
             {rows.map((conversation) => (
@@ -134,9 +141,10 @@ export function ConversationsTab({
           <button
             type="button"
             onClick={onBack}
-            className="border-b border-slate-200 px-4 py-2 text-right text-sm text-slate-600 hover:bg-slate-50 md:hidden"
+            className="flex items-center gap-1.5 border-b border-slate-200 px-4 py-2.5 text-right text-sm text-slate-600 transition-colors hover:bg-slate-50 md:hidden"
           >
-            → همهٔ گفتگوها
+            <ArrowRight className="size-4" />
+            همهٔ گفتگوها
           </button>
         )}
         <div className="min-h-0 flex-1">
@@ -147,7 +155,12 @@ export function ConversationsTab({
               <ErrorBanner message={selectedError} />
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center p-5 text-sm text-slate-400">
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-slate-50/60 p-5 text-sm text-slate-400">
+              {selectedId === null && (
+                <span className="flex size-14 items-center justify-center rounded-2xl bg-white text-slate-300 shadow-card ring-1 ring-slate-200">
+                  <MessagesSquare className="size-7" />
+                </span>
+              )}
               {selectedId !== null ? "در حال بارگذاری..." : "یک گفتگو را از فهرست انتخاب کنید."}
             </div>
           )}
@@ -172,27 +185,25 @@ function ConversationRow({
       type="button"
       onClick={onSelect}
       aria-current={active ? "true" : undefined}
-      className={`flex w-full items-start gap-3 border-b border-slate-100 px-4 py-3 text-right transition-colors ${
-        active ? "bg-slate-100" : "hover:bg-slate-50"
+      className={`relative flex w-full items-start gap-3 border-b border-slate-100 px-4 py-3 text-right transition-colors ${
+        active ? "bg-brand-50/70" : "hover:bg-slate-50"
       }`}
     >
-      <span
-        aria-hidden
-        className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
-          conversation.kind === "DIRECT" ? "bg-slate-700" : "bg-teal-700"
-        }`}
-      >
-        {conversation.kind === "DIRECT" ? initials(conversation.title) : "#"}
-      </span>
+      {active && <span aria-hidden className="absolute inset-y-2 right-0 w-1 rounded-l-full bg-brand-600 animate-fade-in" />}
+      {conversation.kind === "DIRECT" ? (
+        <Avatar name={conversation.title} size="md" />
+      ) : (
+        <span aria-hidden className="flex size-9 flex-shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-800">
+          <Hash className="size-4" />
+        </span>
+      )}
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
-          <span className={`truncate text-sm ${badge ? "font-bold text-slate-900" : "font-medium text-slate-800"}`}>
+          <span className={`truncate text-sm ${badge ? "font-bold text-slate-900" : "text-slate-800"}`}>
             {conversation.title}
           </span>
           {badge && (
-            <span className="flex-shrink-0 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white" aria-label={`${conversation.unread_count} پیام خوانده‌نشده`}>
-              {badge}
-            </span>
+            <CountBadge label={`${conversation.unread_count} پیام خوانده‌نشده`}>{badge}</CountBadge>
           )}
         </span>
         <span className="mt-0.5 block truncate text-xs text-slate-500">{lastMessageLine(conversation)}</span>

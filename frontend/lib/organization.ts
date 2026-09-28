@@ -76,7 +76,7 @@ export const ORG_KIND_LABELS: Record<OrgNodeKind, string> = {
 export const ORG_KIND_TONE: Record<OrgNodeKind, string> = {
   COMPANY: "bg-slate-800 text-white",
   DOMAIN: "bg-indigo-600 text-white",
-  UNIT: "bg-sky-600 text-white",
+  UNIT: "bg-brand-600 text-white",
   SECTION: "bg-emerald-600 text-white",
 };
 

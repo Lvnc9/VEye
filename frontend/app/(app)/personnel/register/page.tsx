@@ -19,7 +19,7 @@ export default function PersonnelRegisterPage() {
   if (!can("manage_personnel")) {
     return (
       <div className="max-w-xl">
-        <h1 className="mb-4 text-2xl font-bold text-slate-900">ساخت پروفایل پرسنل</h1>
+        <h1 className="mb-4 text-2xl font-bold leading-10 text-slate-900">ساخت پروفایل پرسنل</h1>
         <ErrorBanner message="شما دسترسی لازم برای مدیریت پرسنل را ندارید." />
       </div>
     );
@@ -27,7 +27,7 @@ export default function PersonnelRegisterPage() {
 
   return (
     <div className="max-w-xl space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">ساخت پروفایل پرسنل</h1>
+      <h1 className="text-2xl font-bold leading-10 text-slate-900">ساخت پروفایل پرسنل</h1>
       <PersonnelForm onRegistered={() => setReload((n) => n + 1)} tone="light" />
       <UnassignedPeople nodes={nodes} reload={reload} onPlaced={() => setReload((n) => n + 1)} />
     </div>
