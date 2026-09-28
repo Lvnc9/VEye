@@ -137,7 +137,7 @@ export function OrgChart({ nodes, company, showArchived, selectedId, onSelect }:
                 selectedId={selectedId}
                 onSelect={onSelect}
               >
-                {floor.rooms.length === 0 && <span className="text-xs text-slate-400">بدون واحد</span>}
+                {floor.rooms.length === 0 && <span className="text-xs text-slate-500">بدون واحد</span>}
                 {floor.rooms.map((room) => (
                   <Room key={room.node.id} node={room.node} selected={room.node.id === selectedId} onSelect={onSelect}>
                     {room.desks.map((desk) => (

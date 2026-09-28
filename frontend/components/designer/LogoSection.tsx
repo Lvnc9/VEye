@@ -62,7 +62,7 @@ export function LogoSection({
           // eslint-disable-next-line @next/next/no-img-element -- an authenticated API image, not a static asset
           <img src={logoUrl} alt={alt} className="max-h-full max-w-full object-contain" />
         ) : (
-          <span className="text-xs text-slate-400">بدون لوگو</span>
+          <span className="text-xs text-slate-500">بدون لوگو</span>
         )}
       </div>
       {canEdit && (

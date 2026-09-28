@@ -42,7 +42,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(id)}
             className={cx(
               "flex-1 whitespace-nowrap rounded-md transition-[background-color,color,box-shadow] duration-200",
-              size === "sm" ? "px-2.5 py-0.5 text-xs" : "px-3 py-1.5 text-sm",
+              size === "sm" ? "px-2.5 py-0.5 text-xs pointer-coarse:py-2" : "px-3 py-1.5 text-sm pointer-coarse:py-2.5",
               on ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5" : "text-slate-500 hover:text-slate-800",
             )}
           >

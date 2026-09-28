@@ -113,7 +113,7 @@ export function DocumentPicker({
           ))}
         </ul>
         {count > LIMIT + 1 && (
-          <p className="pt-3 text-center text-xs text-slate-400">نتایج بیشتری هست — جست و جو را دقیق‌تر کنید.</p>
+          <p className="pt-3 text-center text-xs text-slate-500">نتایج بیشتری هست — جست و جو را دقیق‌تر کنید.</p>
         )}
       </div>
     </Dialog>

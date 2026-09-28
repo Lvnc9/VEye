@@ -35,7 +35,7 @@ function Signer({ signoff }: { signoff: SignOffSummary | null }) {
   return (
     <span title={signoff.position}>
       {signoff.name}
-      {signoff.signed_date && <span className="block text-xs text-slate-400">{formatJalali(signoff.signed_date)}</span>}
+      {signoff.signed_date && <span className="block text-xs text-slate-500">{formatJalali(signoff.signed_date)}</span>}
     </span>
   );
 }

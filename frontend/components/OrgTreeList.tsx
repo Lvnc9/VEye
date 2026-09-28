@@ -30,14 +30,14 @@ function Row({ node, tone, selectedId, onSelect, renderExtra }: { node: OrgTreeN
   const selected = node.id === selectedId;
   const label = (
     <>
-      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${ORG_KIND_TONE[node.kind]}`}>
+      <span className={`rounded-full px-2 py-0.5 text-[10px] ${ORG_KIND_TONE[node.kind]}`}>
         {ORG_KIND_LABELS[node.kind]}
       </span>
       <span className={node.is_active ? "" : "line-through opacity-60"}>{node.name}</span>
       {!node.is_active && <span className="text-[10px] opacity-70">(بایگانی‌شده)</span>}
     </>
   );
-  const rowClass = `flex items-center gap-2 rounded px-2 py-1 ${
+  const rowClass = `flex items-center gap-2 rounded-lg px-2 py-1 transition-colors ${
     selected
       ? dark
         ? "bg-accent/15 ring-1 ring-accent/40"

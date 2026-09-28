@@ -155,7 +155,7 @@ export function ConversationsTab({
               <ErrorBanner message={selectedError} />
             </div>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 bg-slate-50/60 p-5 text-sm text-slate-400">
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-slate-50/60 p-5 text-sm text-slate-500">
               {selectedId === null && (
                 <span className="flex size-14 items-center justify-center rounded-2xl bg-white text-slate-300 shadow-card ring-1 ring-slate-200">
                   <MessagesSquare className="size-7" />
@@ -208,7 +208,7 @@ function ConversationRow({
         </span>
         <span className="mt-0.5 block truncate text-xs text-slate-500">{lastMessageLine(conversation)}</span>
         {conversation.last_message_at && (
-          <span className="mt-0.5 block text-[10px] text-slate-400">{formatJalaliDateTime(conversation.last_message_at)}</span>
+          <span className="mt-0.5 block text-[10px] text-slate-500">{formatJalaliDateTime(conversation.last_message_at)}</span>
         )}
       </span>
     </button>

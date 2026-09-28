@@ -100,7 +100,7 @@ export function ChangesBlock({
             ))}
             {previous.length === 0 && section.rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-2 py-4 text-center text-slate-400">
+                <td colSpan={5} className="px-2 py-4 text-center text-slate-500">
                   هنوز تغییری ثبت نشده است.
                 </td>
               </tr>

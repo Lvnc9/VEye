@@ -79,7 +79,7 @@ function SignOffCell({ signoff }: { signoff: SignOffSummary | null }) {
   return (
     <span title={signoff.position}>
       {signoff.name}
-      {signoff.signed_date && <span className="block text-xs text-slate-400">{formatJalali(signoff.signed_date)}</span>}
+      {signoff.signed_date && <span className="block text-xs text-slate-500">{formatJalali(signoff.signed_date)}</span>}
     </span>
   );
 }
@@ -511,7 +511,7 @@ export default function DocumentRegisterPage() {
               title="دانلود PDFهای ساخته‌شده به‌صورت فایل ZIP"
             >
               چاپ لیست
-              <span className="text-xs text-slate-400">({selectionLabel(selectedIds.length, filtersActive)})</span>
+              <span className="text-xs text-slate-500">({selectionLabel(selectedIds.length, filtersActive)})</span>
             </Button>
             <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 tabular-nums">
               {count} مستند
@@ -584,7 +584,7 @@ export default function DocumentRegisterPage() {
                           className="size-4 rounded"
                         />
                       </td>
-                      <td className="px-3 py-3.5 text-slate-400 tabular-nums">
+                      <td className="px-3 py-3.5 text-slate-500 tabular-nums">
                         {(currentPage - 1) * PAGE_SIZE + index + 1}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3.5 text-slate-600">{row.category_label}</td>

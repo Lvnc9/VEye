@@ -58,7 +58,7 @@ export function AwaitingCard() {
                 <StatusBadge status={item.status} label={item.status_label} />
                 <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs text-white">{item.step_label}</span>
                 <span className="ms-auto flex items-center gap-2">
-                  <span className="text-xs text-slate-400" title="از این تاریخ منتظر است">
+                  <span className="text-xs text-slate-500" title="از این تاریخ منتظر است">
                     {formatJalali(item.waiting_since)}
                   </span>
                   <ChevronLeft className="size-4 text-slate-300 transition-transform duration-200 group-hover:-translate-x-0.5 group-hover:text-slate-500" />

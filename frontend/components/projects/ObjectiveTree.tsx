@@ -269,10 +269,10 @@ function AssigneeLeaf({
       ) : row.latestUpdate ? (
         <div className="mt-1">
           <p className="whitespace-pre-wrap text-sm text-slate-700">{row.latestUpdate.body}</p>
-          <p className="mt-0.5 text-xs text-slate-400">{formatJalaliDateTime(row.latestUpdate.created_at)}</p>
+          <p className="mt-0.5 text-xs text-slate-500">{formatJalaliDateTime(row.latestUpdate.created_at)}</p>
         </div>
       ) : (
-        <p className="mt-1 text-xs text-slate-400">هنوز گزارشی ثبت نشده است.</p>
+        <p className="mt-1 text-xs text-slate-500">هنوز گزارشی ثبت نشده است.</p>
       )}
 
       <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs">
@@ -473,15 +473,15 @@ function UpdateHistory({
     <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
       {error && <p className="text-xs text-rose-600">{error}</p>}
       {rows === null ? (
-        <p className="text-xs text-slate-400">در حال بارگذاری...</p>
+        <p className="text-xs text-slate-500">در حال بارگذاری...</p>
       ) : rows.length === 0 ? (
-        <p className="text-xs text-slate-400">سابقهٔ دیگری نیست.</p>
+        <p className="text-xs text-slate-500">سابقهٔ دیگری نیست.</p>
       ) : (
         <ul className="space-y-2">
           {rows.map((row) => (
             <li key={row.id} className="text-sm">
               <p className="whitespace-pre-wrap text-slate-700">{row.body}</p>
-              <p className="mt-0.5 text-xs text-slate-400">{formatJalaliDateTime(row.created_at)}</p>
+              <p className="mt-0.5 text-xs text-slate-500">{formatJalaliDateTime(row.created_at)}</p>
             </li>
           ))}
         </ul>

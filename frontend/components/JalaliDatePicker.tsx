@@ -206,7 +206,7 @@ export function JalaliDatePicker({
               </button>
             </div>
 
-            <div className="mt-1 grid grid-cols-7 text-center text-xs text-slate-400" aria-hidden>
+            <div className="mt-1 grid grid-cols-7 text-center text-xs text-slate-500" aria-hidden>
               {JALALI_WEEKDAYS_SHORT.map((name) => (
                 <span key={name} className="py-1">
                   {name}

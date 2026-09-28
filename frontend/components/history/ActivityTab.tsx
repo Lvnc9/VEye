@@ -162,7 +162,7 @@ export function ActivityTab({
                   >
                     {event.document.title}
                   </Link>
-                  <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                  <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                     {event.from_status_label}
                     <ArrowLeft className="size-3" aria-label="به" />
                     {event.to_status_label}
@@ -172,7 +172,7 @@ export function ActivityTab({
                   <p className="mt-1.5 whitespace-pre-wrap rounded-lg bg-slate-50 px-3 py-1.5 text-slate-700">{event.reason}</p>
                 )}
               </div>
-              <time className="shrink-0 text-xs text-slate-400" dateTime={event.created_at}>
+              <time className="shrink-0 text-xs text-slate-500" dateTime={event.created_at}>
                 {formatJalaliDateTime(event.created_at)}
               </time>
             </li>

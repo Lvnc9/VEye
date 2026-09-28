@@ -208,7 +208,7 @@ export function LongBlock({
         ))}
 
         {section.files.length === 0 && uploads.length === 0 ? (
-          <p className="text-sm text-slate-400">فایلی پیوست نشده است.</p>
+          <p className="text-sm text-slate-500">فایلی پیوست نشده است.</p>
         ) : (
           <ul className="space-y-2">
             {section.files.map((file) => (

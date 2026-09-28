@@ -65,7 +65,7 @@ export function RecentActivityCard() {
                   </p>
                 )}
               </div>
-              <time className="shrink-0 pt-0.5 text-xs text-slate-400" dateTime={event.created_at}>
+              <time className="shrink-0 pt-0.5 text-xs text-slate-500" dateTime={event.created_at}>
                 {formatJalaliDateTime(event.created_at)}
               </time>
             </li>

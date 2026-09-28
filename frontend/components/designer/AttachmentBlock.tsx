@@ -77,7 +77,7 @@ export function AttachmentBlock({
         </div>
       ))}
 
-      {section.items.length === 0 && <p className="text-sm text-slate-400">ضمیمه‌ای ثبت نشده است.</p>}
+      {section.items.length === 0 && <p className="text-sm text-slate-500">ضمیمه‌ای ثبت نشده است.</p>}
 
       {!disabled && (
         <AddButton onClick={() => update((s) => ({ ...s, items: [...s.items, { caption: "", document: null }] }))}>

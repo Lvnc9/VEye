@@ -91,7 +91,7 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
           </span>
           {groups.map(({ group, kinds }) => (
             <div key={group} className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-slate-400">{ELEMENT_GROUP_LABELS[group]}</span>
+              <span className="text-xs text-slate-500">{ELEMENT_GROUP_LABELS[group]}</span>
               {kinds.map(({ kind, label }) => (
                 <button
                   key={kind}

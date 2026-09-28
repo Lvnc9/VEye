@@ -75,7 +75,7 @@ export default function VerifyPage() {
               </span>
               <p className="text-xl font-bold text-slate-900">مستندی یافت نشد</p>
               <p className="text-sm leading-7 text-slate-600">{outcome.message}</p>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 کد واردشده: <Code>{code}</Code>
               </p>
             </div>

@@ -8,7 +8,9 @@ export type ButtonSize = "xs" | "sm" | "md" | "lg";
 const BASE =
   "inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg " +
   "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-150 ease-out " +
-  "active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100";
+  "active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 " +
+  // A finger needs a 44px target; a mouse keeps the compact size.
+  "pointer-coarse:min-h-11";
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:

@@ -179,7 +179,7 @@ export default function ProjectDetailPage() {
               <Avatar name={member.user_name} size="xs" />
               {member.user_name}
               {member.role === "MANAGER" && <span className="text-brand-700">(مدیر)</span>}
-              {member.is_guest && <span className="text-slate-400">· مهمان</span>}
+              {member.is_guest && <span className="text-slate-500">· مهمان</span>}
             </span>
           ))}
         </div>

@@ -391,7 +391,7 @@ function MessageRow({
             ))}
           </ul>
         )}
-        <div className={`mt-1 flex items-center gap-2 text-[11px] ${message.is_mine ? "text-white/70" : "text-slate-400"}`}>
+        <div className={`mt-1 flex items-center gap-2 text-[11px] ${message.is_mine ? "text-white/70" : "text-slate-500"}`}>
           <span>{formatJalaliDateTime(message.created_at)}</span>
           {message.can_delete && (
             <button

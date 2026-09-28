@@ -99,7 +99,7 @@ export function CommentsPanel({ projectId }: { projectId: number }) {
                 <p className="font-medium text-slate-900">
                   {comment.author_name}
                   {comment.author_title && <span className="font-normal text-slate-500"> ({comment.author_title})</span>}
-                  <span className="mr-2 text-xs text-slate-400">{formatJalaliDateTime(comment.created_at)}</span>
+                  <span className="mr-2 text-xs text-slate-500">{formatJalaliDateTime(comment.created_at)}</span>
                 </p>
                 <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{comment.body}</p>
               </div>
