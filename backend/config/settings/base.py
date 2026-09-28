@@ -234,6 +234,8 @@ LOGIN_RATELIMIT_RATE = env("LOGIN_RATELIMIT_RATE", default="10/m")
 # The public /verify/ lookup (what a scanned QR code opens). Unauthenticated, so
 # it is limited per IP; a person scanning a stack of printed documents stays far below this.
 VERIFY_RATELIMIT_RATE = env("VERIFY_RATELIMIT_RATE", default="60/m")
+# The designer's live paper (Phase 12): one render per pause in typing, per user.
+LIVE_PREVIEW_RATELIMIT_RATE = env("LIVE_PREVIEW_RATELIMIT_RATE", default="60/m")
 
 # ---------------------------------------------------------------------------
 # Celery

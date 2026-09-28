@@ -24,6 +24,8 @@ arabic-reshaper==3.0.1
 # removes `bidi.algorithm` entirely. Changing this silently changes Persian
 # shaping, so newly generated PDFs would stop matching already-issued ones.
 python-bidi==0.6.11
+# The designer's live paper: PDF pages → images, in memory (Phase 12). Apache-2.0/BSD, wheels bundle PDFium.
+pypdfium2==5.13.0
 
 # --- Jalali dates ---
 jdatetime==6.1.0

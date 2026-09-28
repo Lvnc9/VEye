@@ -1,8 +1,11 @@
+from django.conf import settings
 from django.http import FileResponse, Http404
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
 from django.utils import timezone
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied, Throttled, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -12,7 +15,9 @@ from apps.core.exceptions import ConflictError
 from apps.core.permissions import HasCapability
 from apps.documents.models import Document
 
-from . import bulk, services, storage
+from apps.documents.content_serializers import ContentInputSerializer
+
+from . import bulk, live_preview, services, storage
 from .models import PdfBuild, PdfKind, PdfStatus
 
 
@@ -157,4 +162,46 @@ class BulkPrintView(APIView):
         response["X-Content-Type-Options"] = "nosniff"
         response["X-Bulk-Print-Count"] = str(len(plan.ready))
         response["X-Bulk-Print-Missing"] = str(len(plan.missing))
+        return response
+
+
+class LivePreviewView(APIView):
+    """`POST /documents/{id}/live-preview/` — the designer's live paper (Phase 12).
+
+    Body `{body?, known_hashes?}`. With `body` (the same JSON a content PUT
+    takes) the pages show those unsaved edits — for someone who may edit the
+    draft; without it, the stored document. Answers
+    `{pages: [{hash, image?}], page_count, truncated}`; nothing is stored, no
+    PdfBuild row, no file. Rate-limited per user (LIVE_PREVIEW_RATELIMIT_RATE)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @method_decorator(
+        ratelimit(key="user", rate=lambda group, request: settings.LIVE_PREVIEW_RATELIMIT_RATE, method="POST", block=False)
+    )
+    def post(self, request, document_id):
+        if getattr(request, "limited", False):
+            raise Throttled(detail="پیش‌نمایش بیش از حد درخواست شد؛ چند لحظه صبر کنید.")
+        document = Document.objects.filter(pk=document_id).first()
+        if document is None:
+            raise NotFound("مستند یافت نشد.")
+
+        known = request.data.get("known_hashes") or []
+        if not isinstance(known, list):
+            raise ValidationError({"known_hashes": ["فهرست نامعتبر است."]})
+        known = {value for value in known[: live_preview.MAX_PAGES * 4] if isinstance(value, str)}
+
+        body = request.data.get("body")
+        if body is None:
+            pdf = live_preview.render_stored(document.pk)
+        else:
+            if not request.user.has_capability(Capability.CREATE_DOCUMENT):
+                raise PermissionDenied("دسترسی ویرایش این مستند را ندارید.")
+            serializer = ContentInputSerializer(data=body, context={"document": document})
+            serializer.is_valid(raise_exception=True)
+            pdf = live_preview.render_unsaved(user=request.user, document_id=document.pk, data=serializer.validated_data)
+
+        result = live_preview.rasterise(pdf, known)
+        response = Response({"pages": result.pages, "page_count": result.page_count, "truncated": result.truncated})
+        response["Cache-Control"] = "no-store"
         return response
