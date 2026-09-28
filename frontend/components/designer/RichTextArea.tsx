@@ -2,6 +2,7 @@
 
 import { useRef, useState, type KeyboardEvent } from "react";
 import { applyStyle, parseMarkers, type Style } from "@/lib/rich-text";
+import { controlClass } from "@/components/ui/Field";
 
 const BUTTONS: { style: Style; label: string; title: string; className: string }[] = [
   { style: "bold", label: "B", title: "پررنگ (Ctrl+B)", className: "font-bold" },
@@ -77,7 +78,7 @@ export function RichTextArea({
               onClick={() => apply(button.style)}
               title={button.title}
               aria-label={button.title}
-              className={`h-8 w-8 rounded border border-slate-300 bg-white text-sm text-slate-700 hover:bg-slate-100 ${button.className}`}
+              className={`size-8 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 shadow-xs transition-[background-color,transform] duration-150 hover:bg-slate-50 active:scale-95 ${button.className}`}
             >
               {button.label}
             </button>
@@ -85,7 +86,7 @@ export function RichTextArea({
           <button
             type="button"
             onClick={() => setPreview((open) => !open)}
-            className="ms-2 rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
+            className="ms-2 rounded-lg px-2.5 py-1 text-xs text-brand-700 transition-colors hover:bg-brand-50"
           >
             {preview ? "پنهان کردن پیش‌نمایش" : "پیش‌نمایش"}
           </button>
@@ -104,7 +105,7 @@ export function RichTextArea({
           onChange(event.target.value);
         }}
         onKeyDown={handleKeyDown}
-        className="w-full resize-y rounded border border-slate-300 bg-white px-3 py-2 text-sm leading-7 focus:border-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600"
+        className={`${controlClass} w-full resize-y py-2 leading-7`}
       />
 
       {notice && <p className="text-xs text-amber-700">{notice}</p>}
@@ -112,7 +113,7 @@ export function RichTextArea({
       {preview && (
         <div
           dir="auto"
-          className="whitespace-pre-wrap rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm leading-7"
+          className="whitespace-pre-wrap rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm leading-7 animate-fade-in"
         >
           {value.split("\n").map((line, lineIndex) => (
             <div key={lineIndex} className="min-h-7">

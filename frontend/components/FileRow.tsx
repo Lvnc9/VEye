@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FileText } from "lucide-react";
 import { formatSize } from "@/lib/file-size";
 
 export { formatSize };
@@ -26,24 +27,23 @@ export function FileRow({
   const dark = tone === "dark";
   return (
     <li
-      className={`flex items-center justify-between gap-2 rounded border px-3 py-2 text-sm ${
-        dark ? "border-slate-600 bg-slate-800" : "border-slate-200 bg-slate-50"
+      className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm transition-colors ${
+        dark ? "border-white/15 bg-white/10" : "border-slate-200 bg-white hover:border-slate-300"
       }`}
     >
+      <FileText className={`size-4 ${dark ? "text-white/70" : "text-brand-600"}`} />
       <a
         href={href}
         target="_blank"
         rel="noreferrer"
-        className={`min-w-0 truncate font-medium underline ${
-          dark
-            ? "text-white decoration-slate-400 hover:decoration-white"
-            : "text-slate-800 decoration-slate-300 hover:decoration-slate-600"
+        className={`min-w-0 flex-1 truncate underline-offset-4 hover:underline ${
+          dark ? "text-white decoration-white/60" : "text-slate-800 decoration-slate-400"
         }`}
         title={name}
       >
         {name}
       </a>
-      <span className={`flex shrink-0 items-center gap-2 text-xs ${dark ? "text-slate-300" : "text-slate-500"}`}>
+      <span className={`flex shrink-0 items-center gap-2 text-xs ${dark ? "text-white/70" : "text-slate-500"}`}>
         {kindLabel && <span>{kindLabel}</span>}
         <bdi dir="ltr">{formatSize(size)}</bdi>
         {action}

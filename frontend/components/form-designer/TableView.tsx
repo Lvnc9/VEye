@@ -108,7 +108,7 @@ export function TableView({
       maxLength={MAX_CELL}
       onChange={(event) => onChange(event.target.value)}
       onClick={(event) => (onPick ? onPick(event) : event.stopPropagation())}
-      className={`w-full min-w-0 bg-indigo-50/60 outline-none ${bold ? "font-bold" : ""}`}
+      className={`w-full min-w-0 bg-brand-50/60 outline-none ${bold ? "font-bold" : ""}`}
       style={{ textAlign: align as CSSProperties["textAlign"] }}
     />
   );
@@ -160,11 +160,11 @@ export function TableView({
       )}
       {editing && active && (
         <div
-          className="mb-1 flex flex-wrap items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs text-slate-700"
+          className="mb-1 flex flex-wrap items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-2 py-1 text-xs text-slate-700"
           onClick={(event) => event.stopPropagation()}
           style={{ fontSize: 12, lineHeight: 1.4 }}
         >
-          <span className="font-medium">خانهٔ انتخاب‌شده:</span>
+          <span className="font-bold">خانهٔ انتخاب‌شده:</span>
           {fits(extent) ? (
             <ToolbarButton onClick={() => applyMerge(mergeRange(element, active.row, active.col, extent!.row, extent!.col))}>ادغام خانه‌های انتخاب‌شده</ToolbarButton>
           ) : (
@@ -184,7 +184,7 @@ export function TableView({
             </ToolbarButton>
           )}
           <span className="text-slate-500">(Shift + کلیک: انتخاب چند خانه)</span>
-          {mergeError && <span className="w-full text-red-700">{mergeError}</span>}
+          {mergeError && <span className="w-full text-rose-700">{mergeError}</span>}
         </div>
       )}
       <div className="relative">
@@ -210,7 +210,7 @@ export function TableView({
                       key={c}
                       {...spanOf(r, c)}
                       onClick={editing ? (event) => pick(r, c, event) : undefined}
-                      className={`font-bold ${editing && inSelection(r, c) ? "outline outline-2 -outline-offset-2 outline-indigo-400" : ""}`}
+                      className={`font-bold ${editing && inSelection(r, c) ? "outline outline-2 -outline-offset-2 outline-brand-400" : ""}`}
                       style={{ ...cellBorders(element.borders, r + (spanOf(r, c).rowSpan ?? 1) - 1 === lastHeader), padding: "2pt 3pt", textAlign: "center" }}
                     >
                       {editing
@@ -235,7 +235,7 @@ export function TableView({
                       key={c}
                       {...(row !== null ? spanOf(g, c) : {})}
                       onClick={editing && row !== null ? (event) => pick(g, c, event) : undefined}
-                      className={editing && row !== null && inSelection(g, c) ? "outline outline-2 -outline-offset-2 outline-indigo-400" : undefined}
+                      className={editing && row !== null && inSelection(g, c) ? "outline outline-2 -outline-offset-2 outline-brand-400" : undefined}
                       style={{
                         ...cellBorders(element.borders, false),
                         padding: "2pt 3pt",
@@ -271,7 +271,7 @@ export function TableView({
               className="group/handle absolute inset-y-0 z-10 flex w-3 cursor-col-resize touch-none justify-center"
               style={{ insetInlineStart: `calc(${at}% - 6px)` }}
             >
-              <span className="w-0.5 bg-indigo-400/0 group-hover/handle:bg-indigo-500" />
+              <span className="w-0.5 bg-brand-400/0 group-hover/handle:bg-brand-500" />
             </span>
           ))}
       </div>
@@ -281,7 +281,7 @@ export function TableView({
 
 function ToolbarButton({ onClick, children }: { onClick: () => void; children: string }) {
   return (
-    <button type="button" onClick={onClick} className="rounded border border-indigo-300 bg-white px-2 py-0.5 text-indigo-700 hover:bg-indigo-100">
+    <button type="button" onClick={onClick} className="rounded-md border border-brand-300 bg-white px-2 py-0.5 text-brand-700 transition-colors hover:bg-brand-100">
       {children}
     </button>
   );

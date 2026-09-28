@@ -129,7 +129,7 @@ export function ElementInspector({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm font-semibold text-slate-800">{elementLabel(element.kind)}</p>
+      <p className="text-sm font-bold text-slate-800">{elementLabel(element.kind)}</p>
 
       {element.kind === "heading" && (
         <>

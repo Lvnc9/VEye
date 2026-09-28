@@ -6,6 +6,8 @@ import { Code } from "../Code";
 import { StatusBadge } from "../StatusBadge";
 import { DocumentPicker } from "./DocumentPicker";
 import { AddButton, IconButton, inputClass, type BlockProps } from "./ui";
+import { buttonClass } from "@/components/ui/Button";
+import { X } from "lucide-react";
 
 /**
  * ضمائم — captioned links to other controlled documents.
@@ -26,7 +28,7 @@ export function AttachmentBlock({
   return (
     <div className="space-y-3">
       {section.items.map((item, position) => (
-        <div key={position} className="flex flex-wrap items-center gap-2 rounded border border-slate-200 p-3">
+        <div key={position} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/40 p-3">
           <input
             type="text"
             value={item.caption}
@@ -51,14 +53,14 @@ export function AttachmentBlock({
               <StatusBadge status={item.document.status} label={item.document.status_label} />
             </span>
           ) : (
-            <span className="text-sm text-red-600">مستندی انتخاب نشده</span>
+            <span className="text-sm text-rose-600">مستندی انتخاب نشده</span>
           )}
 
           {!disabled && (
             <button
               type="button"
               onClick={() => setPicking(position)}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+              className={buttonClass({ size: "sm" })}
             >
               {item.document ? "تغییر مستند" : "انتخاب مستند"}
             </button>
@@ -69,7 +71,7 @@ export function AttachmentBlock({
               tone="danger"
               onClick={() => update((s) => ({ ...s, items: s.items.filter((_, i) => i !== position) }))}
             >
-              ✕
+              <X />
             </IconButton>
           )}
         </div>

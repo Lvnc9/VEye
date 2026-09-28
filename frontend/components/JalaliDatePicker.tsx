@@ -1,5 +1,7 @@
 "use client";
 
+import { inputClass } from "@/components/ui/Field";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   JALALI_MONTHS,
@@ -34,7 +36,7 @@ interface Props {
   "aria-describedby"?: string;
 }
 
-const DEFAULT_TRIGGER = "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm";
+const DEFAULT_TRIGGER = `${inputClass}`;
 
 /**
  * A Jalali date picker (Phase 10; the owner asked for هجری شمسی instead of the browser's Gregorian
@@ -155,26 +157,26 @@ export function JalaliDatePicker({
       {open && (
         <>
           {/* Phone: dim the page behind the fixed panel; a tap on it closes. */}
-          <div className="fixed inset-0 z-30 bg-slate-900/20 sm:hidden" onClick={() => close(false)} aria-hidden />
+          <div className="fixed inset-0 z-30 bg-slate-950/30 backdrop-blur-[2px] animate-fade-in sm:hidden" onClick={() => close(false)} aria-hidden />
           <div
             role="dialog"
             aria-label="انتخاب تاریخ"
-            className="fixed inset-x-4 top-24 z-40 rounded-lg border border-slate-200 bg-white p-3 shadow-lg sm:absolute sm:inset-x-auto sm:start-0 sm:top-full sm:mt-1 sm:w-72"
+            className="fixed inset-x-4 top-24 z-40 origin-top rounded-2xl border border-slate-200/80 bg-white p-3 shadow-overlay animate-scale-in sm:absolute sm:inset-x-auto sm:start-0 sm:top-full sm:mt-1.5 sm:w-72"
           >
             <div className="mb-2 flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => showMonth(-1)}
                 aria-label="ماه قبل"
-                className="rounded px-2 py-1 text-slate-600 hover:bg-slate-100"
+                className="flex size-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
               >
-                ›
+                <ChevronRight className="size-4" />
               </button>
               <select
                 aria-label="ماه"
                 value={view.jm}
                 onChange={(event) => setView({ jy: view.jy, jm: Number(event.target.value) })}
-                className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-1 py-1 text-sm"
+                className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-1.5 text-sm transition-colors hover:border-slate-300"
               >
                 {JALALI_MONTHS.map((name, index) => (
                   <option key={name} value={index + 1}>
@@ -186,7 +188,7 @@ export function JalaliDatePicker({
                 aria-label="سال"
                 value={view.jy}
                 onChange={(event) => setView({ jy: Number(event.target.value), jm: view.jm })}
-                className="w-20 rounded border border-slate-200 bg-white px-1 py-1 text-sm"
+                className="h-8 w-20 rounded-lg border border-slate-200 bg-white px-1.5 text-sm transition-colors hover:border-slate-300"
               >
                 {years.map((year) => (
                   <option key={year} value={year}>
@@ -198,13 +200,13 @@ export function JalaliDatePicker({
                 type="button"
                 onClick={() => showMonth(1)}
                 aria-label="ماه بعد"
-                className="rounded px-2 py-1 text-slate-600 hover:bg-slate-100"
+                className="flex size-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
               >
-                ‹
+                <ChevronLeft className="size-4" />
               </button>
             </div>
 
-            <div className="grid grid-cols-7 text-center text-xs text-slate-500" aria-hidden>
+            <div className="mt-1 grid grid-cols-7 text-center text-xs text-slate-400" aria-hidden>
               {JALALI_WEEKDAYS_SHORT.map((name) => (
                 <span key={name} className="py-1">
                   {name}
@@ -229,11 +231,11 @@ export function JalaliDatePicker({
                     aria-pressed={isSelected}
                     aria-label={formatJalaliDMY(view.jy, view.jm, day)}
                     onClick={() => pick(date)}
-                    className={`rounded py-1.5 text-sm tabular-nums disabled:cursor-not-allowed disabled:text-slate-300 ${
+                    className={`rounded-lg py-1.5 text-sm tabular-nums transition-[background-color,color,transform] duration-150 active:scale-90 disabled:cursor-not-allowed disabled:text-slate-300 ${
                       isSelected
-                        ? "bg-slate-900 font-semibold text-white"
+                        ? "bg-brand-700 font-bold text-white shadow-sm"
                         : iso === todayIso
-                          ? "font-semibold text-slate-900 ring-1 ring-slate-400 hover:bg-slate-100"
+                          ? "font-bold text-brand-700 ring-1 ring-inset ring-brand-300 hover:bg-brand-50"
                           : "text-slate-700 hover:bg-slate-100"
                     }`}
                   >
@@ -248,7 +250,7 @@ export function JalaliDatePicker({
                 type="button"
                 onClick={() => pick(today)}
                 disabled={!inRange(todayIso)}
-                className="rounded px-2 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                className="rounded-lg px-2.5 py-1 text-brand-700 transition-colors hover:bg-brand-50 disabled:opacity-40"
               >
                 امروز
               </button>
@@ -259,7 +261,7 @@ export function JalaliDatePicker({
                     onChange(null);
                     close();
                   }}
-                  className="rounded px-2 py-1 text-red-600 hover:bg-red-50"
+                  className="rounded-lg px-2.5 py-1 text-rose-600 transition-colors hover:bg-rose-50"
                 >
                   پاک کردن
                 </button>
@@ -282,10 +284,5 @@ function yearOptions(current: number, min?: string, max?: string): number[] {
 }
 
 function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-slate-400" aria-hidden>
-      <rect x="3" y="4.5" width="14" height="12" rx="1.5" />
-      <path d="M3 8.5h14M7 3v3M13 3v3" strokeLinecap="round" />
-    </svg>
-  );
+  return <CalendarDays aria-hidden className="size-4 shrink-0 text-slate-400" />;
 }

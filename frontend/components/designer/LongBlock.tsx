@@ -6,6 +6,8 @@ import { FileRow } from "@/components/FileRow";
 import type { DocumentFileInfo, LongSection } from "@/lib/types";
 import { RichTextArea } from "./RichTextArea";
 import { AddButton, FieldLabel, IconButton, inputClass, type BlockProps } from "./ui";
+import { buttonClass } from "@/components/ui/Button";
+import { X } from "lucide-react";
 
 /** The three upload buttons and the file types V_1.0's dialogs offered
  *  (utils.py:1638-1666; `xlsx` added — V_1.0 listed every Excel flavour except
@@ -134,7 +136,7 @@ export function LongBlock({
                   update((s) => ({ ...s, extra_boxes: s.extra_boxes.filter((_, i) => i !== position) }))
                 }
               >
-                ✕
+                <X />
               </IconButton>
             )}
           </div>
@@ -155,7 +157,7 @@ export function LongBlock({
         </AddButton>
       )}
 
-      <div className="rounded border border-slate-200 p-4">
+      <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">
         <FieldLabel>فایل‌های پیوست</FieldLabel>
 
         {!disabled && (
@@ -173,7 +175,7 @@ export function LongBlock({
                 <button
                   type="button"
                   onClick={() => pickers[kind].current?.click()}
-                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+                  className={buttonClass({ size: "sm" })}
                 >
                   {label}
                 </button>
@@ -182,23 +184,23 @@ export function LongBlock({
           </div>
         )}
 
-        {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <p className="mb-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
         {uploads.map((pending) => (
-          <div key={pending.id} className="mb-2 rounded border border-slate-200 px-3 py-2 text-sm">
+          <div key={pending.id} className="mb-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="truncate">{pending.name}</span>
               <button
                 type="button"
                 onClick={() => pending.controller.abort()}
-                className="shrink-0 text-xs text-red-600 hover:underline"
+                className="shrink-0 text-xs text-rose-600 hover:underline"
               >
                 لغو
               </button>
             </div>
-            <div className="h-1.5 overflow-hidden rounded bg-slate-200">
+            <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
               <div
-                className="h-full bg-green-600 transition-[width]"
+                className="h-full rounded-full bg-brand-600 transition-[width] duration-300"
                 style={{ width: `${Math.round(pending.progress * 100)}%` }}
               />
             </div>
@@ -223,7 +225,7 @@ export function LongBlock({
                       tone="danger"
                       onClick={() => update((s) => ({ ...s, files: s.files.filter((f) => f.id !== file.id) }))}
                     >
-                      ✕
+                      <X />
                     </IconButton>
                   )
                 }

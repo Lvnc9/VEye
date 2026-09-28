@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { SECTION_TYPE_LABELS, type SectionType } from "@/lib/types";
 import { IconButton } from "./ui";
+import { ChevronDown, ChevronUp, GripVertical, X } from "lucide-react";
 import type { useDragReorder } from "./useDragReorder";
 
 type Drag = ReturnType<typeof useDragReorder>;
@@ -37,44 +38,44 @@ export function BlockFrame({
   return (
     <section
       {...(drag ? drag.rowProps(position) : {})}
-      className={`relative rounded-lg border border-slate-200 bg-white shadow-sm ${drag?.isDragging(position) ? "opacity-40" : ""}`}
+      className={`relative rounded-2xl border border-slate-200/80 bg-white shadow-card transition-[opacity,box-shadow,border-color] duration-200 focus-within:border-brand-300 focus-within:shadow-raised ${drag?.isDragging(position) ? "scale-[0.99] opacity-40" : ""}`}
     >
       {marker && (
         <span
           aria-hidden="true"
-          className={`absolute inset-x-0 h-1 rounded bg-indigo-500 ${marker === "before" ? "-top-2.5" : "-bottom-2.5"}`}
+          className={`absolute inset-x-4 h-1 rounded-full bg-brand-500 shadow-[0_0_10px_rgb(14_165_233/0.6)] animate-fade-in ${marker === "before" ? "-top-2.5" : "-bottom-2.5"}`}
         />
       )}
-      <header className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
-        <h3 className="flex items-center text-sm font-semibold text-slate-800">
+      <header className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-4">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
           {drag && !disabled && (
             <span
               {...drag.gripProps(position, dragKey ?? String(index))}
-              className="me-1 cursor-grab select-none px-1 text-lg leading-none text-slate-400 hover:text-slate-700 active:cursor-grabbing"
+              className="flex size-8 cursor-grab select-none items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing"
             >
-              ⠿
+              <GripVertical className="size-4" />
             </span>
           )}
-          <span className="ms-1 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-100 px-1.5 text-xs text-slate-600">
+          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-bold text-brand-700 ring-1 ring-inset ring-brand-600/15 tabular-nums">
             {index}
           </span>
           {SECTION_TYPE_LABELS[type]}
         </h3>
         {!disabled && (
-          <div className="flex items-center">
+          <div className="flex items-center gap-0.5">
             <IconButton label="انتقال به بالا" onClick={() => onMove(-1)} disabled={index === 1}>
-              ↑
+              <ChevronUp />
             </IconButton>
             <IconButton label="انتقال به پایین" onClick={() => onMove(1)} disabled={index === total}>
-              ↓
+              <ChevronDown />
             </IconButton>
             <IconButton label="حذف بخش" onClick={onRemove} tone="danger">
-              ✕
+              <X />
             </IconButton>
           </div>
         )}
       </header>
-      <div className="p-4">{children}</div>
+      <div className="p-4 sm:p-5">{children}</div>
     </section>
   );
 }

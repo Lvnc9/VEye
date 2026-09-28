@@ -2,6 +2,7 @@
 
 import type { ShortSection } from "@/lib/types";
 import { AddButton, IconButton, inputClass, type BlockProps } from "./ui";
+import { X } from "lucide-react";
 
 /** تشریحی کوتاه — a list of one-line entries (utils.py:2722-2881). V_1.0 started
  *  it with two and could add more or remove the last. */
@@ -29,7 +30,7 @@ export function ShortBlock({ section, index, disabled, update }: BlockProps<Shor
               tone="danger"
               onClick={() => update((s) => ({ ...s, lines: s.lines.filter((_, i) => i !== position) }))}
             >
-              ✕
+              <X />
             </IconButton>
           )}
         </div>

@@ -1,5 +1,8 @@
 "use client";
 
+import { FileStack, PanelBottom, Plus } from "lucide-react";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   canAddSection,
   fromResponse,
@@ -68,19 +71,19 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
         paper={<LivePaper documentId={document.id} body={paperBody} refreshKey={content.logo_url ?? ""} />}
         editor={
           <>
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-lg font-semibold text-slate-900">سربرگ</h2>
+            <Card className="p-5">
+              <CardHeader title="سربرگ" icon={<FileStack />} className="mb-3" />
               <LogoSection
                 endpoint={`/documents/${document.id}/logo/`}
                 logoUrl={content.logo_url}
                 canEdit={canEdit}
                 onChange={(logoUrl) => doc.setContent((current) => ({ ...current, logo_url: logoUrl }))}
               />
-            </section>
+            </Card>
 
             {canEdit && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-slate-600">افزودن بخش:</span>
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white/60 p-3">
+                <span className="text-sm text-slate-500">افزودن بخش:</span>
                 {SECTION_TYPES.map((type) => (
                   <button
                     key={type}
@@ -88,9 +91,10 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
                     disabled={locked || !canAddSection(state.sections, type)}
                     onClick={() => addSection(type)}
                     title={canAddSection(state.sections, type) ? undefined : "در هر مستند فقط یک بخش از این نوع مجاز است."}
-                    className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand-50 px-3 text-sm text-brand-800 ring-1 ring-inset ring-brand-600/15 transition-[background-color,transform] duration-150 hover:bg-brand-100 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-brand-50"
                   >
-                    + {SECTION_TYPE_LABELS[type]}
+                    <Plus className="size-4" />
+                    {SECTION_TYPE_LABELS[type]}
                   </button>
                 ))}
               </div>
@@ -98,9 +102,9 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
 
             <div className="space-y-4">
               {state.sections.length === 0 && (
-                <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">
-                  {canEdit ? "هنوز بخشی اضافه نشده است. از دکمه‌های بالا استفاده کنید." : "این مستند هنوز محتوایی ندارد."}
-                </div>
+                <EmptyState
+                  message={canEdit ? "هنوز بخشی اضافه نشده است. از دکمه‌های بالا استفاده کنید." : "این مستند هنوز محتوایی ندارد."}
+                />
               )}
 
               {state.sections.map((section, position) => {
@@ -160,15 +164,15 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
               })}
             </div>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-lg font-semibold text-slate-900">پاورقی</h2>
+            <Card className="p-5">
+              <CardHeader title="پاورقی" icon={<PanelBottom />} className="mb-3" />
               <FootnoteFields
                 footnote1={state.footnote1}
                 footnote2={state.footnote2}
                 disabled={locked}
                 onChange={(next) => setState((current) => ({ ...current, ...next }))}
               />
-            </section>
+            </Card>
           </>
         }
       />

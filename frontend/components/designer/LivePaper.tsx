@@ -1,5 +1,9 @@
 "use client";
 
+import { FileImage } from "lucide-react";
+import { cardClass } from "@/components/ui/Card";
+import { Segmented } from "@/components/ui/Segmented";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, apiPost } from "@/lib/api-client";
 import { PageCache, type PreviewResponse, type ShownPage } from "@/lib/live-paper";
@@ -78,50 +82,50 @@ export function LivePaper({
   }, [documentId, key]);
 
   return (
-    <section aria-label="پیش‌نمایش چاپ" className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2.5">
-        <h2 className="text-sm font-semibold text-slate-900">پیش‌نمایش چاپ</h2>
+    <section aria-label="پیش‌نمایش چاپ" className={`${cardClass} overflow-hidden`}>
+      <header className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+        <FileImage className="size-4 text-brand-600" />
+        <h2 className="text-sm font-bold text-slate-900">پیش‌نمایش چاپ</h2>
         <span aria-live="polite" className="text-xs text-slate-500">
           {status.state === "updating" ? "در حال به‌روزرسانی…" : status.state === "idle" && meta.count ? `${meta.count.toLocaleString("fa-IR")} صفحه` : ""}
         </span>
-        <div className="ms-auto flex overflow-hidden rounded border border-slate-300 text-xs">
-          {(
-            [
-              ["fit", "هم‌عرض ستون"],
-              ["print", "اندازهٔ چاپ"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={zoom === value}
-              onClick={() => setZoom(value)}
-              className={`px-2.5 py-1 ${zoom === value ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="اندازهٔ نمایش"
+          size="sm"
+          className="ms-auto"
+          items={[
+            ["fit", "هم‌عرض ستون"],
+            ["print", "اندازهٔ چاپ"],
+          ]}
+          value={zoom}
+          onChange={setZoom}
+        />
       </header>
 
       {status.state === "error" && (
-        <p role="status" className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+        <p role="status" className="border-b border-amber-200 bg-amber-50/80 px-4 py-2 text-xs text-amber-800">
           {status.message}
         </p>
       )}
 
-      <div className="relative overflow-auto bg-slate-100 p-3" style={{ maxHeight: "calc(100vh - 12rem)" }}>
+      <div
+        className="relative overflow-auto bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.35)_1px,transparent_0)] bg-[length:18px_18px] bg-slate-100 p-4"
+        style={{ maxHeight: "calc(100vh - 12rem)" }}
+      >
         {pages.length === 0 && status.state === "updating" && (
-          <p className="py-16 text-center text-sm text-slate-500">در حال آماده‌سازی صفحه‌ها…</p>
+          <div className="mx-auto max-w-md space-y-3 py-6">
+            <Skeleton className="aspect-[210/297] h-auto w-full rounded-sm" />
+            <p className="text-center text-sm text-slate-500">در حال آماده‌سازی صفحه‌ها…</p>
+          </div>
         )}
-        <div className={`space-y-4 transition-opacity ${status.state === "updating" && pages.length ? "opacity-70" : ""}`}>
+        <div className={`space-y-5 transition-opacity duration-300 ${status.state === "updating" && pages.length ? "opacity-70" : ""}`}>
           {pages.map((page, index) => (
             <figure key={`${index}-${page.hash}`} className="mx-auto" style={zoom === "print" ? { width: 794 } : undefined}>
               {/* eslint-disable-next-line @next/next/no-img-element -- a data URL drawn by the server, not a static asset */}
               <img
                 src={page.src}
                 alt={`صفحهٔ ${(index + 1).toLocaleString("fa-IR")}`}
-                className="block w-full bg-white shadow-md"
+                className="block w-full rounded-sm bg-white shadow-[0_1px_3px_rgb(15_23_42/0.12),0_12px_32px_-12px_rgb(15_23_42/0.3)] animate-fade-in"
                 draggable={false}
               />
               <figcaption className="mt-1 text-center text-xs text-slate-500">

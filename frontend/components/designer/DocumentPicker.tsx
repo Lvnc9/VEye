@@ -6,6 +6,10 @@ import type { AttachmentTarget, DocumentRow, Paginated } from "@/lib/types";
 import { Code } from "../Code";
 import { StatusBadge } from "../StatusBadge";
 import { inputClass } from "./ui";
+import { Search, SearchX } from "lucide-react";
+import { Dialog } from "@/components/ui/Dialog";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SkeletonLines } from "@/components/ui/Skeleton";
 
 const LIMIT = 8;
 
@@ -58,67 +62,60 @@ export function DocumentPicker({
   }, [search, excludeId]);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="انتخاب مستند"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 p-4 pt-24"
-      onKeyDown={(event) => event.key === "Escape" && onClose()}
-      onClick={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div className="w-full max-w-xl rounded-lg bg-white p-5 shadow-xl">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">انتخاب مستند ضمیمه</h2>
-          <button type="button" onClick={onClose} className="text-sm text-slate-500 hover:text-slate-800">
-            بستن
-          </button>
-        </div>
-
+    <Dialog label="انتخاب مستند" title="انتخاب مستند ضمیمه" onClose={onClose} size="lg">
+      <div className="relative">
+        <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
         <input
           type="search"
           autoFocus
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="جست و جو — عنوان یا کد مستند"
-          className={inputClass}
+          aria-label="جست و جوی مستند"
+          className={`${inputClass} pr-9`}
         />
-
-        <div className="mt-3 max-h-80 overflow-y-auto">
-          {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          {!error && loading && results.length === 0 && <p className="py-4 text-center text-sm text-slate-500">در حال جست و جو...</p>}
-          {!error && !loading && results.length === 0 && (
-            <p className="py-4 text-center text-sm text-slate-500">مستندی یافت نشد.</p>
-          )}
-          <ul className="divide-y divide-slate-100">
-            {results.map((row) => (
-              <li key={row.id}>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onSelect({
-                      id: row.id,
-                      full_code: row.full_code,
-                      title: row.title,
-                      status: row.status,
-                      status_label: row.status_label,
-                    })
-                  }
-                  className="flex w-full items-center justify-between gap-3 px-2 py-2.5 text-right hover:bg-slate-50"
-                >
-                  <span className="flex min-w-0 items-center gap-3">
-                    <Code>{row.full_code}</Code>
-                    <span className="truncate text-sm text-slate-800">{row.title}</span>
-                  </span>
-                  <StatusBadge status={row.status} label={row.status_label} />
-                </button>
-              </li>
-            ))}
-          </ul>
-          {count > LIMIT + 1 && (
-            <p className="pt-3 text-center text-xs text-slate-400">نتایج بیشتری هست — جست و جو را دقیق‌تر کنید.</p>
-          )}
-        </div>
       </div>
-    </div>
+
+      <div className="max-h-80 overflow-y-auto">
+        {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+        {!error && loading && results.length === 0 && (
+          <div role="status" className="space-y-3 py-2">
+            <p className="text-sm text-slate-500">در حال جست و جو...</p>
+            <SkeletonLines rows={3} />
+          </div>
+        )}
+        {!error && !loading && results.length === 0 && (
+          <EmptyState compact icon={<SearchX />} message="مستندی یافت نشد." />
+        )}
+        <ul className="space-y-1">
+          {results.map((row) => (
+            <li key={row.id}>
+              <button
+                type="button"
+                onClick={() =>
+                  onSelect({
+                    id: row.id,
+                    full_code: row.full_code,
+                    title: row.title,
+                    status: row.status,
+                    status_label: row.status_label,
+                  })
+                }
+                className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-right transition-colors hover:bg-brand-50/70"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <Code>{row.full_code}</Code>
+                  <span className="truncate text-sm text-slate-800">{row.title}</span>
+                </span>
+                <StatusBadge status={row.status} label={row.status_label} />
+              </button>
+            </li>
+          ))}
+        </ul>
+        {count > LIMIT + 1 && (
+          <p className="pt-3 text-center text-xs text-slate-400">نتایج بیشتری هست — جست و جو را دقیق‌تر کنید.</p>
+        )}
+      </div>
+    </Dialog>
   );
 }

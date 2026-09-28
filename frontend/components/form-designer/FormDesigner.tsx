@@ -1,5 +1,9 @@
 "use client";
 
+import { MousePointerClick, Plus } from "lucide-react";
+import { cardClass } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Tabs } from "@/components/ui/Tabs";
 import { useState } from "react";
 import {
   ELEMENT_GROUP_LABELS,
@@ -80,11 +84,14 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
   return (
     <DesignerShell doc={doc} wide>
       {canEdit && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <span className="text-sm font-semibold text-slate-700">افزودن:</span>
+        <div className={`${cardClass} flex flex-wrap items-center gap-x-5 gap-y-2.5 px-4 py-3`}>
+          <span className="flex items-center gap-1.5 text-sm font-bold text-slate-700">
+            <Plus className="size-4 text-brand-600" />
+            افزودن:
+          </span>
           {groups.map(({ group, kinds }) => (
             <div key={group} className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-slate-500">{ELEMENT_GROUP_LABELS[group]}</span>
+              <span className="text-xs text-slate-400">{ELEMENT_GROUP_LABELS[group]}</span>
               {kinds.map(({ kind, label }) => (
                 <button
                   key={kind}
@@ -92,9 +99,9 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
                   disabled={locked || full}
                   title={full ? `یک فرم حداکثر ${MAX_ELEMENTS.toLocaleString("fa-IR")} جزء دارد.` : undefined}
                   onClick={() => add(kind)}
-                  className="rounded bg-indigo-600 px-2.5 py-1 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-8 items-center rounded-lg bg-brand-50 px-2.5 text-sm text-brand-800 ring-1 ring-inset ring-brand-600/15 transition-[background-color,transform] duration-150 hover:bg-brand-100 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-brand-50"
                 >
-                  + {label}
+                  {label}
                 </button>
               ))}
             </div>
@@ -125,28 +132,17 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
           onUpdate={updateElement}
         />
 
-        <aside className="rounded-lg border border-slate-200 bg-white shadow-sm xl:sticky xl:top-4">
-          <div role="tablist" className="flex border-b border-slate-200 text-sm">
-            {(
-              [
-                ["element", "ویژگی‌های جزء"],
-                ["page", "صفحه و سربرگ"],
-              ] as [Tab, string][]
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={tab === id}
-                onClick={() => setTab(id)}
-                className={`flex-1 px-3 py-2.5 font-medium ${
-                  tab === id ? "border-b-2 border-indigo-600 text-indigo-700" : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        <aside className={`${cardClass} overflow-hidden xl:sticky xl:top-4`}>
+          <Tabs
+            label="ویژگی‌ها"
+            className="px-2"
+            items={[
+              { id: "element" as Tab, label: "ویژگی‌های جزء" },
+              { id: "page" as Tab, label: "صفحه و سربرگ" },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
           <div className="p-4">
             {tab === "element" &&
               (selected ? (
@@ -157,7 +153,7 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
                   update={(updater) => updateElement(selected.key, updater)}
                 />
               ) : (
-                <p className="text-sm text-slate-500">برای دیدن ویژگی‌ها، روی یکی از اجزای فرم کلیک کنید.</p>
+                <EmptyState compact icon={<MousePointerClick />} message="برای دیدن ویژگی‌ها، روی یکی از اجزای فرم کلیک کنید." />
               ))}
             {tab === "page" && (
               <div className="space-y-6">
@@ -166,8 +162,8 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
                   disabled={locked}
                   onChange={(settings) => edit((current) => ({ ...current, settings }))}
                 />
-                <section className="space-y-2 border-t border-slate-200 pt-4">
-                  <h3 className="text-sm font-semibold text-slate-800">لوگو</h3>
+                <section className="space-y-2 border-t border-slate-100 pt-4">
+                  <h3 className="text-sm font-bold text-slate-800">لوگو</h3>
                   <LogoSection
                     endpoint={`/documents/${document.id}/logo/`}
                     logoUrl={content.logo_url}
@@ -175,8 +171,8 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
                     onChange={(logoUrl) => doc.setContent((current) => ({ ...current, logo_url: logoUrl }))}
                   />
                 </section>
-                <section className="space-y-2 border-t border-slate-200 pt-4">
-                  <h3 className="text-sm font-semibold text-slate-800">پاورقی</h3>
+                <section className="space-y-2 border-t border-slate-100 pt-4">
+                  <h3 className="text-sm font-bold text-slate-800">پاورقی</h3>
                   <FootnoteFields
                     footnote1={state.footnote1}
                     footnote2={state.footnote2}

@@ -10,6 +10,11 @@ import { WorkflowActions } from "@/components/WorkflowActions";
 import { WorkflowTimeline } from "@/components/WorkflowTimeline";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import type { DesignerDocument } from "./useDesignerDocument";
+import { ArrowRight, Eye, Redo2, RotateCcw, Save, Undo2 } from "lucide-react";
+import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { cardClass } from "@/components/ui/Card";
+import { cx } from "@/components/ui/cx";
 
 /**
  * The frame every document body is edited in, whatever its kind: the header card
@@ -39,20 +44,26 @@ export function DesignerShell<S>({
   return (
     <div className={`mx-auto ${width} space-y-6`}>
       <nav className="text-sm">
-        <Link href="/documents" className="text-slate-500 hover:text-slate-800">
-          ← بازگشت به فهرست مستندات
+        <Link
+          href="/documents"
+          className="group inline-flex items-center gap-1.5 text-slate-500 transition-colors hover:text-slate-900"
+        >
+          <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+          بازگشت به فهرست مستندات
         </Link>
       </nav>
 
-      <header className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <header className={cx(cardClass, "relative overflow-hidden p-5 sm:p-6")}>
+        {/* A thin brand rule across the top of the document's header card. */}
+        <div aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-brand-500 via-indigo-400 to-emerald-400 opacity-80" />
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{document.title}</h1>
-            <p className="mt-1 text-sm text-slate-500">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold leading-10 text-slate-900">{document.title}</h1>
+            <p className="mt-0.5 text-sm text-slate-500">
               {document.group_label} · {document.category_label}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Code>{document.full_code}</Code>
             <StatusBadge status={document.status} label={document.status_label} />
           </div>
@@ -70,63 +81,76 @@ export function DesignerShell<S>({
       </header>
 
       {document.return_note && (
-        <div role="status" className="space-y-1 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          <p className="font-semibold">
-            این مستند مرجوع شده است — {document.return_note.by}
-            {document.return_note.by_title ? ` (${document.return_note.by_title})` : ""} ·{" "}
-            {formatJalali(document.return_note.at)}
-          </p>
+        <Alert
+          tone="danger"
+          role="status"
+          title={
+            <>
+              این مستند مرجوع شده است — {document.return_note.by}
+              {document.return_note.by_title ? ` (${document.return_note.by_title})` : ""} ·{" "}
+              {formatJalali(document.return_note.at)}
+            </>
+          }
+        >
           <p className="whitespace-pre-wrap">{document.return_note.reason}</p>
-          <p className="text-red-700">پس از اصلاح، مستند را دوباره برای تایید ارسال کنید.</p>
-        </div>
+          <p className="text-rose-700">پس از اصلاح، مستند را دوباره برای تایید ارسال کنید.</p>
+        </Alert>
       )}
 
       <WorkflowTimeline documentId={document.id} version={document.status} />
 
       {!canEdit && (
-        <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <Alert tone="warning">
           {content.editable
             ? "شما دسترسی ویرایش این مستند را ندارید؛ فقط می‌توانید آن را ببینید."
             : "این مستند دیگر پیش‌نویس نیست و محتوای آن قفل شده است؛ فقط می‌توانید آن را ببینید."}
-        </div>
+        </Alert>
       )}
 
       {doc.recovery?.kind === "offer" && canEdit && (
-        <div role="status" className="flex flex-wrap items-center gap-3 rounded border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          <p className="flex-1">
-            تغییرات ذخیره‌نشده‌ای از {formatJalaliDateTime(new Date(doc.recovery.at))} در همین مرورگر پیدا شد.
-          </p>
-          <button type="button" onClick={doc.restoreDraft} className="rounded bg-sky-700 px-3 py-1.5 font-medium text-white hover:bg-sky-800">
-            بازیابی
-          </button>
-          <button type="button" onClick={doc.discardDraft} className="rounded border border-sky-300 bg-white px-3 py-1.5 text-sky-800 hover:bg-sky-100">
-            نادیده گرفتن
-          </button>
-        </div>
+        <Alert
+          tone="info"
+          role="status"
+          actions={
+            <>
+              <Button size="sm" variant="primary" icon={<RotateCcw />} onClick={doc.restoreDraft}>
+                بازیابی
+              </Button>
+              <Button size="sm" variant="ghost" onClick={doc.discardDraft}>
+                نادیده گرفتن
+              </Button>
+            </>
+          }
+        >
+          تغییرات ذخیره‌نشده‌ای از {formatJalaliDateTime(new Date(doc.recovery.at))} در همین مرورگر پیدا شد.
+        </Alert>
       )}
       {doc.recovery?.kind === "stale" && (
-        <div role="status" className="flex flex-wrap items-center gap-3 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <p className="flex-1">
-            تغییرات ذخیره‌نشده‌ای از {formatJalaliDateTime(new Date(doc.recovery.at))} پیدا شد، اما مستند پس از آن ذخیره شده است؛
-            برای اینکه کار دیگران پاک نشود، کنار گذاشته شد.
-          </p>
-          <button type="button" onClick={doc.discardDraft} className="rounded border border-amber-300 bg-white px-3 py-1.5 text-amber-800 hover:bg-amber-100">
-            بستن
-          </button>
-        </div>
+        <Alert
+          tone="warning"
+          role="status"
+          actions={
+            <Button size="sm" variant="ghost" onClick={doc.discardDraft}>
+              بستن
+            </Button>
+          }
+        >
+          تغییرات ذخیره‌نشده‌ای از {formatJalaliDateTime(new Date(doc.recovery.at))} پیدا شد، اما مستند پس از آن ذخیره شده است؛
+          برای اینکه کار دیگران پاک نشود، کنار گذاشته شد.
+        </Alert>
       )}
 
       {doc.conflict && (
-        <div className="space-y-2 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <p>این مستند در همین فاصله توسط شخص دیگری ذخیره شده است. برای ادامه باید آخرین نسخه را بارگذاری کنید.</p>
-          <button
-            type="button"
-            onClick={() => void doc.reload()}
-            className="rounded bg-red-700 px-3 py-1.5 font-medium text-white hover:bg-red-800"
-          >
-            بارگذاری آخرین نسخه (تغییرات ذخیره‌نشده از بین می‌رود)
-          </button>
-        </div>
+        <Alert
+          tone="danger"
+          actions={
+            <Button size="sm" variant="danger" icon={<RotateCcw />} onClick={() => void doc.reload()}>
+              بارگذاری آخرین نسخه (تغییرات ذخیره‌نشده از بین می‌رود)
+            </Button>
+          }
+        >
+          این مستند در همین فاصله توسط شخص دیگری ذخیره شده است. برای ادامه باید آخرین نسخه را بارگذاری کنید.
+        </Alert>
       )}
 
       {children}
@@ -135,57 +159,63 @@ export function DesignerShell<S>({
           slide it under the sidebar). The negative margins cancel <main>'s padding
           (p-4 sm:p-6 md:p-8, app/(app)/layout.tsx) at every width, so the bar spans
           the column edge to edge without pushing the page sideways on a phone. */}
-      <div className="sticky bottom-0 z-40 -mx-4 -mb-4 mt-6 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6 md:-mx-8 md:-mb-8 md:px-8">
-        <div className={`mx-auto flex ${width} flex-wrap items-center gap-3`}>
+      <div className="sticky bottom-0 z-40 -mx-4 -mb-4 mt-6 border-t border-slate-200/80 bg-white/85 px-4 py-3 shadow-[0_-8px_24px_-12px_rgb(15_23_42/0.15)] backdrop-blur-md sm:-mx-6 sm:-mb-6 sm:px-6 md:-mx-8 md:-mb-8 md:px-8">
+        <div className={`mx-auto flex ${width} flex-wrap items-center gap-2 sm:gap-3`}>
           {canEdit && (
             <>
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                icon={<Save />}
                 onClick={() => void doc.save()}
                 disabled={saveBlocked || !dirty}
+                loading={saving}
                 title={pendingUploads > 0 ? "تا پایان بارگذاری فایل‌ها صبر کنید." : "ذخیره و ادامهٔ ویرایش"}
-                className="rounded bg-purple-800 px-6 py-2 text-sm font-semibold text-white hover:bg-purple-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="px-5"
               >
                 {saving ? "در حال ذخیره..." : "ذخیره"}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="subtle"
                 onClick={() => void doc.save({ andReturn: true })}
                 disabled={saveBlocked || !dirty}
                 title="ذخیره و بازگشت به فهرست مستندات"
-                className="rounded border border-purple-800 bg-white px-4 py-2 text-sm font-medium text-purple-800 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 ذخیره و بازگشت
-              </button>
-              <span className="flex items-center" role="group" aria-label="واگرد و ازنو">
+              </Button>
+              <span
+                className="flex items-center rounded-lg border border-slate-300 bg-white shadow-xs"
+                role="group"
+                aria-label="واگرد و ازنو"
+              >
                 <button
                   type="button"
                   onClick={doc.undo}
                   disabled={!doc.canUndo || saving}
                   title="واگرد (Ctrl+Z)"
                   aria-label="واگرد"
-                  className="rounded-s border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex size-10 items-center justify-center rounded-s-lg text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
                 >
-                  ↶
+                  <Undo2 className="rtl-flip size-4" />
                 </button>
+                <span aria-hidden className="h-5 w-px bg-slate-200" />
                 <button
                   type="button"
                   onClick={doc.redo}
                   disabled={!doc.canRedo || saving}
                   title="ازنو (Ctrl+Shift+Z)"
                   aria-label="ازنو"
-                  className="-ms-px rounded-e border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex size-10 items-center justify-center rounded-e-lg text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
                 >
-                  ↷
+                  <Redo2 className="rtl-flip size-4" />
                 </button>
               </span>
             </>
           )}
-          <button
-            type="button"
+          <Button
+            icon={<Eye />}
             onClick={doc.preview}
-            disabled={!can("print_document") || dirty || saving || previewing}
-            aria-busy={previewing}
+            disabled={!can("print_document") || dirty || saving}
+            loading={previewing}
             title={
               !can("print_document")
                 ? "دسترسی لازم برای ساخت PDF را ندارید."
@@ -193,16 +223,27 @@ export function DesignerShell<S>({
                   ? "ابتدا تغییرات را ذخیره کنید؛ پیش‌نمایش آخرین نسخهٔ ذخیره‌شده را نشان می‌دهد."
                   : "پیش‌نمایش PDF با واترمارک"
             }
-            className="rounded border border-slate-300 bg-white px-6 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
           >
             {previewing ? "در حال ساخت…" : "نمایش"}
-          </button>
+          </Button>
 
-          {dirty && canEdit && <span className="text-sm text-amber-700">تغییرات ذخیره‌نشده</span>}
-          {pendingUploads > 0 && <span className="text-sm text-slate-500">در حال بارگذاری فایل...</span>}
-          {notice && !dirty && <span className="text-sm text-green-700">{notice}</span>}
+          <span className="flex flex-wrap items-center gap-3 text-sm" aria-live="polite">
+            {dirty && canEdit && (
+              <span className="inline-flex items-center gap-1.5 text-amber-700 animate-fade-in">
+                <span aria-hidden className="size-2 rounded-full bg-amber-500 shadow-[0_0_0_3px_rgb(245_158_11/0.2)]" />
+                تغییرات ذخیره‌نشده
+              </span>
+            )}
+            {pendingUploads > 0 && <span className="text-slate-500">در حال بارگذاری فایل...</span>}
+            {notice && !dirty && (
+              <span className="inline-flex items-center gap-1.5 text-emerald-700 animate-fade-in">
+                <span aria-hidden className="size-2 rounded-full bg-emerald-500" />
+                {notice}
+              </span>
+            )}
+          </span>
           {saveErrors.length > 0 && (
-            <ul className="w-full list-disc space-y-0.5 ps-5 text-sm text-red-700">
+            <ul className="w-full list-disc space-y-0.5 rounded-lg bg-rose-50 py-2 ps-8 pe-3 text-sm text-rose-800">
               {saveErrors.map((message, i) => (
                 <li key={i}>{message}</li>
               ))}

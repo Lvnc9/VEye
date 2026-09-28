@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, X } from "lucide-react";
 import {
   ANSWER_KIND_LABELS,
   MAX_MATRIX_ITEMS,
@@ -44,7 +45,9 @@ import { Check, Field, NumberInput, Select } from "./Inspector";
 type Patch<T> = (patch: Partial<T>) => void;
 
 const smallButton =
-  "rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 shadow-xs " +
+  "transition-[background-color,transform] duration-150 hover:bg-slate-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 " +
+  "disabled:active:scale-100 [&_svg]:size-3.5";
 
 function withWidths(cells: FieldCell[], widths: number[]): FieldCell[] {
   return cells.map((cell, i) => ({ ...cell, width: widths[i] }));
@@ -77,11 +80,11 @@ export function FieldsEditor({ element, disabled, set }: { element: FieldsProps;
 
       <div className="space-y-3">
         {element.rows.map((row, r) => (
-          <fieldset key={r} className="space-y-2 rounded border border-slate-200 p-2">
-            <legend className="flex w-full items-center gap-1 px-1 text-xs font-medium text-slate-600">
+          <fieldset key={r} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/40 p-2.5">
+            <legend className="flex w-full items-center gap-1 px-1 text-xs font-bold text-slate-600">
               <span className="flex-1">ردیف {(r + 1).toLocaleString("fa-IR")}</span>
               <button type="button" className={smallButton} disabled={disabled || r === 0} aria-label="ردیف بالا" onClick={() => set({ rows: moveElement(element.rows, r, r - 1) })}>
-                ↑
+                <ChevronUp />
               </button>
               <button
                 type="button"
@@ -90,16 +93,16 @@ export function FieldsEditor({ element, disabled, set }: { element: FieldsProps;
                 aria-label="ردیف پایین"
                 onClick={() => set({ rows: moveElement(element.rows, r, r + 1) })}
               >
-                ↓
+                <ChevronDown />
               </button>
               <button
                 type="button"
-                className={`${smallButton} text-red-600`}
+                className={`${smallButton} text-rose-600 hover:bg-rose-50`}
                 disabled={disabled || element.rows.length === 1}
                 aria-label="حذف ردیف"
                 onClick={() => set({ rows: element.rows.filter((_, i) => i !== r) })}
               >
-                ✕
+                <X />
               </button>
             </legend>
             {row.cells.map((cell, c) => (
@@ -116,7 +119,7 @@ export function FieldsEditor({ element, disabled, set }: { element: FieldsProps;
                   />
                   <button
                     type="button"
-                    className={`${smallButton} text-red-600`}
+                    className={`${smallButton} text-rose-600 hover:bg-rose-50`}
                     disabled={disabled || row.cells.length === 1}
                     aria-label="حذف خانه"
                     onClick={() => {
@@ -124,7 +127,7 @@ export function FieldsEditor({ element, disabled, set }: { element: FieldsProps;
                       setRow(r, withWidths(cells, evenWidths(cells.length)));
                     }}
                   >
-                    ✕
+                    <X />
                   </button>
                 </div>
                 <div className="grid grid-cols-[1fr_5.5rem] gap-1">
@@ -223,7 +226,7 @@ export function SignaturesEditor({ element, disabled, set }: { element: Signatur
   return (
     <div className="space-y-4">
       {element.boxes.map((box, b) => (
-        <fieldset key={b} className="space-y-2 rounded border border-slate-200 p-2">
+        <fieldset key={b} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/40 p-2.5">
           <div className="flex gap-1">
             <input
               value={box.caption}
@@ -235,12 +238,12 @@ export function SignaturesEditor({ element, disabled, set }: { element: Signatur
             />
             <button
               type="button"
-              className={`${smallButton} text-red-600`}
+              className={`${smallButton} text-rose-600 hover:bg-rose-50`}
               disabled={disabled || element.boxes.length === 1}
               aria-label="حذف کادر"
               onClick={() => set({ boxes: element.boxes.filter((_, i) => i !== b) })}
             >
-              ✕
+              <X />
             </button>
           </div>
           <Check label="خط نام و نام خانوادگی" checked={box.name_line} disabled={disabled} onChange={(name_line) => setBox(b, { name_line })} />
@@ -283,28 +286,28 @@ export function TableEditor({ element, disabled, set }: { element: TableProps; d
       </Field>
 
       <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-700">ستون‌ها (از راست به چپ)</p>
+        <p className="text-sm font-bold text-slate-700">ستون‌ها (از راست به چپ)</p>
         {element.columns.map((column, c) => (
-          <div key={c} className="space-y-1 rounded border border-slate-200 p-2">
+          <div key={c} className="space-y-1 rounded-xl border border-slate-200 bg-slate-50/40 p-2.5">
             <div className="flex items-center gap-1 text-xs text-slate-600">
               <span className="flex-1 truncate">
                 ستون {(c + 1).toLocaleString("fa-IR")}
                 {element.header[element.header.length - 1][c] ? ` — ${element.header[element.header.length - 1][c]}` : ""}
               </span>
               <button type="button" className={smallButton} disabled={disabled || c === 0} aria-label="جابه‌جایی به راست" onClick={() => table((t) => moveColumn(t, c, c - 1))}>
-                →
+                <ArrowRight />
               </button>
               <button type="button" className={smallButton} disabled={disabled || c === count - 1} aria-label="جابه‌جایی به چپ" onClick={() => table((t) => moveColumn(t, c, c + 1))}>
-                ←
+                <ArrowLeft />
               </button>
               <button
                 type="button"
-                className={`${smallButton} text-red-600`}
+                className={`${smallButton} text-rose-600 hover:bg-rose-50`}
                 disabled={disabled || count === 1}
                 aria-label="حذف ستون"
                 onClick={() => table((t) => removeColumn(t, c))}
               >
-                ✕
+                <X />
               </button>
             </div>
             <div className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-1">
@@ -429,16 +432,16 @@ function StringList({
             className={`${inputClass} py-1`}
           />
           <button type="button" className={smallButton} disabled={disabled || i === 0} aria-label="بالا" onClick={() => onChange(moveElement(values, i, i - 1))}>
-            ↑
+            <ChevronUp />
           </button>
           <button
             type="button"
-            className={`${smallButton} text-red-600`}
+            className={`${smallButton} text-rose-600 hover:bg-rose-50`}
             disabled={disabled || values.length <= min}
             aria-label="حذف"
             onClick={() => onChange(values.filter((_, j) => j !== i))}
           >
-            ✕
+            <X />
           </button>
         </div>
       ))}
@@ -456,7 +459,7 @@ export function ChoicesEditor({ element, disabled, set }: { element: ChoicesProp
         <input value={element.label} maxLength={MAX_LABEL} disabled={disabled} onChange={(event) => set({ label: event.target.value })} className={inputClass} />
       </Field>
       <div>
-        <p className="mb-1 text-sm font-medium text-slate-700">گزینه‌ها</p>
+        <p className="mb-1 text-sm font-bold text-slate-700">گزینه‌ها</p>
         <StringList values={element.options} min={1} max={MAX_OPTIONS} disabled={disabled} addLabel="گزینه" onChange={(options) => set({ options })} />
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -501,11 +504,11 @@ export function MatrixEditor({ element, disabled, set }: { element: MatrixProps;
         <input value={element.title} maxLength={MAX_LABEL} disabled={disabled} placeholder="مثال: ارزیابی عملکرد" onChange={(event) => set({ title: event.target.value })} className={inputClass} />
       </Field>
       <div>
-        <p className="mb-1 text-sm font-medium text-slate-700">موارد (ردیف‌ها)</p>
+        <p className="mb-1 text-sm font-bold text-slate-700">موارد (ردیف‌ها)</p>
         <StringList values={element.items} min={1} max={MAX_MATRIX_ITEMS} disabled={disabled} addLabel="مورد" onChange={(items) => set({ items })} />
       </div>
       <div>
-        <p className="mb-1 text-sm font-medium text-slate-700">درجه‌ها (ستون‌ها)</p>
+        <p className="mb-1 text-sm font-bold text-slate-700">درجه‌ها (ستون‌ها)</p>
         <StringList values={element.scale} min={2} max={MAX_SCALE} disabled={disabled} addLabel="درجه" onChange={(scale) => set({ scale })} />
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -545,11 +548,11 @@ export function QuestionsEditor({ element, disabled, set }: { element: Questions
     <div className="space-y-3">
       <Check label="شماره‌گذاری پرسش‌ها" checked={element.numbered} disabled={disabled} onChange={(numbered) => set({ numbered })} />
       {element.items.map((item, i) => (
-        <fieldset key={i} className="space-y-2 rounded border border-slate-200 p-2">
-          <legend className="flex w-full items-center gap-1 px-1 text-xs font-medium text-slate-600">
+        <fieldset key={i} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/40 p-2.5">
+          <legend className="flex w-full items-center gap-1 px-1 text-xs font-bold text-slate-600">
             <span className="flex-1">پرسش {(i + 1).toLocaleString("fa-IR")}</span>
             <button type="button" className={smallButton} disabled={disabled || i === 0} aria-label="بالا" onClick={() => set({ items: moveElement(element.items, i, i - 1) })}>
-              ↑
+              <ChevronUp />
             </button>
             <button
               type="button"
@@ -558,16 +561,16 @@ export function QuestionsEditor({ element, disabled, set }: { element: Questions
               aria-label="پایین"
               onClick={() => set({ items: moveElement(element.items, i, i + 1) })}
             >
-              ↓
+              <ChevronDown />
             </button>
             <button
               type="button"
-              className={`${smallButton} text-red-600`}
+              className={`${smallButton} text-rose-600 hover:bg-rose-50`}
               disabled={disabled || element.items.length === 1}
               aria-label="حذف پرسش"
               onClick={() => set({ items: element.items.filter((_, j) => j !== i) })}
             >
-              ✕
+              <X />
             </button>
           </legend>
           <textarea

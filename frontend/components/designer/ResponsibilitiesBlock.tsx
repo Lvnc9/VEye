@@ -2,6 +2,7 @@
 
 import { RESPONSIBILITY_ROLE_LABELS, TITLE_MATRIX, type ResponsibilitiesSection, type RoleRow } from "@/lib/types";
 import { AddButton, FieldLabel, IconButton, inputClass, type BlockProps } from "./ui";
+import { X } from "lucide-react";
 
 /** The nine job titles from the personnel matrix, offered as suggestions. The
  *  fields stay free text: V_1.0's dropdowns for these each held a single
@@ -26,12 +27,12 @@ export function ResponsibilitiesBlock({ section, disabled, update }: BlockProps<
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-right text-sm">
-          <thead className="text-slate-500">
+          <thead className="text-xs text-slate-500">
             <tr>
-              <th className="w-28 px-2 pb-2 font-medium">نقش</th>
-              <th className="px-2 pb-2 font-medium">سمت</th>
-              <th className="px-2 pb-2 font-medium">ناظر</th>
-              <th className="px-2 pb-2 font-medium">توضیحات</th>
+              <th className="w-28 px-2 pb-2 font-normal">نقش</th>
+              <th className="px-2 pb-2 font-normal">سمت</th>
+              <th className="px-2 pb-2 font-normal">ناظر</th>
+              <th className="px-2 pb-2 font-normal">توضیحات</th>
             </tr>
           </thead>
           <tbody>
@@ -99,7 +100,7 @@ export function ResponsibilitiesBlock({ section, disabled, update }: BlockProps<
                 tone="danger"
                 onClick={() => update((s) => ({ ...s, notes: s.notes.filter((_, i) => i !== position) }))}
               >
-                ✕
+                <X />
               </IconButton>
             )}
           </div>

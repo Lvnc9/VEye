@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown, ChevronUp, GripVertical, X } from "lucide-react";
 import type { CSSProperties } from "react";
 import {
   FOOTER_HEIGHT,
@@ -69,10 +70,10 @@ export function FormCanvas({
   } as CSSProperties;
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-100 p-2 sm:p-4">
+    <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.35)_1px,transparent_0)] bg-[length:18px_18px] bg-slate-100 p-2 shadow-card sm:p-5">
       <div style={{ containerType: "inline-size" }} className={settings.orientation === "landscape" ? "" : "mx-auto max-w-[820px]"}>
         <div
-          className="flex flex-col bg-white text-slate-950 shadow-md"
+          className="flex flex-col bg-white text-slate-950 shadow-[0_1px_3px_rgb(15_23_42/0.12),0_16px_40px_-16px_rgb(15_23_42/0.35)]"
           style={pageStyle}
           onClick={() => onSelect(null)}
         >
@@ -99,35 +100,35 @@ export function FormCanvas({
                     onSelect(element.key);
                   }}
                   className={`group relative -mx-[3px] rounded-sm px-[3px] outline-offset-2 ${
-                    selected ? "outline outline-2 outline-indigo-500" : "hover:outline hover:outline-1 hover:outline-indigo-200"
+                    selected ? "outline outline-2 outline-brand-500" : "hover:outline hover:outline-1 hover:outline-brand-300"
                   } ${drag.isDragging(index) ? "opacity-40" : ""}`}
                 >
                   {marker && (
                     <span
                       aria-hidden="true"
-                      className={`absolute inset-x-0 h-0.5 bg-indigo-500 ${marker === "before" ? "-top-px" : "-bottom-px"}`}
+                      className={`absolute inset-x-0 h-0.5 bg-brand-500 shadow-[0_0_8px_rgb(14_165_233/0.6)] ${marker === "before" ? "-top-px" : "-bottom-px"}`}
                     />
                   )}
                   {!locked && (
                     <div
-                      className={`absolute -top-3 start-0 z-10 items-center gap-0.5 rounded border border-slate-200 bg-white px-0.5 text-xs shadow-sm ${
+                      className={`absolute -top-3.5 start-0 z-10 items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 text-xs shadow-raised animate-fade-in ${
                         selected ? "flex" : "hidden group-hover:flex"
                       }`}
                     >
                       <span
                         {...drag.gripProps(index, element.key)}
-                        className="cursor-grab px-1 text-slate-500 active:cursor-grabbing"
+                        className="flex h-6 cursor-grab items-center px-0.5 text-slate-400 hover:text-slate-700 active:cursor-grabbing"
                       >
-                        ⠿
+                        <GripVertical className="size-3.5" />
                       </span>
                       <ToolButton label="بالا" disabled={index === 0} onClick={() => onMove(index, -1)}>
-                        ↑
+                        <ChevronUp />
                       </ToolButton>
                       <ToolButton label="پایین" disabled={index === elements.length - 1} onClick={() => onMove(index, 1)}>
-                        ↓
+                        <ChevronDown />
                       </ToolButton>
                       <ToolButton label="حذف" danger onClick={() => onRemove(element.key)}>
-                        ✕
+                        <X />
                       </ToolButton>
                     </div>
                   )}
@@ -163,7 +164,7 @@ function ToolButton({
   disabled?: boolean;
   danger?: boolean;
   onClick: () => void;
-  children: string;
+  children: React.ReactNode;
 }) {
   return (
     <button
@@ -175,7 +176,7 @@ function ToolButton({
         event.stopPropagation();
         onClick();
       }}
-      className={`h-6 min-w-6 rounded px-1 disabled:opacity-30 ${danger ? "text-red-600 hover:bg-red-50" : "text-slate-600 hover:bg-slate-100"}`}
+      className={`flex size-6 items-center justify-center rounded-md transition-colors disabled:opacity-30 [&_svg]:size-3.5 ${danger ? "text-rose-600 hover:bg-rose-50" : "text-slate-600 hover:bg-slate-100"}`}
     >
       {children}
     </button>

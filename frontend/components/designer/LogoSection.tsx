@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ApiError, apiDelete, apiUpload } from "@/lib/api-client";
+import { buttonClass } from "@/components/ui/Button";
 
 /** A logo picker: saved as soon as a file is picked or removed, independently of
  *  any «ذخیره». `endpoint` takes POST (multipart `logo`) and DELETE, and answers
@@ -56,7 +57,7 @@ export function LogoSection({
 
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded border border-slate-200 bg-slate-50">
+      <div className="flex size-24 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.3)_1px,transparent_0)] bg-[length:10px_10px] bg-slate-50">
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- an authenticated API image, not a static asset
           <img src={logoUrl} alt={alt} className="max-h-full max-w-full object-contain" />
@@ -78,7 +79,7 @@ export function LogoSection({
               type="button"
               disabled={busy}
               onClick={() => input.current?.click()}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              className={buttonClass({ size: "sm" })}
             >
               {logoUrl ? "تغییر لوگو" : "انتخاب لوگو"}
             </button>
@@ -87,14 +88,14 @@ export function LogoSection({
                 type="button"
                 disabled={busy}
                 onClick={() => void removeLogo()}
-                className="rounded border border-red-200 bg-white px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                className={buttonClass({ size: "sm", variant: "danger-ghost" })}
               >
                 حذف لوگو
               </button>
             )}
           </div>
           <p className="text-xs text-slate-500">تصویر PNG یا JPEG؛ لوگو بلافاصله ذخیره می‌شود.</p>
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-rose-600">{error}</p>}
         </div>
       )}
     </div>

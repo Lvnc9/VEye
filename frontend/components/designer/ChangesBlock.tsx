@@ -4,6 +4,7 @@ import { formatJalali, todayJalali } from "@/lib/jalali";
 import type { ChangesSection, PreviousChange } from "@/lib/types";
 import { Code } from "../Code";
 import { AddButton, IconButton, inputClass, type BlockProps } from "./ui";
+import { X } from "lucide-react";
 
 /**
  * جدول تغییرات — the change log.
@@ -38,12 +39,12 @@ export function ChangesBlock({
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-right text-sm">
-          <thead className="text-slate-500">
+          <thead className="text-xs text-slate-500">
             <tr>
-              <th className="w-16 px-2 pb-2 font-medium">ردیف</th>
-              <th className="w-28 px-2 pb-2 font-medium">شماره ویرایش</th>
-              <th className="w-32 px-2 pb-2 font-medium">تاریخ ویرایش</th>
-              <th className="px-2 pb-2 font-medium">عنوان تغییرات *</th>
+              <th className="w-16 px-2 pb-2 font-normal">ردیف</th>
+              <th className="w-28 px-2 pb-2 font-normal">شماره ویرایش</th>
+              <th className="w-32 px-2 pb-2 font-normal">تاریخ ویرایش</th>
+              <th className="px-2 pb-2 font-normal">عنوان تغییرات *</th>
               <th className="w-10" />
             </tr>
           </thead>
@@ -91,7 +92,7 @@ export function ChangesBlock({
                       tone="danger"
                       onClick={() => update((s) => ({ ...s, rows: s.rows.filter((_, i) => i !== position) }))}
                     >
-                      ✕
+                      <X />
                     </IconButton>
                   )}
                 </td>
