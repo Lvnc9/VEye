@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useReducer, useState, type Reducer, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, apiGet, apiPut } from "@/lib/api-client";
 import { PdfBuildError, buildPdf, openPdfInTab } from "@/lib/pdf";
 import { setFlash } from "@/lib/flash";
 import { useCurrentUser } from "@/lib/current-user";
 import type { ContentResponse } from "@/lib/types";
+import { emptyHistory, record, redo, undo, type History } from "@/lib/undo-history";
 
 /** How one kind of document body becomes editable state and back. The classic
  *  block designer and the form designer each supply one; everything else about
@@ -21,6 +22,35 @@ export interface DesignerAdapter<S> {
   validate(state: S): string[];
 }
 
+type Model<S> = { state: S; history: History<S> };
+
+type Action<S> =
+  | { type: "edit"; action: SetStateAction<S>; at: number }
+  | { type: "replace"; state: S; keepHistory: boolean }
+  | { type: "undo" }
+  | { type: "redo" };
+
+/** The editable state and its undo history, moved together so undo stays pure. */
+function modelReducer<S>(model: Model<S>, action: Action<S>): Model<S> {
+  switch (action.type) {
+    case "edit": {
+      const next = typeof action.action === "function" ? (action.action as (current: S) => S)(model.state) : action.action;
+      if (Object.is(next, model.state)) return model;
+      return { state: next, history: record(model.history, model.state, action.at) };
+    }
+    case "replace":
+      return { state: action.state, history: action.keepHistory ? model.history : emptyHistory() };
+    case "undo": {
+      const step = undo(model.history, model.state);
+      return step ? { state: step.state, history: step.history } : model;
+    }
+    case "redo": {
+      const step = redo(model.history, model.state);
+      return step ? { state: step.state, history: step.history } : model;
+    }
+  }
+}
+
 /** The load / save / preview life cycle of `/documents/{id}/content/`. */
 export function useDesignerDocument<S>(initial: ContentResponse, adapter: DesignerAdapter<S>) {
   const router = useRouter();
@@ -28,7 +58,13 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
   const id = initial.document.id;
 
   const [content, setContent] = useState<ContentResponse>(initial);
-  const [state, setState] = useState<S>(() => adapter.fromResponse(initial));
+  const [model, dispatch] = useReducer(modelReducer as Reducer<Model<S>, Action<S>>, undefined, () => ({
+    state: adapter.fromResponse(initial),
+    history: emptyHistory<S>(),
+  }));
+  const state = model.state;
+  /** Every edit goes through here, so it can be undone (Ctrl/⌘+Z). */
+  const setState = useCallback((action: SetStateAction<S>) => dispatch({ type: "edit", action, at: Date.now() }), []);
   const [savedSnapshot, setSavedSnapshot] = useState(() => adapter.snapshot(adapter.fromResponse(initial)));
   const [reloading, setReloading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -44,7 +80,7 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
     (response: ContentResponse) => {
       const next = adapter.fromResponse(response);
       setContent(response);
-      setState(next);
+      dispatch({ type: "replace", state: next, keepHistory: false });
       setSavedSnapshot(adapter.snapshot(next));
       setConflict(false);
       setLoadError(null);
@@ -69,6 +105,21 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
   const canEdit = content.editable && can("create_document");
   /** Every input is disabled while this is true. */
   const locked = !canEdit || saving;
+
+  // Ctrl/⌘+Z undoes, Ctrl/⌘+Shift+Z or Ctrl+Y redoes — for the whole document, text
+  // fields included. Matched on the physical key: with a Persian layout `key` is «ظ».
+  useEffect(() => {
+    if (locked) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      if (event.code === "KeyZ" && !event.shiftKey) dispatch({ type: "undo" });
+      else if ((event.code === "KeyZ" && event.shiftKey) || event.code === "KeyY") dispatch({ type: "redo" });
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [locked]);
 
   // Closing the tab with unsaved work is the one way to lose it silently.
   useEffect(() => {
@@ -120,7 +171,8 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
       // Hand back the state just sent so each block keeps its React key.
       const next = adapter.fromResponse(response, state);
       setContent(response);
-      setState(next);
+      // Saving is not a step: what came back equals what was sent, and earlier steps stay undoable.
+      dispatch({ type: "replace", state: next, keepHistory: true });
       setSavedSnapshot(adapter.snapshot(next));
       const message = `مستند ${response.document.full_code} ذخیره شد.`;
       if (andReturn) {
@@ -147,6 +199,10 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
     dirty,
     canEdit,
     locked,
+    undo: () => dispatch({ type: "undo" }),
+    redo: () => dispatch({ type: "redo" }),
+    canUndo: model.history.past.length > 0,
+    canRedo: model.history.future.length > 0,
     reloading,
     loadError,
     saving,

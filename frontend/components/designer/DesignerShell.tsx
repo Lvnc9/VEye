@@ -132,6 +132,28 @@ export function DesignerShell<S>({
               >
                 ذخیره و بازگشت
               </button>
+              <span className="flex items-center" role="group" aria-label="واگرد و ازنو">
+                <button
+                  type="button"
+                  onClick={doc.undo}
+                  disabled={!doc.canUndo || saving}
+                  title="واگرد (Ctrl+Z)"
+                  aria-label="واگرد"
+                  className="rounded-s border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ↶
+                </button>
+                <button
+                  type="button"
+                  onClick={doc.redo}
+                  disabled={!doc.canRedo || saving}
+                  title="ازنو (Ctrl+Shift+Z)"
+                  aria-label="ازنو"
+                  className="-ms-px rounded-e border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ↷
+                </button>
+              </span>
             </>
           )}
           <button
