@@ -99,7 +99,13 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
     return () => setPendingUploads((n) => n - 1);
   }, []);
 
-  async function save() {
+  /**
+   * Saves the body. Since Phase 12 (the owner's decision, 2026-09-28) the page
+   * stays open — the live paper is beside the editor; `andReturn` goes back to
+   * «ساخت مستند» afterwards, as V_1.0 always did (poster_01.py show_pdf →
+   * change_to_documents1).
+   */
+  async function save({ andReturn = false }: { andReturn?: boolean } = {}) {
     const problems = adapter.validate(state);
     if (problems.length > 0) {
       setSaveErrors(problems);
@@ -116,10 +122,13 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
       setContent(response);
       setState(next);
       setSavedSnapshot(adapter.snapshot(next));
-      // Like V_1.0 (poster_01.py show_pdf → change_to_documents1): once the document is
-      // saved, go back to «ساخت مستند», where the register says it was saved.
-      setFlash(`مستند ${response.document.full_code} ذخیره شد.`);
-      router.push("/documents");
+      const message = `مستند ${response.document.full_code} ذخیره شد.`;
+      if (andReturn) {
+        setFlash(message); // the register shows it
+        router.push("/documents");
+      } else {
+        setNotice(message);
+      }
     } catch (err) {
       const code = err instanceof ApiError ? (err.data as { code?: string } | undefined)?.code : undefined;
       if (code === "version_conflict") setConflict(true);

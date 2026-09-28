@@ -113,15 +113,26 @@ export function DesignerShell<S>({
       <div className="sticky bottom-0 z-40 -mx-4 -mb-4 mt-6 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6 md:-mx-8 md:-mb-8 md:px-8">
         <div className={`mx-auto flex ${width} flex-wrap items-center gap-3`}>
           {canEdit && (
-            <button
-              type="button"
-              onClick={() => void doc.save()}
-              disabled={saveBlocked || !dirty}
-              title={pendingUploads > 0 ? "تا پایان بارگذاری فایل‌ها صبر کنید." : undefined}
-              className="rounded bg-purple-800 px-6 py-2 text-sm font-semibold text-white hover:bg-purple-900 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? "در حال ذخیره..." : "ذخیره"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => void doc.save()}
+                disabled={saveBlocked || !dirty}
+                title={pendingUploads > 0 ? "تا پایان بارگذاری فایل‌ها صبر کنید." : "ذخیره و ادامهٔ ویرایش"}
+                className="rounded bg-purple-800 px-6 py-2 text-sm font-semibold text-white hover:bg-purple-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "در حال ذخیره..." : "ذخیره"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void doc.save({ andReturn: true })}
+                disabled={saveBlocked || !dirty}
+                title="ذخیره و بازگشت به فهرست مستندات"
+                className="rounded border border-purple-800 bg-white px-4 py-2 text-sm font-medium text-purple-800 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ذخیره و بازگشت
+              </button>
+            </>
           )}
           <button
             type="button"
