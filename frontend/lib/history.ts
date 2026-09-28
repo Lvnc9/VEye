@@ -36,10 +36,10 @@ export const EVENT_KIND_LABELS: Record<DocumentEventKind, string> = {
 
 /** Tailwind classes per event kind (a dot in the feed). */
 export const EVENT_KIND_TONE: Record<DocumentEventKind, string> = {
-  submitted: "bg-blue-500",
+  submitted: "bg-brand-500",
   confirmed: "bg-amber-500",
-  approved: "bg-green-600",
-  returned: "bg-red-500",
+  approved: "bg-emerald-500",
+  returned: "bg-rose-500",
   superseded: "bg-slate-400",
   imported: "bg-violet-400",
 };

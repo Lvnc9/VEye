@@ -1,13 +1,12 @@
 "use client";
 
+import { Eye, Printer, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { officialPdfAction } from "@/lib/pdf";
 import type { DocumentRow, PdfStatus } from "@/lib/types";
 
 const NO_ACCESS = "دسترسی لازم برای ساخت PDF را ندارید.";
 
-const primary = "rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-700";
-const secondary = "rounded border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50";
-const disabled = "cursor-not-allowed rounded bg-slate-200 px-3 py-1 text-xs font-medium text-slate-500";
 
 interface Props {
   row: DocumentRow;
@@ -31,38 +30,40 @@ interface Props {
 export function PdfActions({ row, status, canPrint, previewing, onPrint, onRebuild, onPreview }: Props) {
   const official = officialPdfAction(status);
 
+  const busy = official.mode === "busy";
   return (
     <>
       {row.action === "print" && (
         <>
-          <button
-            type="button"
+          <Button
+            size="xs"
+            variant="primary"
             onClick={onPrint}
-            disabled={!canPrint || official.mode === "busy"}
-            aria-busy={official.mode === "busy"}
+            disabled={!canPrint}
+            loading={busy}
+            icon={<Printer />}
             title={!canPrint ? NO_ACCESS : undefined}
-            className={!canPrint || official.mode === "busy" ? disabled : primary}
           >
             {official.label}
-          </button>
+          </Button>
           {status === "ready" && canPrint && (
-            <button type="button" onClick={onRebuild} className={secondary}>
+            <Button size="xs" onClick={onRebuild} icon={<RefreshCw />}>
               بازسازی
-            </button>
+            </Button>
           )}
         </>
       )}
       {row.content_saved_at && (
-        <button
-          type="button"
+        <Button
+          size="xs"
           onClick={onPreview}
-          disabled={!canPrint || previewing}
-          aria-busy={previewing}
+          disabled={!canPrint}
+          loading={previewing}
+          icon={<Eye />}
           title={!canPrint ? NO_ACCESS : "پیش‌نمایش PDF با واترمارک"}
-          className={!canPrint || previewing ? disabled : secondary}
         >
           {previewing ? "در حال ساخت…" : "نمایش"}
-        </button>
+        </Button>
       )}
     </>
   );

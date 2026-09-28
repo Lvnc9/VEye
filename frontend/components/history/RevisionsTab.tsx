@@ -4,7 +4,15 @@ import { useState } from "react";
 import { Code } from "@/components/Code";
 import { Pager } from "@/components/Pager";
 import { StatusBadge } from "@/components/StatusBadge";
-import { EmptyBanner, ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { ExternalLink, FileText, RotateCcw, SearchX, X } from "lucide-react";
+import { Alert } from "@/components/ui/Alert";
+import { Button, buttonClass } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { selectClass } from "@/components/ui/Field";
+import { cx } from "@/components/ui/cx";
+
 import { DebouncedInput } from "@/components/history/DebouncedInput";
 import { EMPTY_REVISION_FILTERS, hasActiveFilters, revisionParams, type RevisionFilters } from "@/lib/history";
 import { formatJalali } from "@/lib/jalali";
@@ -20,7 +28,7 @@ import {
 } from "@/lib/types";
 
 const PAGE_SIZE = 25;
-const select = "rounded border border-slate-300 bg-white px-3 py-2 text-sm";
+const select = cx(selectClass, "min-w-[8rem] flex-1 sm:flex-none");
 
 function Signer({ signoff }: { signoff: SignOffSummary | null }) {
   if (!signoff?.name) return <span className="text-slate-300">—</span>;
@@ -58,7 +66,7 @@ export function RevisionsTab({
 
   return (
     <div className="space-y-4">
-      <section className="flex flex-wrap items-center gap-3">
+      <Card as="section" className="flex flex-wrap items-center gap-2 p-3 sm:gap-3 sm:p-4">
         <DebouncedInput
           key={resetKey}
           value={filters.search}
@@ -93,57 +101,69 @@ export function RevisionsTab({
           ))}
         </select>
         {hasActiveFilters(filters) && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RotateCcw />}
+            className="animate-fade-in"
             onClick={() => {
               onFilters(EMPTY_REVISION_FILTERS);
               setResetKey((n) => n + 1);
               setPage(1);
             }}
-            className="text-sm text-slate-600 underline"
           >
             پاک کردن فیلترها
-          </button>
+          </Button>
         )}
-        <span className="ms-auto text-sm text-slate-500">{count} بازنگری</span>
-      </section>
+        <span className="ms-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 tabular-nums">
+          {count} بازنگری
+        </span>
+      </Card>
 
       {filters.family && (
-        <p className="rounded border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+        <Alert
+          tone="info"
+          actions={
+            <Button size="xs" variant="ghost" icon={<X />} onClick={() => update({ family: "" })}>
+              نمایش همهٔ مستندات
+            </Button>
+          }
+        >
           همهٔ بازنگری‌های مستند <Code>{filters.family}</Code>
-          <button type="button" onClick={() => update({ family: "" })} className="ms-3 underline">
-            نمایش همهٔ مستندات
-          </button>
-        </p>
+        </Alert>
       )}
 
       {error && <ErrorBanner message={error} />}
       {loading && rows.length === 0 && <LoadingBanner />}
       {!error && !loading && rows.length === 0 && (
-        <EmptyBanner message={hasActiveFilters(filters) ? "بازنگری‌ای با این مشخصات یافت نشد." : "هنوز مستندی ثبت نشده است."} />
+        <EmptyState
+          icon={hasActiveFilters(filters) ? <SearchX /> : <FileText />}
+          message={hasActiveFilters(filters) ? "بازنگری‌ای با این مشخصات یافت نشد." : "هنوز مستندی ثبت نشده است."}
+        />
       )}
 
       {rows.length > 0 && (
-        <div className={`overflow-x-auto rounded-lg border border-slate-200 bg-white ${loading ? "opacity-60" : ""}`}>
+        <Card as="div" flush className={cx("overflow-hidden transition-opacity duration-200", loading && "opacity-60")}>
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-right text-sm">
-            <thead className="bg-slate-50 text-slate-600">
-              <tr>
+            <thead className="bg-slate-50/90 text-xs text-slate-500">
+              <tr className="border-b border-slate-200">
                 {["کد", "بازنگری", "عنوان", "گروه", "وضعیت", "تدوین", "تائید", "تصویب", "PDF"].map((column) => (
-                  <th key={column} className="whitespace-nowrap px-3 py-3 font-medium">
+                  <th key={column} className="whitespace-nowrap px-3 py-3 font-normal">
                     {column}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {rows.map((row) => (
-                <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
+                <tr key={row.id} className="transition-colors duration-150 hover:bg-slate-50/80">
                   <td className="px-3 py-3">
                     <button
                       type="button"
                       title="نمایش همهٔ بازنگری‌های این مستند"
                       onClick={() => update({ family: row.code })}
-                      className="underline decoration-dotted"
+                      className="rounded-md transition-transform hover:scale-105"
                     >
                       <Code>{row.code}</Code>
                     </button>
@@ -151,10 +171,10 @@ export function RevisionsTab({
                   <td className="px-3 py-3">
                     <Code>{row.revision_display}</Code>
                   </td>
-                  <td className="max-w-[260px] truncate px-3 py-3 font-medium text-slate-900" title={row.title}>
+                  <td className="max-w-[260px] truncate px-3 py-3 font-bold text-slate-900" title={row.title}>
                     {row.title}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3">{row.group_label}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-slate-600">{row.group_label}</td>
                   <td className="px-3 py-3">
                     <StatusBadge status={row.status} label={row.status_label} />
                   </td>
@@ -173,8 +193,9 @@ export function RevisionsTab({
                         href={pdfDownloadUrl(row.id)}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded border border-slate-300 bg-white px-2 py-1 text-xs hover:bg-slate-50"
+                        className={buttonClass({ size: "xs" })}
                       >
+                        <ExternalLink />
                         باز کردن
                       </a>
                     ) : (
@@ -186,6 +207,7 @@ export function RevisionsTab({
             </tbody>
           </table>
         </div>
+        </Card>
       )}
 
       <Pager page={Math.min(page, totalPages)} totalPages={totalPages} onChange={setPage} />

@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useState } from "react";
 import { Code } from "@/components/Code";
 import { Pager } from "@/components/Pager";
-import { EmptyBanner, ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { Activity, ArrowLeft, RotateCcw, SearchX } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { selectClass } from "@/components/ui/Field";
+import { cx } from "@/components/ui/cx";
+
 import { DebouncedInput } from "@/components/history/DebouncedInput";
 import {
   ACTIVITY_WINDOWS,
@@ -20,7 +27,7 @@ import { usePagedQuery } from "@/lib/use-paged-query";
 import type { ActivityEvent, DocumentEventKind } from "@/lib/types";
 
 const PAGE_SIZE = 25;
-const select = "rounded border border-slate-300 bg-white px-3 py-2 text-sm";
+const select = cx(selectClass, "min-w-[8rem] flex-1 sm:flex-none");
 
 /** The audit trail across all documents (سوابق مستندات ← فعالیت‌ها), newest first. */
 export function ActivityTab({
@@ -48,7 +55,7 @@ export function ActivityTab({
 
   return (
     <div className="space-y-4">
-      <section className="flex flex-wrap items-center gap-3">
+      <Card as="section" className="flex flex-wrap items-center gap-2 p-3 sm:gap-3 sm:p-4">
         <DebouncedInput
           key={`q${resetKey}`}
           value={filters.q}
@@ -62,7 +69,7 @@ export function ActivityTab({
           onCommit={(actor) => update({ actor })}
           placeholder="نام شخص"
           ariaLabel="نام شخص"
-          className="w-40 rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+          className="w-full sm:w-44"
         />
         <select
           aria-label="نوع فعالیت"
@@ -90,58 +97,80 @@ export function ActivityTab({
           ))}
         </select>
         {hasActiveFilters(filters) && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RotateCcw />}
+            className="animate-fade-in"
             onClick={() => {
               onFilters(EMPTY_ACTIVITY_FILTERS);
               setResetKey((n) => n + 1);
               setPage(1);
             }}
-            className="text-sm text-slate-600 underline"
           >
             پاک کردن فیلترها
-          </button>
+          </Button>
         )}
-        <span className="ms-auto text-sm text-slate-500">{count} رویداد</span>
-      </section>
+        <span className="ms-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 tabular-nums">
+          {count} رویداد
+        </span>
+      </Card>
 
       {error && <ErrorBanner message={error} />}
       {loading && rows.length === 0 && <LoadingBanner />}
       {!error && !loading && rows.length === 0 && (
-        <EmptyBanner message={hasActiveFilters(filters) ? "رویدادی با این مشخصات یافت نشد." : "هنوز فعالیتی ثبت نشده است."} />
+        <EmptyState
+          icon={hasActiveFilters(filters) ? <SearchX /> : <Activity />}
+          message={hasActiveFilters(filters) ? "رویدادی با این مشخصات یافت نشد." : "هنوز فعالیتی ثبت نشده است."}
+        />
       )}
 
       {rows.length > 0 && (
-        <ol className={`divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white ${loading ? "opacity-60" : ""}`}>
+        <Card
+          as="div"
+          flush
+          className={cx("overflow-hidden transition-opacity duration-200", loading && "opacity-60")}
+        >
+        <ol className="divide-y divide-slate-100">
           {rows.map((event) => (
-            <li key={event.id} className="flex gap-3 px-4 py-3 text-sm">
-              <span aria-hidden className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${EVENT_KIND_TONE[event.kind]}`} />
+            <li key={event.id} className="flex gap-3 px-4 py-3.5 text-sm transition-colors hover:bg-slate-50/70 sm:px-5">
+              <span
+                aria-hidden
+                className={`mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-slate-100 ${EVENT_KIND_TONE[event.kind]}`}
+              />
               <div className="min-w-0 flex-1">
                 <p className="text-slate-900">
-                  <span className="font-medium">{event.kind_label}</span>
+                  <span className="font-bold">{event.kind_label}</span>
                   <span className="text-slate-500">
                     {" "}
                     — {event.actor_name}
                     {event.actor_title ? ` (${event.actor_title})` : ""}
                   </span>
                 </p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-600">
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-600">
                   <button
                     type="button"
                     title="نمایش همهٔ بازنگری‌های این مستند"
                     onClick={() => onOpenFamily(event.document.full_code.split("-").slice(0, 2).join("-"))}
-                    className="underline decoration-dotted"
+                    className="rounded-md transition-transform hover:scale-105"
                   >
                     <Code>{event.document.full_code}</Code>
                   </button>
-                  <Link href={`/documents/${event.document.id}/edit`} className="truncate hover:underline">
+                  <Link
+                    href={`/documents/${event.document.id}/edit`}
+                    className="truncate transition-colors hover:text-brand-700"
+                  >
                     {event.document.title}
                   </Link>
-                  <span className="text-xs text-slate-400">
-                    {event.from_status_label} ← {event.to_status_label}
+                  <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                    {event.from_status_label}
+                    <ArrowLeft className="size-3" aria-label="به" />
+                    {event.to_status_label}
                   </span>
                 </p>
-                {event.reason && <p className="mt-1 whitespace-pre-wrap text-slate-700">{event.reason}</p>}
+                {event.reason && (
+                  <p className="mt-1.5 whitespace-pre-wrap rounded-lg bg-slate-50 px-3 py-1.5 text-slate-700">{event.reason}</p>
+                )}
               </div>
               <time className="shrink-0 text-xs text-slate-400" dateTime={event.created_at}>
                 {formatJalaliDateTime(event.created_at)}
@@ -149,6 +178,7 @@ export function ActivityTab({
             </li>
           ))}
         </ol>
+        </Card>
       )}
 
       <Pager page={Math.min(page, totalPages)} totalPages={totalPages} onChange={setPage} />

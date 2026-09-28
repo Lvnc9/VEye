@@ -22,7 +22,7 @@ import {
   type SignOffSummary,
 } from "@/lib/types";
 import { useCurrentUser } from "@/lib/current-user";
-import { EmptyBanner, ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { Code } from "@/components/Code";
 import { PdfActions } from "@/components/PdfActions";
 import { WorkflowActions } from "@/components/WorkflowActions";
@@ -30,6 +30,15 @@ import { BulkPrintDialog } from "@/components/BulkPrintDialog";
 import { selectionLabel, type BulkSelection } from "@/lib/bulk-print";
 import { formatJalali } from "@/lib/jalali";
 import { StatusBadge } from "@/components/StatusBadge";
+import { FilePlus2, FileText, Pencil, Plus, Printer, RotateCcw, Search, SearchX, X } from "lucide-react";
+import { Alert } from "@/components/ui/Alert";
+import { Button, buttonClass } from "@/components/ui/Button";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { selectClass as controlSelect } from "@/components/ui/Field";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Pager } from "@/components/Pager";
+import { cx } from "@/components/ui/cx";
 
 const PAGE_SIZE = 25;
 
@@ -319,291 +328,358 @@ export default function DocumentRegisterPage() {
     });
   }
   const bulkSelection: BulkSelection = selectedIds.length > 0 ? { ids: selectedIds } : { filters };
-  const selectClass = "rounded border border-slate-300 bg-white px-3 py-2 text-sm";
+  const selectClass = controlSelect;
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">مستندات سیستم</h1>
-          <p className="mt-1 text-sm text-slate-500">ساخت و پیگیری مستندات کنترل‌شده</p>
-        </div>
-        {canCreate && (
-          <button
-            type="button"
-            onClick={() => setShowCreate((open) => !open)}
-            className="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-          >
-            {showCreate ? "بستن" : "ایجاد+"}
-          </button>
-        )}
-      </header>
+      <PageHeader
+        title="مستندات سیستم"
+        subtitle="ساخت و پیگیری مستندات کنترل‌شده"
+        actions={
+          canCreate && (
+            <Button
+              variant={showCreate ? "secondary" : "primary"}
+              onClick={() => setShowCreate((open) => !open)}
+              icon={showCreate ? <X /> : <Plus />}
+              aria-expanded={showCreate}
+            >
+              {showCreate ? "بستن" : "ایجاد"}
+            </Button>
+          )
+        }
+      />
 
       {canCreate && showCreate && (
-        <form
-          onSubmit={handleCreate}
-          className="space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
-        >
-          <h2 className="text-lg font-semibold text-slate-900">ثبت مستند جدید</h2>
-          {createError && (
-            <div className="space-y-2">
-              <ErrorBanner message={createError} />
-              {existingTitle && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchInput(existingTitle);
-                    setFilters({ ...EMPTY_FILTERS, search: existingTitle });
-                    setPage(1);
-                  }}
-                  className="text-sm font-medium text-slate-700 underline"
+        <Card as="div" className="animate-scale-in">
+          <form onSubmit={handleCreate} className="space-y-4">
+            <CardHeader title="ثبت مستند جدید" icon={<FilePlus2 />} className="mb-2" />
+            {createError && (
+              <div className="space-y-2">
+                <ErrorBanner message={createError} />
+                {existingTitle && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<Search />}
+                    onClick={() => {
+                      setSearchInput(existingTitle);
+                      setFilters({ ...EMPTY_FILTERS, search: existingTitle });
+                      setPage(1);
+                    }}
+                  >
+                    نمایش مستند موجود
+                  </Button>
+                )}
+              </div>
+            )}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <label className="block text-sm">
+                <span className="mb-1.5 block text-slate-700">دسته بندی</span>
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value as DocumentCategory | "" })}
+                  className={`${selectClass} w-full`}
                 >
-                  نمایش مستند موجود
-                </button>
-              )}
+                  <option value="">انتخاب کنید</option>
+                  {(Object.keys(DOCUMENT_CATEGORY_LABELS) as DocumentCategory[]).map((value) => (
+                    <option key={value} value={value}>
+                      {DOCUMENT_CATEGORY_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1.5 block text-slate-700">عنوان</span>
+                <input
+                  type="text"
+                  value={form.title}
+                  maxLength={255}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  className={`${selectClass} w-full`}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1.5 block text-slate-700">گروه</span>
+                <select
+                  value={form.group}
+                  onChange={(e) => setForm({ ...form, group: e.target.value as DocumentGroup | "" })}
+                  className={`${selectClass} w-full`}
+                >
+                  <option value="">انتخاب کنید</option>
+                  {(Object.keys(DOCUMENT_GROUP_LABELS) as DocumentGroup[]).map((value) => (
+                    <option key={value} value={value}>
+                      {DOCUMENT_GROUP_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-          )}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">دسته بندی</span>
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value as DocumentCategory | "" })}
-                className={`${selectClass} w-full`}
-              >
-                <option value="">انتخاب کنید</option>
-                {(Object.keys(DOCUMENT_CATEGORY_LABELS) as DocumentCategory[]).map((value) => (
-                  <option key={value} value={value}>
-                    {DOCUMENT_CATEGORY_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">عنوان</span>
-              <input
-                type="text"
-                value={form.title}
-                maxLength={255}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className={`${selectClass} w-full`}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">گروه</span>
-              <select
-                value={form.group}
-                onChange={(e) => setForm({ ...form, group: e.target.value as DocumentGroup | "" })}
-                className={`${selectClass} w-full`}
-              >
-                <option value="">انتخاب کنید</option>
-                {(Object.keys(DOCUMENT_GROUP_LABELS) as DocumentGroup[]).map((value) => (
-                  <option key={value} value={value}>
-                    {DOCUMENT_GROUP_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <button
-            type="submit"
-            disabled={creating}
-            className="rounded bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
-          >
-            {creating ? "در حال ثبت..." : "ساخت"}
-          </button>
-        </form>
+            <div className="flex justify-end">
+              <Button type="submit" variant="primary" loading={creating} icon={<FilePlus2 />}>
+                {creating ? "در حال ثبت..." : "ساخت"}
+              </Button>
+            </div>
+          </form>
+        </Card>
       )}
 
       {notice && (
-        <div className="rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{notice}</div>
+        <Alert tone="success" role="status">
+          {notice}
+        </Alert>
       )}
       {actionError && <ErrorBanner message={actionError} />}
 
-      <section className="flex flex-wrap items-center gap-3">
-        <input
-          type="search"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="جست و جو — مثال: برون سازمانی"
-          className="w-full max-w-xs rounded border border-slate-300 bg-white px-3 py-2 text-sm"
-        />
-        <select value={filters.group} onChange={(e) => updateFilter("group", e.target.value as DocumentGroup | "")} className={selectClass}>
-          <option value="">همه گروه‌ها</option>
-          {(Object.keys(DOCUMENT_GROUP_LABELS) as DocumentGroup[]).map((value) => (
-            <option key={value} value={value}>
-              {DOCUMENT_GROUP_LABELS[value]}
-            </option>
-          ))}
-        </select>
-        <select value={filters.category} onChange={(e) => updateFilter("category", e.target.value as DocumentCategory | "")} className={selectClass}>
-          <option value="">همه دسته‌ها</option>
-          {(Object.keys(DOCUMENT_CATEGORY_LABELS) as DocumentCategory[]).map((value) => (
-            <option key={value} value={value}>
-              {DOCUMENT_CATEGORY_LABELS[value]}
-            </option>
-          ))}
-        </select>
-        <select value={filters.status} onChange={(e) => updateFilter("status", e.target.value as DocumentStatus | "")} className={selectClass}>
-          <option value="">همه وضعیت‌ها</option>
-          {(Object.keys(DOCUMENT_STATUS_LABELS) as DocumentStatus[]).map((value) => (
-            <option key={value} value={value}>
-              {DOCUMENT_STATUS_LABELS[value]}
-            </option>
-          ))}
-        </select>
-        {filtersActive && (
-          <button
-            type="button"
-            onClick={() => {
-              setFilters(EMPTY_FILTERS);
-              setSearchInput("");
-              setPage(1);
-            }}
-            className="text-sm text-slate-600 underline"
+      <Card as="div" className="p-3 sm:p-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="جست و جو — مثال: برون سازمانی"
+              aria-label="جست و جو در مستندات"
+              className={`${selectClass} w-full pr-9`}
+            />
+          </div>
+          <select
+            value={filters.group}
+            aria-label="گروه"
+            onChange={(e) => updateFilter("group", e.target.value as DocumentGroup | "")}
+            className={cx(selectClass, "min-w-[8rem] flex-1 sm:flex-none")}
           >
-            پاک کردن فیلترها
-          </button>
-        )}
-        <span className="ms-auto flex items-center gap-3 text-sm text-slate-500">
-          {selectedIds.length > 0 && (
-            <button type="button" onClick={() => setSelection({ sig: filterSig, ids: [] })} className="underline">
-              لغو انتخاب
-            </button>
+            <option value="">همه گروه‌ها</option>
+            {(Object.keys(DOCUMENT_GROUP_LABELS) as DocumentGroup[]).map((value) => (
+              <option key={value} value={value}>
+                {DOCUMENT_GROUP_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.category}
+            aria-label="دسته بندی"
+            onChange={(e) => updateFilter("category", e.target.value as DocumentCategory | "")}
+            className={cx(selectClass, "min-w-[8rem] flex-1 sm:flex-none")}
+          >
+            <option value="">همه دسته‌ها</option>
+            {(Object.keys(DOCUMENT_CATEGORY_LABELS) as DocumentCategory[]).map((value) => (
+              <option key={value} value={value}>
+                {DOCUMENT_CATEGORY_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.status}
+            aria-label="وضعیت"
+            onChange={(e) => updateFilter("status", e.target.value as DocumentStatus | "")}
+            className={cx(selectClass, "min-w-[8rem] flex-1 sm:flex-none")}
+          >
+            <option value="">همه وضعیت‌ها</option>
+            {(Object.keys(DOCUMENT_STATUS_LABELS) as DocumentStatus[]).map((value) => (
+              <option key={value} value={value}>
+                {DOCUMENT_STATUS_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          {filtersActive && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<RotateCcw />}
+              className="animate-fade-in"
+              onClick={() => {
+                setFilters(EMPTY_FILTERS);
+                setSearchInput("");
+                setPage(1);
+              }}
+            >
+              پاک کردن فیلترها
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={() => setBulkOpen(true)}
-            disabled={count === 0}
-            title="دانلود PDFهای ساخته‌شده به‌صورت فایل ZIP"
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-          >
-            چاپ لیست
-            <span className="ms-2 text-xs font-normal text-slate-400">({selectionLabel(selectedIds.length, filtersActive)})</span>
-          </button>
-          <span>{count} مستند</span>
-        </span>
-      </section>
+          <span className="ms-auto flex flex-wrap items-center gap-2 text-sm text-slate-500">
+            {selectedIds.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setSelection({ sig: filterSig, ids: [] })}>
+                لغو انتخاب
+              </Button>
+            )}
+            <Button
+              size="sm"
+              icon={<Printer />}
+              onClick={() => setBulkOpen(true)}
+              disabled={count === 0}
+              title="دانلود PDFهای ساخته‌شده به‌صورت فایل ZIP"
+            >
+              چاپ لیست
+              <span className="text-xs text-slate-400">({selectionLabel(selectedIds.length, filtersActive)})</span>
+            </Button>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 tabular-nums">
+              {count} مستند
+            </span>
+          </span>
+        </div>
+      </Card>
 
       {error && <ErrorBanner message={error} />}
       {loading && rows.length === 0 && <LoadingBanner />}
 
       {!error && !loading && rows.length === 0 && (
-        <EmptyBanner message={filtersActive ? "مستندی با این مشخصات یافت نشد." : "هنوز مستندی ثبت نشده است."} />
+        filtersActive ? (
+          <EmptyState icon={<SearchX />} title="نتیجه‌ای نیست" message="مستندی با این مشخصات یافت نشد." />
+        ) : (
+          <EmptyState icon={<FileText />} title="فهرست خالی است" message="هنوز مستندی ثبت نشده است." />
+        )
       )}
 
       {rows.length > 0 && (
-        <div className={`overflow-x-auto rounded-lg border border-slate-200 bg-white ${loading ? "opacity-60" : ""}`}>
-          <table className="w-full min-w-[1150px] text-right text-sm">
-            <thead className="bg-slate-50 text-slate-600">
-              <tr>
-                <th className="w-8 px-3 py-3">
-                  <input
-                    type="checkbox"
-                    aria-label="انتخاب همهٔ مستندات این صفحه"
-                    checked={pageAllSelected}
-                    onChange={togglePage}
-                  />
-                </th>
-                {COLUMNS.map((column) => (
-                  <th key={column} className="whitespace-nowrap px-3 py-3 font-medium">
-                    {column}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-3">
+        <Card
+          flush
+          as="div"
+          className={cx("overflow-hidden transition-opacity duration-200", loading && "opacity-60")}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1150px] text-right text-sm">
+              <thead className="bg-slate-50/90 text-xs text-slate-500">
+                <tr className="border-b border-slate-200">
+                  <th className="w-10 px-4 py-3">
                     <input
                       type="checkbox"
-                      aria-label={`انتخاب ${row.full_code}`}
-                      checked={selectedIds.includes(row.id)}
-                      onChange={() => toggleSelected(row.id)}
+                      aria-label="انتخاب همهٔ مستندات این صفحه"
+                      checked={pageAllSelected}
+                      onChange={togglePage}
+                      className="size-4 rounded"
                     />
-                  </td>
-                  <td className="px-3 py-3 text-slate-500">{(currentPage - 1) * PAGE_SIZE + index + 1}</td>
-                  <td className="whitespace-nowrap px-3 py-3">{row.category_label}</td>
-                  <td className="max-w-[260px] truncate px-3 py-3 font-medium text-slate-900" title={row.title}>
-                    {row.title}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3">{row.group_label}</td>
-                  <td className="px-3 py-3">
-                    <Code>{row.revision_display}</Code>
-                  </td>
-                  <td className="px-3 py-3">
-                    <Code>{row.code}</Code>
-                  </td>
-                  <td className="px-3 py-3">
-                    <ResponsibilityCell pair={row.responsibilities.accountant} />
-                  </td>
-                  <td className="px-3 py-3">
-                    <ResponsibilityCell pair={row.responsibilities.questioner} />
-                  </td>
-                  <td className="px-3 py-3">
-                    <ResponsibilityCell pair={row.responsibilities.responder} />
-                  </td>
-                  <td className="px-3 py-3">
-                    <SignOffCell signoff={row.signoffs.creater} />
-                  </td>
-                  <td className="px-3 py-3">
-                    <SignOffCell signoff={row.signoffs.confirmer} />
-                  </td>
-                  <td className="px-3 py-3">
-                    <SignOffCell signoff={row.signoffs.approver} />
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge status={row.status} label={row.status_label} />
-                      <Link
-                        href={`/documents/${row.id}/edit`}
-                        className={
-                          row.can_edit && canCreate && row.action === "complete"
-                            ? "rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-700"
-                            : "rounded border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                        }
-                      >
-                        {row.can_edit && canCreate
-                          ? row.action === "complete"
-                            ? DOCUMENT_ACTION_LABELS.complete
-                            : "ویرایش"
-                          : "مشاهده"}
-                      </Link>
-                      <WorkflowActions
-                        row={row}
-                        onDone={(message) => {
-                          setActionError(null);
-                          setNotice(message);
-                          setReloadToken((n) => n + 1);
-                        }}
-                      />
-                      <PdfActions
-                        row={row}
-                        status={pdfStatus[row.id] ?? row.pdf_status}
-                        canPrint={canPrint}
-                        previewing={previewingId === row.id}
-                        onPrint={() => handlePrint(row)}
-                        onRebuild={() => void runOfficialBuild(row)}
-                        onPreview={() => handlePreview(row)}
-                      />
-                      {canCreate && row.can_revise && (
-                        <button
-                          type="button"
-                          onClick={() => handleRevise(row)}
-                          disabled={revisingId === row.id}
-                          className="rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-                        >
-                          {revisingId === row.id ? "..." : "بازنگری جدید"}
-                        </button>
+                  </th>
+                  {COLUMNS.map((column, i) => (
+                    <th
+                      key={column}
+                      className={cx(
+                        "whitespace-nowrap px-3 py-3 font-normal",
+                        // The last column (status + actions) stays in view at the left edge while the table scrolls.
+                        i === COLUMNS.length - 1 && "bg-slate-50 md:sticky md:left-0 md:z-10 md:shadow-[8px_0_12px_-10px_rgb(15_23_42/0.25)]",
                       )}
-                    </div>
-                  </td>
+                    >
+                      {column}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((row, index) => {
+                  const selected = selectedIds.includes(row.id);
+                  return (
+                    <tr
+                      key={row.id}
+                      className={cx(
+                        "group align-top transition-colors duration-150",
+                        selected ? "bg-brand-50" : "bg-white hover:bg-slate-50",
+                      )}
+                    >
+                      <td className="px-4 py-3.5">
+                        <input
+                          type="checkbox"
+                          aria-label={`انتخاب ${row.full_code}`}
+                          checked={selected}
+                          onChange={() => toggleSelected(row.id)}
+                          className="size-4 rounded"
+                        />
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-400 tabular-nums">
+                        {(currentPage - 1) * PAGE_SIZE + index + 1}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3.5 text-slate-600">{row.category_label}</td>
+                      <td className="max-w-[260px] truncate px-3 py-3.5 font-bold text-slate-900" title={row.title}>
+                        <Link
+                          href={`/documents/${row.id}/edit`}
+                          className="transition-colors hover:text-brand-700"
+                        >
+                          {row.title}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3.5 text-slate-600">{row.group_label}</td>
+                      <td className="px-3 py-3.5">
+                        <Code>{row.revision_display}</Code>
+                      </td>
+                      <td className="px-3 py-3.5">
+                        <Code>{row.code}</Code>
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-600">
+                        <ResponsibilityCell pair={row.responsibilities.accountant} />
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-600">
+                        <ResponsibilityCell pair={row.responsibilities.questioner} />
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-600">
+                        <ResponsibilityCell pair={row.responsibilities.responder} />
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-700">
+                        <SignOffCell signoff={row.signoffs.creater} />
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-700">
+                        <SignOffCell signoff={row.signoffs.confirmer} />
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-700">
+                        <SignOffCell signoff={row.signoffs.approver} />
+                      </td>
+                      <td
+                        className={cx(
+                          "px-3 py-3.5 transition-colors duration-150 md:sticky md:left-0 md:min-w-[16rem] md:shadow-[8px_0_12px_-10px_rgb(15_23_42/0.25)]",
+                          selected ? "bg-brand-50" : "bg-white group-hover:bg-slate-50",
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <StatusBadge status={row.status} label={row.status_label} />
+                          <Link
+                            href={`/documents/${row.id}/edit`}
+                            className={buttonClass({
+                              size: "xs",
+                              variant: row.can_edit && canCreate && row.action === "complete" ? "primary" : "secondary",
+                            })}
+                          >
+                            {row.can_edit && canCreate ? <Pencil /> : <FileText />}
+                            {row.can_edit && canCreate
+                              ? row.action === "complete"
+                                ? DOCUMENT_ACTION_LABELS.complete
+                                : "ویرایش"
+                              : "مشاهده"}
+                          </Link>
+                          <WorkflowActions
+                            row={row}
+                            onDone={(message) => {
+                              setActionError(null);
+                              setNotice(message);
+                              setReloadToken((n) => n + 1);
+                            }}
+                          />
+                          <PdfActions
+                            row={row}
+                            status={pdfStatus[row.id] ?? row.pdf_status}
+                            canPrint={canPrint}
+                            previewing={previewingId === row.id}
+                            onPrint={() => handlePrint(row)}
+                            onRebuild={() => void runOfficialBuild(row)}
+                            onPreview={() => handlePreview(row)}
+                          />
+                          {canCreate && row.can_revise && (
+                            <Button
+                              size="xs"
+                              variant="subtle"
+                              icon={<FilePlus2 />}
+                              onClick={() => handleRevise(row)}
+                              loading={revisingId === row.id}
+                            >
+                              بازنگری جدید
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {bulkOpen && (
@@ -614,29 +690,7 @@ export default function DocumentRegisterPage() {
         />
       )}
 
-      {totalPages > 1 && (
-        <nav className="flex items-center justify-center gap-4 text-sm" aria-label="صفحه‌بندی">
-          <button
-            type="button"
-            onClick={() => setPage(currentPage - 1)}
-            disabled={currentPage <= 1}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 disabled:opacity-40"
-          >
-            قبلی
-          </button>
-          <span className="text-slate-600">
-            صفحه {currentPage} از {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage(currentPage + 1)}
-            disabled={currentPage >= totalPages}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 disabled:opacity-40"
-          >
-            بعدی
-          </button>
-        </nav>
-      )}
+      <Pager page={currentPage} totalPages={totalPages} onChange={setPage} />
     </div>
   );
 }

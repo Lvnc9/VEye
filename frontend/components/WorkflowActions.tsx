@@ -5,6 +5,8 @@ import { returnDocument, signStep, STEP_DONE, STEP_LABELS, STEP_PROMPTS, workflo
 import type { DocumentRow } from "@/lib/types";
 import { SignatureDialog } from "@/components/SignatureDialog";
 import { ReturnDialog } from "@/components/ReturnDialog";
+import { Undo2, PenLine } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 
 interface Props {
   row: DocumentRow;
@@ -15,9 +17,6 @@ interface Props {
   hold?: string;
 }
 
-const primary = "rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-700";
-const secondary = "rounded border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50";
-const disabled = "cursor-not-allowed rounded bg-slate-200 px-3 py-1 text-xs font-medium text-slate-500";
 
 /**
  * A register row's sign-off buttons (Phase 5). Which ones appear is decided by
@@ -33,19 +32,26 @@ export function WorkflowActions({ row, onDone, hold }: Props) {
 
   return (
     <>
-      <button
-        type="button"
+      <Button
+        size="xs"
+        variant="primary"
+        icon={<PenLine />}
         disabled={controls.primary.disabled || Boolean(hold)}
         title={controls.primary.title ?? hold}
         onClick={() => setDialog("sign")}
-        className={controls.primary.disabled || hold ? disabled : primary}
       >
         {controls.primary.label}
-      </button>
+      </Button>
       {controls.canReturn && (
-        <button type="button" onClick={() => setDialog("return")} className={secondary}>
+        <Button
+          size="xs"
+          variant="danger-ghost"
+          icon={<Undo2 />}
+          onClick={() => setDialog("return")}
+          className="ring-1 ring-inset ring-rose-200"
+        >
           مرجوع
-        </button>
+        </Button>
       )}
 
       {dialog === "sign" && step && (

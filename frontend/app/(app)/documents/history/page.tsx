@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { ActivityTab } from "@/components/history/ActivityTab";
 import { RevisionsTab } from "@/components/history/RevisionsTab";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 import {
   EMPTY_ACTIVITY_FILTERS,
   EMPTY_REVISION_FILTERS,
@@ -27,29 +29,9 @@ export default function DocumentHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">سوابق مستندات</h1>
-        <p className="mt-1 text-sm text-slate-500">بازنگری‌های همهٔ مستندات و تاریخچهٔ گردش کار آن‌ها</p>
-      </header>
+      <PageHeader title="سوابق مستندات" subtitle="بازنگری‌های همهٔ مستندات و تاریخچهٔ گردش کار آن‌ها" />
 
-      <div role="tablist" aria-label="بخش‌های سوابق" className="flex gap-1 border-b border-slate-200">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === item.id}
-            onClick={() => setTab(item.id)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${
-              tab === item.id
-                ? "border-slate-900 text-slate-900"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <Tabs label="بخش‌های سوابق" items={TABS} value={tab} onChange={setTab} />
 
       {tab === "revisions" ? (
         <RevisionsTab filters={revisionFilters} onFilters={setRevisionFilters} />
