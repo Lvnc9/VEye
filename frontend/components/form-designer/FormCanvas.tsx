@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type CSSProperties, type DragEvent } from "react";
+import type { CSSProperties } from "react";
 import {
   FOOTER_HEIGHT,
   HEADER_GAP,
@@ -12,7 +12,8 @@ import {
   META_CELL,
   PAGE,
 } from "@/lib/form-layout";
-import { dropIndex, headingNumbers, type FormElement, type FormSettings } from "@/lib/form-designer";
+import { headingNumbers, type FormElement, type FormSettings } from "@/lib/form-designer";
+import { useDragReorder } from "@/components/designer/useDragReorder";
 import { ElementView } from "./ElementView";
 import { mm, pt } from "./units";
 
@@ -58,24 +59,7 @@ export function FormCanvas({
 }) {
   const page = PAGE[settings.orientation];
   const numbers = headingNumbers(elements);
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [dropAt, setDropAt] = useState<{ index: number; after: boolean } | null>(null);
-  const rows = useRef<(HTMLDivElement | null)[]>([]);
-
-  function dragOver(event: DragEvent, index: number) {
-    if (dragFrom === null) return;
-    event.preventDefault();
-    const box = event.currentTarget.getBoundingClientRect();
-    const after = event.clientY > box.top + box.height / 2;
-    if (dropAt?.index !== index || dropAt.after !== after) setDropAt({ index, after });
-  }
-
-  function drop(event: DragEvent) {
-    event.preventDefault();
-    if (dragFrom !== null && dropAt) onReorder(dragFrom, dropIndex(dragFrom, dropAt.index, dropAt.after));
-    setDragFrom(null);
-    setDropAt(null);
-  }
+  const drag = useDragReorder(onReorder);
 
   const pageStyle = {
     "--mm": `calc(100cqw / ${page.width})`,
@@ -105,22 +89,18 @@ export function FormCanvas({
 
             {elements.map((element, index) => {
               const selected = element.key === selectedKey;
-              const marker = dropAt?.index === index ? (dropAt.after ? "after" : "before") : null;
+              const marker = drag.marker(index);
               return (
                 <div
                   key={element.key}
-                  ref={(node) => {
-                    rows.current[index] = node;
-                  }}
+                  {...drag.rowProps(index)}
                   onClick={(event) => {
                     event.stopPropagation();
                     onSelect(element.key);
                   }}
-                  onDragOver={(event) => dragOver(event, index)}
-                  onDrop={drop}
                   className={`group relative -mx-[3px] rounded-sm px-[3px] outline-offset-2 ${
                     selected ? "outline outline-2 outline-indigo-500" : "hover:outline hover:outline-1 hover:outline-indigo-200"
-                  } ${dragFrom === index ? "opacity-40" : ""}`}
+                  } ${drag.isDragging(index) ? "opacity-40" : ""}`}
                 >
                   {marker && (
                     <span
@@ -135,19 +115,7 @@ export function FormCanvas({
                       }`}
                     >
                       <span
-                        draggable
-                        onDragStart={(event) => {
-                          event.dataTransfer.effectAllowed = "move";
-                          event.dataTransfer.setData("text/plain", element.key); // Firefox needs data to start a drag
-                          const row = rows.current[index];
-                          if (row) event.dataTransfer.setDragImage(row, 16, 16);
-                          setDragFrom(index);
-                        }}
-                        onDragEnd={() => {
-                          setDragFrom(null);
-                          setDropAt(null);
-                        }}
-                        title="برای جابه‌جایی بکشید"
+                        {...drag.gripProps(index, element.key)}
                         className="cursor-grab px-1 text-slate-500 active:cursor-grabbing"
                       >
                         ⠿

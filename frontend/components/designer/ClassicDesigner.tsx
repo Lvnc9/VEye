@@ -23,6 +23,8 @@ import { PaperLayout } from "./PaperLayout";
 import { FootnoteFields } from "./FootnoteFields";
 import { LogoSection } from "./LogoSection";
 import { useDesignerDocument, type DesignerAdapter } from "./useDesignerDocument";
+import { useDragReorder } from "./useDragReorder";
+import { moveElement } from "@/lib/reorder";
 
 const classicAdapter: DesignerAdapter<DesignerState> = {
   fromResponse: (response, previous) => fromResponse(response, previous?.sections),
@@ -44,6 +46,11 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
     }));
     doc.setNotice(null);
   }
+
+  const drag = useDragReorder((from, to) => {
+    setState((current) => ({ ...current, sections: moveElement(current.sections, from, to) }));
+    doc.setNotice(null);
+  });
 
   function addSection(type: SectionType) {
     setState((current) => ({ ...current, sections: [...current.sections, newSection(type)] }));
@@ -104,6 +111,8 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
                     index={index}
                     total={state.sections.length}
                     disabled={locked}
+                    drag={drag}
+                    dragKey={section.key}
                     onMove={(direction) =>
                       setState((current) => ({ ...current, sections: moveSection(current.sections, position, direction) }))
                     }
