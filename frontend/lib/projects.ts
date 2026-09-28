@@ -15,10 +15,10 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 };
 
 export const PROJECT_STATUS_TONE: Record<ProjectStatus, string> = {
-  ACTIVE: "bg-green-100 text-green-800",
-  ON_HOLD: "bg-amber-100 text-amber-800",
-  DONE: "bg-slate-200 text-slate-700",
-  CANCELLED: "bg-red-100 text-red-800",
+  ACTIVE: "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-600/20",
+  ON_HOLD: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/25",
+  DONE: "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-500/15",
+  CANCELLED: "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-600/20",
 };
 
 export const OBJECTIVE_STATUS_LABELS: Record<ObjectiveStatus, string> = {
@@ -30,11 +30,11 @@ export const OBJECTIVE_STATUS_LABELS: Record<ObjectiveStatus, string> = {
 };
 
 export const OBJECTIVE_STATUS_TONE: Record<ObjectiveStatus, string> = {
-  TODO: "bg-slate-100 text-slate-700",
-  IN_PROGRESS: "bg-blue-100 text-blue-800",
-  BLOCKED: "bg-amber-100 text-amber-800",
-  DONE: "bg-green-100 text-green-800",
-  CANCELLED: "bg-red-100 text-red-800",
+  TODO: "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-500/15",
+  IN_PROGRESS: "bg-brand-50 text-brand-800 ring-1 ring-inset ring-brand-600/20",
+  BLOCKED: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/25",
+  DONE: "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-600/20",
+  CANCELLED: "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-600/20",
 };
 
 export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
@@ -48,27 +48,27 @@ export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
 export const MEETING_EVENT_KINDS: ReadonlySet<string> = new Set(["meeting_scheduled", "meeting_changed", "meeting_cancelled"]);
 
 export const PROJECT_EVENT_TONE: Record<string, string> = {
-  project_created: "bg-blue-500",
+  project_created: "bg-brand-500",
   project_status_changed: "bg-amber-500",
   project_archived: "bg-slate-400",
-  project_unarchived: "bg-green-600",
+  project_unarchived: "bg-emerald-500",
   member_added: "bg-teal-500",
   guest_invited: "bg-violet-400",
   member_role_changed: "bg-amber-500",
-  member_removed: "bg-red-500",
-  objective_added: "bg-blue-500",
+  member_removed: "bg-rose-500",
+  objective_added: "bg-brand-500",
   objective_assigned: "bg-teal-500",
   objective_status_changed: "bg-amber-500",
   objective_due_changed: "bg-orange-500",
-  objective_removed: "bg-red-500",
+  objective_removed: "bg-rose-500",
   comment_added: "bg-slate-400",
-  comment_removed: "bg-red-500",
-  document_linked: "bg-green-600",
-  document_unlinked: "bg-red-500",
+  comment_removed: "bg-rose-500",
+  document_linked: "bg-emerald-500",
+  document_unlinked: "bg-rose-500",
   objective_update_added: "bg-sky-500",
   meeting_scheduled: "bg-indigo-500",
   meeting_changed: "bg-amber-500",
-  meeting_cancelled: "bg-red-500",
+  meeting_cancelled: "bg-rose-500",
 };
 
 export interface ProjectMemberPreview {

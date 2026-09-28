@@ -9,8 +9,10 @@ import { meetingBody, splitAcknowledgement, type ProjectMeeting, type ProjectMem
 import { useApiQuery } from "@/lib/use-api-query";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { JalaliDatePicker } from "@/components/JalaliDatePicker";
+import { buttonClass } from "@/components/ui/Button";
+import { controlClass } from "@/components/ui/Field";
 
-const input = "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm";
+const input = `${controlClass} w-full px-3 py-2 text-sm`;
 
 /** «جدول جلسات» (docs/12 §D): a real `<table>` from `md` up, stacked cards below that. Only role
  *  MANAGER creates/edits/deletes (`canManageMeetings`, from the project detail); every project reader
@@ -41,11 +43,11 @@ export function MeetingsPanel({
   const rows = meetings.data ?? [];
 
   return (
-    <section aria-label="جدول جلسات" className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section aria-label="جدول جلسات" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-slate-900">جدول جلسات</h2>
+        <h2 className="text-base font-bold text-slate-900">جدول جلسات</h2>
         {canManageMeetings && !creating && (
-          <button type="button" onClick={() => setCreating(true)} className="text-sm text-slate-700 underline hover:text-slate-900">
+          <button type="button" onClick={() => setCreating(true)} className="text-sm text-brand-700 underline-offset-4 transition-colors hover:text-brand-800 hover:underline">
             افزودن جلسه
           </button>
         )}
@@ -200,7 +202,7 @@ function MeetingActions({
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
       {meeting.can_acknowledge && meeting.my_acknowledged_at === null && (
-        <button type="button" disabled={busy} onClick={acknowledge} className="rounded bg-slate-900 px-2.5 py-1 font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+        <button type="button" disabled={busy} onClick={acknowledge} className={buttonClass({ variant: "primary", size: "xs" })}>
           مشاهده شد
         </button>
       )}
@@ -209,7 +211,7 @@ function MeetingActions({
           <button type="button" onClick={onEdit} className="text-slate-600 underline hover:text-slate-900">
             ویرایش
           </button>
-          <button type="button" disabled={busy} onClick={remove} className="text-red-600 underline hover:text-red-800 disabled:opacity-50">
+          <button type="button" disabled={busy} onClick={remove} className="text-rose-600 underline hover:text-rose-800 disabled:opacity-50">
             حذف
           </button>
         </>
@@ -283,7 +285,7 @@ function MeetingForm({
     <div className="mb-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
       {error && <ErrorBanner message={error} />}
       {isEdit && (
-        <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <p className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
           تغییر تاریخ، ساعت یا مکان، همهٔ «مشاهده شد»های ثبت‌شده را پاک می‌کند.
         </p>
       )}
@@ -330,10 +332,10 @@ function MeetingForm({
         {members.length === 0 ? (
           <p className="text-xs text-slate-500">این پروژه هنوز عضوی ندارد.</p>
         ) : (
-          <ul className="max-h-32 space-y-1 overflow-y-auto rounded border border-slate-200 bg-white p-2">
+          <ul className="max-h-32 space-y-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">
             {members.map((member) => (
               <li key={member.id}>
-                <label className="flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-slate-50">
+                <label className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-slate-50">
                   <input type="checkbox" checked={attendees.includes(member.user)} onChange={() => toggle(member.user)} />
                   <span className="truncate">{member.user_name}</span>
                   <span className="truncate text-xs text-slate-500">{member.user_title}</span>
@@ -344,10 +346,10 @@ function MeetingForm({
         )}
       </div>
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} disabled={saving} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+        <button type="button" onClick={onCancel} disabled={saving} className={buttonClass({ variant: "secondary", size: "sm" })}>
           انصراف
         </button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+        <button type="button" onClick={submit} disabled={saving} className={buttonClass({ variant: "primary", size: "sm" })}>
           {saving ? "در حال ذخیره..." : "ذخیره"}
         </button>
       </div>

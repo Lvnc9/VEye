@@ -24,9 +24,12 @@ import {
   type ProjectCreateForm,
 } from "@/lib/projects";
 import { useApiQuery } from "@/lib/use-api-query";
+import { buttonClass } from "@/components/ui/Button";
+import { controlClass } from "@/components/ui/Field";
+import { PageHeader } from "@/components/ui/PageHeader";
 
-const input = "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm";
-const label = "mb-1 block text-sm font-medium text-slate-700";
+const input = `${controlClass} w-full px-3 py-2 text-sm`;
+const label = "mb-1.5 block text-sm text-slate-700";
 const DRAFT_DEBOUNCE_MS = 1500;
 
 function emptyDraft(): DraftObjective {
@@ -180,24 +183,24 @@ export default function NewProjectPage() {
   const sections = nodeOptions(tree.data.nodes, { kinds: ["SECTION"] });
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">پروژهٔ جدید</h1>
+    <div className="mx-auto max-w-2xl space-y-6">
+      <PageHeader title="پروژهٔ جدید" back={{ href: "/projects", label: "پروژه‌ها" }} />
 
       {draftState === "banner" && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 animate-fade-in">
           <span>پیش‌نویس ذخیره‌شده دارید.</span>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={continueDraft}
-              className="rounded bg-amber-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800"
+              className="inline-flex h-8 items-center rounded-lg bg-amber-600 px-3 text-xs font-bold text-white transition-colors hover:bg-amber-700"
             >
               ادامهٔ پیش‌نویس
             </button>
             <button
               type="button"
               onClick={discardDraft}
-              className="rounded border border-amber-300 bg-white px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-100"
+              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-100"
             >
               شروع از نو
             </button>
@@ -205,7 +208,7 @@ export default function NewProjectPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm" noValidate>
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6" noValidate>
         {serverError && <ErrorBanner message={serverError} />}
 
         <div>
@@ -213,7 +216,7 @@ export default function NewProjectPage() {
             بخش
           </label>
           {sections.length === 0 ? (
-            <p className="rounded border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500">
+            <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500">
               هنوز بخشی در ساختار سازمان تعریف نشده است.
             </p>
           ) : (
@@ -231,7 +234,7 @@ export default function NewProjectPage() {
               ))}
             </select>
           )}
-          {errors.section && <p className="mt-1 text-xs text-red-600">{errors.section}</p>}
+          {errors.section && <p className="mt-1 text-xs text-rose-600">{errors.section}</p>}
         </div>
 
         <div>
@@ -239,7 +242,7 @@ export default function NewProjectPage() {
             نام پروژه
           </label>
           <input id="name" value={form.name} onChange={(e) => set("name", e.target.value)} maxLength={255} className={input} />
-          {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name}</p>}
+          {errors.name && <p className="mt-1 text-xs text-rose-600">{errors.name}</p>}
         </div>
 
         {form.section !== null && (
@@ -278,7 +281,7 @@ export default function NewProjectPage() {
               min={form.starts_on || undefined}
               onChange={(iso) => set("due_on", iso ?? "")}
             />
-            {errors.due_on && <p className="mt-1 text-xs text-red-600">{errors.due_on}</p>}
+            {errors.due_on && <p className="mt-1 text-xs text-rose-600">{errors.due_on}</p>}
           </div>
         </div>
 
@@ -287,14 +290,14 @@ export default function NewProjectPage() {
           {form.objectives.length > 0 && (
             <ul className="space-y-1">
               {form.objectives.map((objective) => (
-                <li key={objective.key} className="flex items-center justify-between gap-2 rounded border border-slate-100 bg-slate-50 px-3 py-1.5 text-sm">
+                <li key={objective.key} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5 text-sm">
                   <span className="min-w-0 truncate">
                     {objective.title} — {assigneeNames(objective.assignees)} — {formatJalali(objective.due_on)}
                   </span>
                   <button
                     type="button"
                     onClick={() => removeObjective(objective.key)}
-                    className="shrink-0 text-xs text-red-600 hover:underline"
+                    className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-rose-600 transition-colors hover:bg-rose-50"
                   >
                     حذف
                   </button>
@@ -304,7 +307,7 @@ export default function NewProjectPage() {
           )}
 
           {form.section !== null && form.members.length > 0 ? (
-            <div className="space-y-2 rounded border border-slate-100 bg-slate-50 p-3">
+            <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
               <div className="flex flex-wrap items-end gap-2">
                 <div className="flex-1">
                   <label className="mb-1 block text-xs text-slate-600" htmlFor="objective-title">
@@ -326,10 +329,10 @@ export default function NewProjectPage() {
               </div>
               <div>
                 <span className="mb-1 block text-xs text-slate-600">مسئولان</span>
-                <ul className="max-h-32 space-y-1 overflow-y-auto rounded border border-slate-200 bg-white p-2">
+                <ul className="max-h-32 space-y-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">
                   {form.members.map((member) => (
                     <li key={member.user}>
-                      <label className="flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-slate-50">
+                      <label className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-slate-50">
                         <input
                           type="checkbox"
                           checked={draft.assignees.includes(member.user)}
@@ -347,7 +350,7 @@ export default function NewProjectPage() {
                   type="button"
                   onClick={addObjective}
                   disabled={!canAddDraftObjective(draft)}
-                  className="rounded border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  className={buttonClass({ variant: "secondary", size: "md" })}
                 >
                   افزودن
                 </button>
@@ -358,7 +361,7 @@ export default function NewProjectPage() {
           )}
         </div>
 
-        <button type="submit" disabled={saving} className="w-full rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+        <button type="submit" disabled={saving} className={buttonClass({ variant: "primary", size: "md", className: "w-full" })}>
           {saving ? "در حال ایجاد..." : "ایجاد پروژه"}
         </button>
       </form>

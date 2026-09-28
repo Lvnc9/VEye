@@ -9,6 +9,8 @@ import type { ProjectComment } from "@/lib/projects";
 import type { Paginated } from "@/lib/types";
 import { useApiQuery } from "@/lib/use-api-query";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { buttonClass } from "@/components/ui/Button";
+import { controlClass } from "@/components/ui/Field";
 
 /** یادداشت‌های پروژه: anyone who can read the project may post; only a comment's own author may
  *  ever delete it (backend enforces this — `can_delete` here only decides whether to show the
@@ -62,8 +64,8 @@ export function CommentsPanel({ projectId }: { projectId: number }) {
   const rows = comments.data?.results ?? [];
 
   return (
-    <section aria-label="یادداشت‌ها" className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-3 text-base font-semibold text-slate-900">یادداشت‌ها</h2>
+    <section aria-label="یادداشت‌ها" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
+      <h2 className="mb-4 text-base font-bold text-slate-900">یادداشت‌ها</h2>
       {error && <ErrorBanner message={error} />}
       <form onSubmit={onFormSubmit} className="mb-4 space-y-2">
         <textarea
@@ -74,10 +76,10 @@ export function CommentsPanel({ projectId }: { projectId: number }) {
           aria-label="متن یادداشت"
           maxLength={4000}
           rows={2}
-          className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+          className={`${controlClass} w-full px-3 py-2 text-sm`}
         />
         <div className="flex justify-end">
-          <button type="submit" disabled={posting || !body.trim()} className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+          <button type="submit" disabled={posting || !body.trim()} className={buttonClass({ variant: "primary", size: "md" })}>
             ثبت
           </button>
         </div>
@@ -106,7 +108,7 @@ export function CommentsPanel({ projectId }: { projectId: number }) {
                   type="button"
                   onClick={() => remove(comment.id)}
                   aria-label="حذف یادداشت"
-                  className="shrink-0 text-xs text-red-600 hover:underline"
+                  className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-rose-600 transition-colors hover:bg-rose-50"
                 >
                   حذف
                 </button>

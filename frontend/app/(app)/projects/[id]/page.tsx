@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { ApiError, apiPatch, apiPost } from "@/lib/api-client";
 import { formatJalali } from "@/lib/jalali";
-import { initials } from "@/lib/organization";
 import {
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_TONE,
@@ -21,8 +20,17 @@ import { DocumentLinksPanel } from "@/components/projects/DocumentLinksPanel";
 import { MeetingsPanel } from "@/components/projects/MeetingsPanel";
 import { ObjectiveTree } from "@/components/projects/ObjectiveTree";
 import { ProjectActivityFeed } from "@/components/projects/ProjectActivityFeed";
+import { AlarmClock, Archive, ArchiveRestore, ArrowRight, CalendarClock, CalendarPlus, Flag, Users } from "lucide-react";
+import Link from "next/link";
+import { Alert } from "@/components/ui/Alert";
+import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { cardClass } from "@/components/ui/Card";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { cx } from "@/components/ui/cx";
 
-const select = "rounded border border-slate-300 bg-white px-2 py-1.5 text-sm";
+// A status select is tinted with its status's own tone rather than the white control look.
+const select = "h-9 rounded-lg border-0 px-2.5 text-sm transition-shadow focus:outline-none focus:ring-4 focus:ring-brand-500/15";
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -65,15 +73,33 @@ export default function ProjectDetailPage() {
   if (project.error || !project.data) return <ErrorBanner message={project.error ?? "دریافت پروژه ممکن نشد."} />;
   const data = project.data;
 
+  const facts: { label: string; value: string | number; icon: React.ReactNode }[] = [
+    { label: "تاریخ شروع", value: data.starts_on ? formatJalali(data.starts_on) : "—", icon: <Flag /> },
+    { label: "مهلت پروژه", value: data.due_on ? formatJalali(data.due_on) : "—", icon: <CalendarClock /> },
+    { label: "تاریخ ایجاد", value: formatJalali(data.created_at), icon: <CalendarPlus /> },
+    { label: "تعداد اعضا", value: data.member_count, icon: <Users /> },
+  ];
+
   return (
     <div className="space-y-6">
+      <nav className="text-sm">
+        <Link
+          href="/projects"
+          className="group inline-flex items-center gap-1.5 text-slate-500 transition-colors hover:text-slate-900"
+        >
+          <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+          پروژه‌ها
+        </Link>
+      </nav>
+
       {error && <ErrorBanner message={error} />}
 
-      <header className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <header className={cx(cardClass, "relative overflow-hidden p-5 sm:p-6")}>
+        <div aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-brand-500 via-indigo-400 to-emerald-400 opacity-80" />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-slate-900">{data.name}</h1>
-            <p className="mt-1 text-sm text-slate-500">{data.section_name}</p>
+            <h1 className="text-2xl font-bold leading-10 text-slate-900">{data.name}</h1>
+            <p className="mt-0.5 text-sm text-slate-500">{data.section_name}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {data.can_edit ? (
@@ -90,74 +116,69 @@ export default function ProjectDetailPage() {
                 ))}
               </select>
             ) : (
-              <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${PROJECT_STATUS_TONE[data.status]}`}>
+              <span className={`rounded-full px-2.5 py-0.5 text-xs ${PROJECT_STATUS_TONE[data.status]}`}>
                 {data.status_label}
               </span>
             )}
             {data.can_edit && (
-              <button
-                type="button"
-                disabled={archiving}
+              <Button
+                size="sm"
+                loading={archiving}
                 onClick={toggleArchive}
-                className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                icon={data.is_archived ? <ArchiveRestore /> : <Archive />}
               >
                 {data.is_archived ? "خروج از بایگانی" : "بایگانی"}
-              </button>
+              </Button>
             )}
           </div>
         </div>
 
         {data.is_archived && (
-          <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <Alert tone="warning" className="mt-4">
             این پروژه بایگانی شده و فقط‌خواندنی است.
-          </p>
+          </Alert>
         )}
 
-        {data.goal && <p className="mt-3 text-sm leading-7 text-slate-700">{data.goal}</p>}
+        {data.goal && <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-700">{data.goal}</p>}
 
-        <div className="mt-4 flex items-center gap-2">
-          <div className="h-2.5 max-w-sm flex-1 overflow-hidden rounded-full bg-slate-100" role="presentation">
-            <div className={`h-full rounded-full ${progressBarTone(data.progress)}`} style={{ width: `${data.progress ?? 0}%` }} />
-          </div>
-          <span className="text-sm text-slate-600">{progressLabel(data.progress)}</span>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <ProgressBar
+            value={data.progress}
+            tone={progressBarTone(data.progress)}
+            className="h-2.5 min-w-40 max-w-md flex-1"
+            label="پیشرفت پروژه"
+          />
+          <span className="text-sm font-bold text-slate-700 tabular-nums">{progressLabel(data.progress)}</span>
           {data.overdue_count > 0 && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+            <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs text-rose-800 ring-1 ring-inset ring-rose-600/20">
+              <AlarmClock className="size-3.5" />
               {data.overdue_count} ریزهدف دیرکرد
             </span>
           )}
         </div>
 
-        <dl className="mt-4 grid grid-cols-2 gap-3 text-xs text-slate-500 sm:grid-cols-4">
-          <div>
-            <dt>تاریخ شروع</dt>
-            <dd className="text-slate-800">{data.starts_on ? formatJalali(data.starts_on) : "—"}</dd>
-          </div>
-          <div>
-            <dt>مهلت پروژه</dt>
-            <dd className="text-slate-800">{data.due_on ? formatJalali(data.due_on) : "—"}</dd>
-          </div>
-          <div>
-            <dt>تاریخ ایجاد</dt>
-            <dd className="text-slate-800">{formatJalali(data.created_at)}</dd>
-          </div>
-          <div>
-            <dt>تعداد اعضا</dt>
-            <dd className="text-slate-800">{data.member_count}</dd>
-          </div>
+        <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {facts.map((fact) => (
+            <div key={fact.label} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-200/70">
+              <span className="text-slate-400 [&_svg]:size-4">{fact.icon}</span>
+              <div className="min-w-0">
+                <dt className="text-xs text-slate-500">{fact.label}</dt>
+                <dd className="truncate text-sm font-bold text-slate-800 tabular-nums">{fact.value}</dd>
+              </div>
+            </div>
+          ))}
         </dl>
 
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
           {data.members.map((member) => (
             <span
               key={member.id}
               title={`${member.user_name} — ${member.role_label}`}
-              className="flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pe-3 ps-1 text-xs text-slate-700"
+              className="flex items-center gap-1.5 rounded-full bg-white py-1 pe-3 ps-1 text-xs text-slate-700 ring-1 ring-inset ring-slate-200"
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-700 text-[10px] font-bold text-white">
-                {initials(member.user_name)}
-              </span>
+              <Avatar name={member.user_name} size="xs" />
               {member.user_name}
-              {member.role === "MANAGER" && <span className="text-slate-500">(مدیر)</span>}
+              {member.role === "MANAGER" && <span className="text-brand-700">(مدیر)</span>}
               {member.is_guest && <span className="text-slate-400">· مهمان</span>}
             </span>
           ))}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api-client";
 import { formatJalali, formatJalaliDateTime } from "@/lib/jalali";
 import { MEETING_EVENT_KINDS, PROJECT_EVENT_TONE, type ProjectActivityEvent } from "@/lib/projects";
+import { ArrowLeft } from "lucide-react";
 
 /**
  * A project's activity feed (docs/11 §3.5) — the same shape of thing `WorkflowTimeline.tsx` is for
@@ -29,8 +30,8 @@ export function ProjectActivityFeed({ projectId, version }: { projectId: number;
   const events = loaded?.key === key ? loaded.events : [];
 
   return (
-    <section aria-label="فعالیت‌های پروژه" className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-3 text-base font-semibold text-slate-900">فعالیت‌ها</h2>
+    <section aria-label="فعالیت‌های پروژه" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
+      <h2 className="mb-4 text-base font-bold text-slate-900">فعالیت‌ها</h2>
       {events.length === 0 ? (
         <p className="text-sm text-slate-500">هنوز رویدادی ثبت نشده است.</p>
       ) : (
@@ -56,7 +57,7 @@ export function ProjectActivityFeed({ projectId, version }: { projectId: number;
                   // status enum, so it has no from_status_label/to_status_label to fall back on — the
                   // labels are always blank for this kind (backend history.py's _STATUS_ENUM_BY_KIND).
                   <p className="mt-0.5 text-xs text-slate-500">
-                    {formatJalali(event.from_status)} ← {formatJalali(event.to_status)}
+                    {formatJalali(event.from_status)} <ArrowLeft className="inline size-3" aria-label="به" /> {formatJalali(event.to_status)}
                   </p>
                 ) : MEETING_EVENT_KINDS.has(event.kind) && event.to_status ? (
                   // The meeting's day, as an ISO date in to_status (backend services._meeting_event).
@@ -65,7 +66,7 @@ export function ProjectActivityFeed({ projectId, version }: { projectId: number;
                   event.from_status_label &&
                   event.to_status_label && (
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {event.from_status_label} ← {event.to_status_label}
+                      {event.from_status_label} <ArrowLeft className="inline size-3" aria-label="به" /> {event.to_status_label}
                     </p>
                   )
                 )}

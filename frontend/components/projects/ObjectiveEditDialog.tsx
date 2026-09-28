@@ -5,9 +5,12 @@ import { ApiError, apiPatch } from "@/lib/api-client";
 import { editObjectiveBody, type Objective, type ProjectMember } from "@/lib/projects";
 import { ErrorBanner } from "@/components/StatusBanner";
 import { JalaliDatePicker } from "@/components/JalaliDatePicker";
+import { buttonClass } from "@/components/ui/Button";
+import { controlClass } from "@/components/ui/Field";
+import { Dialog } from "@/components/ui/Dialog";
 
-const input = "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm";
-const label = "mb-1 block text-sm font-medium text-slate-700";
+const input = `${controlClass} w-full px-3 py-2 text-sm`;
+const label = "mb-1.5 block text-sm text-slate-700";
 
 /** «ویرایش» on the objective card: everything `can_edit` covers except position, which is the
  *  ▲/▼ buttons' job. `assignees` always replaces the whole set (the API contract, not a diff). */
@@ -61,16 +64,7 @@ export function ObjectiveEditDialog({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`ویرایش ${objective.title}`}
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 pt-16"
-      onKeyDown={(event) => event.key === "Escape" && !saving && onCancel()}
-      onClick={(event) => event.target === event.currentTarget && !saving && onCancel()}
-    >
-      <div className="w-full max-w-lg space-y-4 rounded-lg bg-white p-5 shadow-xl">
-        <h2 className="text-lg font-semibold text-slate-900">ویرایش ریزهدف</h2>
+    <Dialog label={`ویرایش ${objective.title}`} title="ویرایش ریزهدف" onClose={onCancel} busy={saving}>
         {error && <ErrorBanner message={error} />}
 
         <div>
@@ -105,10 +99,10 @@ export function ObjectiveEditDialog({
           {members.length === 0 ? (
             <p className="text-xs text-slate-500">این پروژه هنوز عضوی ندارد.</p>
           ) : (
-            <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-slate-200 p-2">
+            <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
               {members.map((member) => (
                 <li key={member.user}>
-                  <label className="flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-slate-50">
+                  <label className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-slate-50">
                     <input type="checkbox" checked={assignees.includes(member.user)} onChange={() => toggle(member.user)} />
                     <span className="truncate">{member.user_name}</span>
                     <span className="truncate text-xs text-slate-500">{member.user_title}</span>
@@ -151,7 +145,7 @@ export function ObjectiveEditDialog({
             type="button"
             onClick={onCancel}
             disabled={saving}
-            className="rounded border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className={buttonClass({ variant: "secondary", size: "md" })}
           >
             انصراف
           </button>
@@ -159,12 +153,11 @@ export function ObjectiveEditDialog({
             type="button"
             onClick={submit}
             disabled={saving}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+            className={buttonClass({ variant: "primary", size: "md" })}
           >
             {saving ? "در حال ذخیره..." : "ذخیره"}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
