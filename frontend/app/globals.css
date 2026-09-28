@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f7fb;
+  --foreground: #0f172a;
 
-  /* The dark surfaces of the public pages (login, setup). The app shell keeps its light theme. */
+  /* The navy surfaces: the public pages (login, setup) and the app's sidebar. */
   --surface: #0a1020;
   --surface-raised: #111a30;
   --line: #22304d;
@@ -12,6 +12,11 @@
   --accent-strong: #0ea5e9;
 }
 
+/*
+ * The VEye design system (docs/05 «Design system»). Neutrals are Tailwind's slate; `brand` is the one
+ * accent (an alias of sky, so it can be retuned here). Primary actions use brand-700, which keeps
+ * 4.5:1 on white; brand-400 (= --accent) is for accents on the navy surfaces.
+ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -23,17 +28,131 @@
   --font-sans: var(--font-vazir), system-ui, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-vazir), system-ui, sans-serif;
+@theme {
+  --color-canvas: #f5f7fb;
+  --color-brand-50: var(--color-sky-50);
+  --color-brand-100: var(--color-sky-100);
+  --color-brand-200: var(--color-sky-200);
+  --color-brand-300: var(--color-sky-300);
+  --color-brand-400: var(--color-sky-400);
+  --color-brand-500: var(--color-sky-500);
+  --color-brand-600: var(--color-sky-600);
+  --color-brand-700: var(--color-sky-700);
+  --color-brand-800: var(--color-sky-800);
+  --color-brand-900: var(--color-sky-900);
+  --color-brand-950: var(--color-sky-950);
+
+  /* Persian needs taller lines than Latin: the default 1.43 clips diacritics and crowds wrapped text. */
+  --text-xs--line-height: calc(1.125 / 0.75);
+  --text-sm--line-height: calc(1.5 / 0.875);
+
+  /* One elevation scale, tinted with slate-900 rather than black. */
+  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.05);
+  --shadow-raised: 0 10px 24px -8px rgb(15 23 42 / 0.14), 0 2px 6px -2px rgb(15 23 42 / 0.06);
+  --shadow-overlay: 0 24px 56px -12px rgb(15 23 42 / 0.3), 0 4px 12px -4px rgb(15 23 42 / 0.08);
+
+  /* Motion: decelerate when arriving, accelerate when leaving. */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-quart: cubic-bezier(0.5, 0, 0.75, 0);
+
+  --animate-fade-up: veye-fade-up 280ms var(--ease-out-quint) both;
+  --animate-fade-in: veye-fade-in 200ms var(--ease-out-quint) both;
+  --animate-scale-in: veye-scale-in 260ms var(--ease-out-quint) both;
+  --animate-pop: veye-pop 320ms var(--ease-out-quint) both;
+
+  @keyframes veye-fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes veye-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes veye-scale-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  @keyframes veye-pop {
+    0% {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+    60% {
+      transform: scale(1.08);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
 }
 
-/* Persian digits everywhere text is rendered, matching the desktop app and
-   the generated PDFs. Opt out with .latn on a specific element (e.g. a
-   document code like PO-01-01, which must stay Latin). */
-body {
-  font-variant-numeric: normal;
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-vazir), system-ui, sans-serif;
+    /* Persian digits everywhere text is rendered, matching the desktop app and the generated PDFs.
+       Opt out with .latn on a specific element (e.g. a document code like PO-01-01, which must stay Latin). */
+    font-variant-numeric: normal;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Tailwind 4's preflight leaves buttons on the default arrow; everything clickable shows a hand. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  summary,
+  label[for],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /* One visible focus ring for keyboard users, everywhere. Mouse clicks don't show it. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-brand-100);
+    color: var(--color-brand-950);
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-brand-700);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-slate-300) transparent;
+  }
+
+  /* lucide icons: one stroke weight across the product; they never shrink in a flex row. */
+  svg.lucide {
+    stroke-width: 1.75;
+    flex-shrink: 0;
+  }
 }
 
 .latn {
@@ -42,8 +161,44 @@ body {
   unicode-bidi: embed;
 }
 
-/* Public-page motion: a staggered entrance (set --i per element) and a slow drifting accent rule.
-   Both switch off for people who ask for reduced motion. */
+/* Directional icons (log out, send) point the other way in a right-to-left UI. */
+.rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* Page entry: every screen of the app rises in once (app/(app)/template.tsx). */
+.veye-page {
+  animation: veye-fade-up 280ms var(--ease-out-quint) both;
+}
+
+/* A staggered entrance for cards and list items: set --i on each (40ms apart). */
+.veye-stagger {
+  animation: veye-fade-up 320ms var(--ease-out-quint) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+/* Skeleton placeholders: a soft light band sweeps across (transform only). */
+.veye-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-slate-200);
+  border-radius: 0.5rem;
+}
+.veye-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.65), transparent);
+  animation: veye-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes veye-shimmer {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+/* Public-page motion: a staggered entrance (set --i per element) and a slow drifting accent rule. */
 @keyframes veye-rise {
   from {
     opacity: 0;
@@ -77,9 +232,18 @@ body {
   animation: veye-drift 6s linear infinite;
 }
 
+/* Everything above switches off for people who ask for reduced motion: things still appear, at once. */
 @media (prefers-reduced-motion: reduce) {
-  .veye-rise,
-  .veye-rule {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .veye-skeleton::after {
     animation: none;
   }
 }

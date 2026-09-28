@@ -1,17 +1,19 @@
 import type { DocumentStatus } from "@/lib/types";
+import { Badge, type Tone } from "@/components/ui/Badge";
 
-const STYLES: Record<DocumentStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-700",
-  AWAITING_CONFIRMATION: "bg-amber-100 text-amber-800",
-  AWAITING_APPROVAL: "bg-orange-100 text-orange-800",
-  UNDER_CONTROL: "bg-green-100 text-green-800",
-  OBSOLETE: "bg-red-100 text-red-800",
+/** Draft → awaiting confirmation → awaiting approval → under control; obsolete is the dead end. */
+export const DOCUMENT_STATUS_TONE: Record<DocumentStatus, Tone> = {
+  DRAFT: "neutral",
+  AWAITING_CONFIRMATION: "warning",
+  AWAITING_APPROVAL: "brand",
+  UNDER_CONTROL: "success",
+  OBSOLETE: "danger",
 };
 
 export function StatusBadge({ status, label }: { status: DocumentStatus; label: string }) {
   return (
-    <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${STYLES[status]}`}>
+    <Badge tone={DOCUMENT_STATUS_TONE[status]} dot>
       {label}
-    </span>
+    </Badge>
   );
 }

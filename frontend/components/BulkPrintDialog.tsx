@@ -1,7 +1,12 @@
 "use client";
 
 import { Code } from "@/components/Code";
+import { Download } from "lucide-react";
 import { ErrorBanner } from "@/components/StatusBanner";
+import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { Dialog, DialogFooter } from "@/components/ui/Dialog";
+import { SkeletonLines } from "@/components/ui/Skeleton";
 import { downloadUrl, preflightPath, type BulkSelection } from "@/lib/bulk-print";
 import { useApiQuery } from "@/lib/use-api-query";
 import type { BulkPrintPreflight } from "@/lib/types";
@@ -23,81 +28,66 @@ export function BulkPrintDialog({
   const { data, error, loading } = useApiQuery<BulkPrintPreflight>(preflightPath(selection));
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="چاپ لیست"
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 pt-20"
-      onKeyDown={(event) => event.key === "Escape" && onClose()}
-      onClick={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div className="w-full max-w-lg space-y-4 rounded-lg bg-white p-5 shadow-xl">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">چاپ لیست</h2>
-          <p className="mt-1 text-sm text-slate-500">{label}</p>
+    <Dialog label="چاپ لیست" title="چاپ لیست" description={label} onClose={onClose}>
+      {loading && (
+        <div role="status" className="space-y-3">
+          <p className="text-sm text-slate-500">در حال بررسی...</p>
+          <SkeletonLines rows={2} />
         </div>
+      )}
+      {error && <ErrorBanner message={error} />}
 
-        {loading && <p className="text-sm text-slate-600">در حال بررسی...</p>}
-        {error && <ErrorBanner message={error} />}
-
-        {data && (
-          <>
-            <p className="text-sm leading-6 text-slate-700">
-              <span className="font-semibold text-green-700">{data.ready}</span> PDF آمادهٔ دانلود است
-              {data.missing.length > 0 && (
-                <>
-                  {" "}
-                  و برای <span className="font-semibold text-amber-700">{data.missing.length}</span> مستند PDF وجود ندارد
-                </>
-              )}
-              . فقط PDFهای ساخته‌شده در فایل ZIP قرار می‌گیرند؛ چیزی ساخته نمی‌شود.
-            </p>
-
-            {data.truncated && (
-              <p role="status" className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                از {data.total} مستند، فقط {data.cap} مورد نخست (به ترتیب کد) بررسی شد. برای بقیه، انتخاب را محدودتر کنید.
-              </p>
-            )}
-
+      {data && (
+        <>
+          <p className="text-sm leading-7 text-slate-700">
+            <span className="font-bold text-emerald-700">{data.ready}</span> PDF آمادهٔ دانلود است
             {data.missing.length > 0 && (
-              <div className="max-h-56 overflow-y-auto rounded border border-slate-200">
-                <ul className="divide-y divide-slate-100 text-sm">
-                  {data.missing.map((item) => (
-                    <li key={item.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-                      <Code>{item.full_code}</Code>
-                      <span className="min-w-[8rem] flex-1 text-slate-800">{item.title}</span>
-                      <span className="text-xs text-amber-700">{item.reason_label}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <>
+                {" "}
+                و برای <span className="font-bold text-amber-700">{data.missing.length}</span> مستند PDF وجود ندارد
+              </>
             )}
-          </>
-        )}
+            . فقط PDFهای ساخته‌شده در فایل ZIP قرار می‌گیرند؛ چیزی ساخته نمی‌شود.
+          </p>
 
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-          >
-            بستن
-          </button>
-          <button
-            type="button"
-            disabled={!data || data.ready === 0}
-            onClick={() => {
-              // A plain navigation: the browser sends its cookie and saves the ZIP;
-              // the page stays put (Content-Disposition: attachment).
-              window.location.assign(downloadUrl(selection));
-              onClose();
-            }}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
-          >
-            {data ? `دانلود ZIP (${data.ready} فایل)` : "دانلود ZIP"}
-          </button>
-        </div>
-      </div>
-    </div>
+          {data.truncated && (
+            <Alert tone="warning" role="status">
+              از {data.total} مستند، فقط {data.cap} مورد نخست (به ترتیب کد) بررسی شد. برای بقیه، انتخاب را محدودتر کنید.
+            </Alert>
+          )}
+
+          {data.missing.length > 0 && (
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200">
+              <ul className="divide-y divide-slate-100 text-sm">
+                {data.missing.map((item) => (
+                  <li key={item.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                    <Code>{item.full_code}</Code>
+                    <span className="min-w-[8rem] flex-1 text-slate-800">{item.title}</span>
+                    <span className="text-xs text-amber-700">{item.reason_label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+
+      <DialogFooter>
+        <Button onClick={onClose}>بستن</Button>
+        <Button
+          variant="primary"
+          icon={<Download />}
+          disabled={!data || data.ready === 0}
+          onClick={() => {
+            // A plain navigation: the browser sends its cookie and saves the ZIP;
+            // the page stays put (Content-Disposition: attachment).
+            window.location.assign(downloadUrl(selection));
+            onClose();
+          }}
+        >
+          {data ? `دانلود ZIP (${data.ready} فایل)` : "دانلود ZIP"}
+        </Button>
+      </DialogFooter>
+    </Dialog>
   );
 }

@@ -1,5 +1,8 @@
 "use client";
 
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+
 /** Previous / next with «صفحه X از Y», as on the register. Renders nothing for one page. */
 export function Pager({
   page,
@@ -11,18 +14,18 @@ export function Pager({
   onChange: (page: number) => void;
 }) {
   if (totalPages <= 1) return null;
-  const button = "rounded border border-slate-300 bg-white px-3 py-1.5 disabled:opacity-40";
   return (
-    <nav className="flex items-center justify-center gap-4 text-sm" aria-label="صفحه‌بندی">
-      <button type="button" onClick={() => onChange(page - 1)} disabled={page <= 1} className={button}>
+    <nav className="flex items-center justify-center gap-3 text-sm" aria-label="صفحه‌بندی">
+      <Button size="sm" onClick={() => onChange(page - 1)} disabled={page <= 1} icon={<ChevronRight />}>
         قبلی
-      </button>
-      <span className="text-slate-600">
+      </Button>
+      <span className="min-w-24 text-center text-slate-600 tabular-nums">
         صفحه {page} از {totalPages}
       </span>
-      <button type="button" onClick={() => onChange(page + 1)} disabled={page >= totalPages} className={button}>
+      <Button size="sm" onClick={() => onChange(page + 1)} disabled={page >= totalPages}>
         بعدی
-      </button>
+        <ChevronLeft />
+      </Button>
     </nav>
   );
 }

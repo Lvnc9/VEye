@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api-client";
 import { ErrorBanner } from "@/components/StatusBanner";
+import { Button } from "@/components/ui/Button";
+import { Dialog, DialogFooter } from "@/components/ui/Dialog";
 
 interface Props {
   title: string;
@@ -37,40 +39,17 @@ export function ConfirmDialog({ title, message, confirmLabel, danger = false, on
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 pt-24"
-      onKeyDown={(event) => event.key === "Escape" && !busy && onCancel()}
-      onClick={(event) => event.target === event.currentTarget && !busy && onCancel()}
-    >
-      <div className="w-full max-w-md space-y-4 rounded-lg bg-white p-5 shadow-xl">
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        <p className="text-sm leading-6 text-slate-600">{message}</p>
-        {error && <ErrorBanner message={error} />}
-        <div className="flex justify-end gap-2">
-          <button
-            ref={cancelRef}
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            className="rounded border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            انصراف
-          </button>
-          <button
-            type="button"
-            onClick={confirm}
-            disabled={busy}
-            className={`rounded px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
-              danger ? "bg-red-600 hover:bg-red-700" : "bg-slate-900 hover:bg-slate-700"
-            }`}
-          >
-            {busy ? "لحظه‌ای صبر کنید..." : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Dialog label={title} title={title} onClose={onCancel} busy={busy} size="sm">
+      <p className="text-sm leading-7 text-slate-600">{message}</p>
+      {error && <ErrorBanner message={error} />}
+      <DialogFooter>
+        <Button ref={cancelRef} onClick={onCancel} disabled={busy}>
+          انصراف
+        </Button>
+        <Button variant={danger ? "danger" : "primary"} onClick={confirm} loading={busy}>
+          {busy ? "لحظه‌ای صبر کنید..." : confirmLabel}
+        </Button>
+      </DialogFooter>
+    </Dialog>
   );
 }

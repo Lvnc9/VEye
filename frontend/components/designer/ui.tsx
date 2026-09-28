@@ -1,10 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Plus } from "lucide-react";
 import type { DesignerSection } from "@/lib/types";
+import { controlClass } from "@/components/ui/Field";
+import { IconButton as UiIconButton } from "@/components/ui/IconButton";
 
-export const inputClass =
-  "w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500";
+/** Designer text boxes and text areas: the shared control look, sized by their padding (they grow). */
+export const inputClass = `${controlClass} w-full py-2`;
 
 /** Props every block editor receives. Blocks change themselves through a
  *  functional `update` rather than a value: uploads resolve asynchronously, and
@@ -32,21 +35,10 @@ export function IconButton({
   children: ReactNode;
   tone?: "neutral" | "danger";
 }) {
-  const color =
-    tone === "danger"
-      ? "text-red-600 hover:bg-red-50 disabled:hover:bg-transparent"
-      : "text-slate-600 hover:bg-slate-100 disabled:hover:bg-transparent";
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-      className={`inline-flex h-8 min-w-8 items-center justify-center rounded px-2 text-sm disabled:cursor-not-allowed disabled:opacity-30 ${color}`}
-    >
+    <UiIconButton label={label} onClick={onClick} disabled={disabled} tone={tone} size="sm">
       {children}
-    </button>
+    </UiIconButton>
   );
 }
 
@@ -64,13 +56,14 @@ export function AddButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded border border-dashed border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 text-sm text-slate-600 transition-[background-color,border-color,color,transform] duration-150 hover:border-brand-400 hover:bg-brand-50/60 hover:text-brand-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-300 disabled:hover:bg-transparent disabled:hover:text-slate-600"
     >
-      + {children}
+      <Plus className="size-4" />
+      {children}
     </button>
   );
 }
 
 export function FieldLabel({ children }: { children: ReactNode }) {
-  return <span className="mb-1 block text-sm font-medium text-slate-700">{children}</span>;
+  return <span className="mb-1.5 block text-sm text-slate-700">{children}</span>;
 }
