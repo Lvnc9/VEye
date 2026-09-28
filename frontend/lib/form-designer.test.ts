@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  rekey,
   coveredCells,
   mergeAt,
   mergeNext,
@@ -330,5 +331,14 @@ describe("merged cells", () => {
     expect(resizeRows(merged, "header", 1).merges).toEqual([{ row: 1, col: 1, rowspan: 2, colspan: 1 }]);
     expect(resizeRows(merged, "rows", 1).merges).toEqual([]);
     expect(resizeRows(merged, "rows", 3).rows).toHaveLength(3);
+  });
+});
+
+describe("rekey", () => {
+  it("gives every element a fresh key and changes nothing else", () => {
+    const state = { ...fromResponse(response([])), elements: [newElement("heading"), newElement("table")] };
+    const again = rekey(state);
+    expect(again.elements.map((e) => e.key)).not.toEqual(state.elements.map((e) => e.key));
+    expect(snapshot(again)).toBe(snapshot(state));
   });
 });

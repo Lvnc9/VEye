@@ -132,6 +132,12 @@ export function snapshot(state: DesignerState): string {
   return JSON.stringify(rest);
 }
 
+/** The same state with fresh React keys — for work restored from this browser's
+ *  storage after a reload, when the key counter has started again. */
+export function rekey(state: DesignerState): DesignerState {
+  return { ...state, sections: state.sections.map((section) => ({ ...section, key: newKey() })) };
+}
+
 /** Moves a block one place up (-1) or down (+1); a no-op at either end. */
 export function moveSection(sections: DesignerSection[], index: number, direction: -1 | 1): DesignerSection[] {
   const target = index + direction;

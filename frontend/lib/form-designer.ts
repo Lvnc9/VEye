@@ -490,6 +490,11 @@ export function toPayload(state: FormState): FormSavePayload {
   };
 }
 
+/** The same state with fresh React keys (see lib/designer.ts `rekey`). */
+export function rekey(state: FormState): FormState {
+  return { ...state, elements: state.elements.map((element) => ({ ...element, key: newKey() })) };
+}
+
 export function snapshot(state: FormState): string {
   const { base_version: _version, ...rest } = toPayload(state);
   void _version;

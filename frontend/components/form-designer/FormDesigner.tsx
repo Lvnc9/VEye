@@ -9,6 +9,7 @@ import {
   insertAfter,
   moveElement,
   newElement,
+  rekey,
   snapshot,
   toPayload,
   validate,
@@ -26,7 +27,7 @@ import { useDesignerDocument, type DesignerAdapter } from "@/components/designer
 import { FormCanvas } from "./FormCanvas";
 import { ElementInspector, PageSettingsPanel } from "./Inspector";
 
-const formAdapter: DesignerAdapter<FormState> = { fromResponse, toPayload, snapshot, validate };
+const formAdapter: DesignerAdapter<FormState> = { fromResponse, toPayload, snapshot, validate, rekey };
 
 type Tab = "element" | "page";
 

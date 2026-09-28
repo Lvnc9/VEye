@@ -8,6 +8,7 @@ import { setFlash } from "@/lib/flash";
 import { useCurrentUser } from "@/lib/current-user";
 import type { ContentResponse } from "@/lib/types";
 import { emptyHistory, record, redo, undo, type History } from "@/lib/undo-history";
+import { clearDraft, findRecovery, writeDraft, type Recovery } from "@/lib/designer-draft";
 
 /** How one kind of document body becomes editable state and back. The classic
  *  block designer and the form designer each supply one; everything else about
@@ -20,7 +21,12 @@ export interface DesignerAdapter<S> {
   snapshot(state: S): string;
   /** Local checks that mirror the server's; Persian messages. */
   validate(state: S): string[];
+  /** Fresh React keys, for work restored from this browser after a reload. */
+  rekey(state: S): S;
 }
+
+/** How long typing must pause before unsaved work is written to this browser. */
+const DRAFT_DEBOUNCE_MS = 1000;
 
 type Model<S> = { state: S; history: History<S> };
 
@@ -54,7 +60,7 @@ function modelReducer<S>(model: Model<S>, action: Action<S>): Model<S> {
 /** The load / save / preview life cycle of `/documents/{id}/content/`. */
 export function useDesignerDocument<S>(initial: ContentResponse, adapter: DesignerAdapter<S>) {
   const router = useRouter();
-  const { can } = useCurrentUser();
+  const { can, user } = useCurrentUser();
   const id = initial.document.id;
 
   const [content, setContent] = useState<ContentResponse>(initial);
@@ -105,6 +111,46 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
   const canEdit = content.editable && can("create_document");
   /** Every input is disabled while this is true. */
   const locked = !canEdit || saving;
+
+  // Unsaved work survives a closed tab (lib/designer-draft.ts). Once the signed-in user
+  // is known, look for work left from before; adjusting state during render is React's
+  // pattern for deriving it from a value that arrives later (no effect needed).
+  const userId = user?.id ?? null;
+  const [recoveryFor, setRecoveryFor] = useState<number | null>(null);
+  const [recovery, setRecovery] = useState<Recovery<S>>(null);
+  if (userId !== null && recoveryFor !== userId) {
+    setRecoveryFor(userId);
+    setRecovery(findRecovery<S>(userId, id, content.version, savedSnapshot, adapter.snapshot));
+  }
+  const offering = recovery?.kind === "offer";
+  const stateSnapshot = adapter.snapshot(state);
+
+  useEffect(() => {
+    // Until the author answers the offer, the stored work is left as it is.
+    if (userId === null || offering || !canEdit) return;
+    if (!dirty) {
+      clearDraft(userId, id);
+      return;
+    }
+    const timer = window.setTimeout(
+      () => writeDraft({ userId, documentId: id, baseVersion: content.version, state, at: Date.now() }),
+      DRAFT_DEBOUNCE_MS,
+    );
+    return () => window.clearTimeout(timer);
+    // `state` is written as of the latest snapshot; the snapshot string is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, id, offering, canEdit, dirty, stateSnapshot, content.version]);
+
+  function restoreDraft() {
+    if (recovery?.kind !== "offer") return;
+    setState(adapter.rekey(recovery.state));
+    setRecovery(null);
+  }
+
+  function discardDraft() {
+    if (userId !== null) clearDraft(userId, id);
+    setRecovery(null);
+  }
 
   // Ctrl/⌘+Z undoes, Ctrl/⌘+Shift+Z or Ctrl+Y redoes — for the whole document, text
   // fields included. Matched on the physical key: with a Persian layout `key` is «ظ».
@@ -202,6 +248,9 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
     undo: () => dispatch({ type: "undo" }),
     redo: () => dispatch({ type: "redo" }),
     canUndo: model.history.past.length > 0,
+    recovery,
+    restoreDraft,
+    discardDraft,
     canRedo: model.history.future.length > 0,
     reloading,
     loadError,

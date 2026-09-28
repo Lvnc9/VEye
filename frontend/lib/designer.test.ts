@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  rekey,
   ROLE_ORDER,
   canAddSection,
   fromResponse,
@@ -223,5 +224,15 @@ describe("validate", () => {
     if (table.type !== "Changes Table") throw new Error();
     table.rows = [{ text: "  " }];
     expect(validate(state([table]))).toHaveLength(1);
+  });
+});
+
+describe("rekey", () => {
+  it("gives every block a fresh key and changes nothing else", () => {
+    const state = { version: 2, footnote1: "", footnote2: "", sections: [newSection("Short Explanation"), newSection("Attachment")] };
+    const again = rekey(state);
+    expect(again.sections.map((s) => s.key)).not.toEqual(state.sections.map((s) => s.key));
+    expect(new Set(again.sections.map((s) => s.key)).size).toBe(2);
+    expect(snapshot(again)).toBe(snapshot(state));
   });
 });

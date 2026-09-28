@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useCurrentUser } from "@/lib/current-user";
-import { formatJalali } from "@/lib/jalali";
+import { formatJalali, formatJalaliDateTime } from "@/lib/jalali";
 import { Code } from "@/components/Code";
 import { StatusBadge } from "@/components/StatusBadge";
 import { WorkflowActions } from "@/components/WorkflowActions";
@@ -88,6 +88,31 @@ export function DesignerShell<S>({
           {content.editable
             ? "شما دسترسی ویرایش این مستند را ندارید؛ فقط می‌توانید آن را ببینید."
             : "این مستند دیگر پیش‌نویس نیست و محتوای آن قفل شده است؛ فقط می‌توانید آن را ببینید."}
+        </div>
+      )}
+
+      {doc.recovery?.kind === "offer" && canEdit && (
+        <div role="status" className="flex flex-wrap items-center gap-3 rounded border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <p className="flex-1">
+            تغییرات ذخیره‌نشده‌ای از {formatJalaliDateTime(new Date(doc.recovery.at))} در همین مرورگر پیدا شد.
+          </p>
+          <button type="button" onClick={doc.restoreDraft} className="rounded bg-sky-700 px-3 py-1.5 font-medium text-white hover:bg-sky-800">
+            بازیابی
+          </button>
+          <button type="button" onClick={doc.discardDraft} className="rounded border border-sky-300 bg-white px-3 py-1.5 text-sky-800 hover:bg-sky-100">
+            نادیده گرفتن
+          </button>
+        </div>
+      )}
+      {doc.recovery?.kind === "stale" && (
+        <div role="status" className="flex flex-wrap items-center gap-3 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="flex-1">
+            تغییرات ذخیره‌نشده‌ای از {formatJalaliDateTime(new Date(doc.recovery.at))} پیدا شد، اما مستند پس از آن ذخیره شده است؛
+            برای اینکه کار دیگران پاک نشود، کنار گذاشته شد.
+          </p>
+          <button type="button" onClick={doc.discardDraft} className="rounded border border-amber-300 bg-white px-3 py-1.5 text-amber-800 hover:bg-amber-100">
+            بستن
+          </button>
         </div>
       )}
 

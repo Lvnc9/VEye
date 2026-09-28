@@ -4,6 +4,7 @@ import {
   canAddSection,
   fromResponse,
   moveSection,
+  rekey,
   newSection,
   snapshot,
   toPayload,
@@ -31,6 +32,7 @@ const classicAdapter: DesignerAdapter<DesignerState> = {
   toPayload,
   snapshot,
   validate,
+  rekey,
 };
 
 /** طراحی مستند — V_1.0's Poster screen (poster_01.py): the five block types. */
