@@ -77,13 +77,13 @@ export function DeleteNodeButton({ node, onChanged }: { node: OrgNode; onChanged
 
   return (
     <span className="flex items-center gap-2">
-      {error && <span className="text-xs text-red-300">{error}</span>}
+      {error && <span className="text-xs text-rose-300">{error}</span>}
       <button
         type="button"
         onClick={remove}
         disabled={busy}
         aria-label={`حذف ${node.name}`}
-        className="rounded px-2 py-0.5 text-xs text-slate-400 hover:bg-red-500/15 hover:text-red-300 disabled:opacity-50"
+        className="rounded-md px-2 py-0.5 text-xs text-slate-400 transition-colors hover:bg-rose-500/15 hover:text-rose-300 disabled:opacity-50"
       >
         حذف
       </button>

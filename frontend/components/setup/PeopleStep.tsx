@@ -64,7 +64,7 @@ export function PeopleStep({
           ثبت‌شده‌ها{people.data ? ` (${people.data.count})` : ""}
         </h3>
         {people.error ? (
-          <p className="text-xs text-red-300">{people.error}</p>
+          <p className="text-xs text-rose-300">{people.error}</p>
         ) : list.length === 0 ? (
           <p className="text-xs text-slate-500">هنوز کسی ثبت نشده است.</p>
         ) : (

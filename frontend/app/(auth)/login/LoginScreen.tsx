@@ -6,6 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { normalizeNationalCode, safeNextPath } from "@/lib/login";
 import type { SetupStatus } from "@/lib/types";
+import { ArrowLeft, Eye, EyeOff, IdCard, LockKeyhole } from "lucide-react";
+import { BrandMark } from "@/components/ui/BrandMark";
+import { Spinner } from "@/components/ui/Spinner";
 
 const FEATURES = [
   "هر مستند، از تدوین تا تصویب، با امضا و سوابق کامل",
@@ -14,8 +17,14 @@ const FEATURES = [
 ];
 
 const inputClass =
-  "w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 " +
-  "focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30";
+  "h-11 w-full rounded-xl border border-line bg-surface px-10 text-sm text-slate-100 placeholder:text-slate-500 " +
+  "transition-[border-color,box-shadow] duration-150 hover:border-slate-500/60 " +
+  "focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/20";
+
+const primaryClass =
+  "group flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-bold text-slate-950 " +
+  "shadow-[0_8px_24px_-8px_rgb(56_189_248/0.6)] transition-[background-color,transform,box-shadow] duration-150 " +
+  "hover:bg-accent-strong hover:shadow-[0_10px_28px_-8px_rgb(56_189_248/0.75)] active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100";
 
 /**
  * Dark, two-column sign-in: the brand on the right (RTL first), the card on the left.
@@ -33,6 +42,7 @@ export function LoginScreen() {
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [nationalCode, setNationalCode] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -75,11 +85,13 @@ export function LoginScreen() {
           aria-hidden
           className="pointer-events-none absolute -top-40 -right-40 h-[28rem] w-[28rem] rounded-full bg-accent/10 blur-3xl"
         />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.12)_1px,transparent_0)] bg-[length:26px_26px] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]"
+        />
         <div className="veye-rise relative flex items-center gap-3" style={{ "--i": 0 } as React.CSSProperties}>
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface-raised text-xl font-bold text-accent">
-            وی
-          </span>
-          <span className="text-lg font-bold tracking-tight">وی‌آی</span>
+          <BrandMark size="lg" />
+          <span className="text-lg font-bold">وی‌آی</span>
         </div>
 
         <div className="relative my-14 max-w-xl lg:my-0">
@@ -118,10 +130,8 @@ export function LoginScreen() {
         <div className="veye-rise w-full max-w-sm" style={{ "--i": 2 } as React.CSSProperties}>
           {/* The hero is desktop-only; on a phone the form comes first, under a compact brand mark. */}
           <div className="mb-10 flex items-center gap-3 lg:hidden">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-lg font-bold text-accent">
-              وی
-            </span>
-            <span className="text-lg font-bold tracking-tight">وی‌آی</span>
+            <BrandMark />
+            <span className="text-lg font-bold">وی‌آی</span>
           </div>
           {freshWithNoAccounts ? (
             <div className="space-y-6">
@@ -131,11 +141,9 @@ export function LoginScreen() {
                   این سامانه هنوز راه‌اندازی نشده است. با چند مرحلهٔ ساده، حساب توسعه‌دهنده و ساختار سازمان را بسازید.
                 </p>
               </div>
-              <Link
-                href="/setup"
-                className="block w-full rounded-lg bg-accent px-4 py-3 text-center text-sm font-bold text-slate-950 transition-colors hover:bg-accent-strong"
-              >
+              <Link href="/setup" className={primaryClass}>
                 شروع راه‌اندازی
+                <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
               </Link>
             </div>
           ) : (
@@ -148,7 +156,7 @@ export function LoginScreen() {
               {error && (
                 <div
                   role="alert"
-                  className="rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-200"
+                  className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-200 animate-fade-in"
                 >
                   {error}
                 </div>
@@ -158,6 +166,8 @@ export function LoginScreen() {
                 <label htmlFor="national-code" className="mb-1.5 block text-sm font-medium text-slate-300">
                   کد ملی
                 </label>
+                <div className="relative">
+                <IdCard aria-hidden className="pointer-events-none absolute inset-y-0 right-3.5 my-auto size-4 text-slate-500" />
                 <input
                   id="national-code"
                   type="text"
@@ -166,31 +176,43 @@ export function LoginScreen() {
                   autoComplete="username"
                   value={nationalCode}
                   onChange={(e) => setNationalCode(e.target.value)}
-                  className={`${inputClass} latn text-left`}
+                  className={`${inputClass} latn pl-3.5 text-left`}
                 />
+                </div>
               </div>
 
               <div>
                 <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-300">
                   رمز عبور
                 </label>
+                <div className="relative">
+                <LockKeyhole aria-hidden className="pointer-events-none absolute inset-y-0 right-3.5 my-auto size-4 text-slate-500" />
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className={`${inputClass} latn text-left`}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((shown) => !shown)}
+                  aria-label={showPassword ? "پنهان کردن رمز" : "نمایش رمز"}
+                  aria-pressed={showPassword}
+                  title={showPassword ? "پنهان کردن رمز" : "نمایش رمز"}
+                  className="absolute inset-y-0 left-1.5 my-auto flex size-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/5 hover:text-slate-200"
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+                </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-accent-strong disabled:opacity-50"
-              >
+              <button type="submit" disabled={loading} aria-busy={loading || undefined} className={primaryClass}>
+                {loading && <Spinner />}
                 {loading ? "در حال ورود..." : "ورود"}
+                {!loading && <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />}
               </button>
 
               {setupAvailable && (

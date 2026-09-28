@@ -5,6 +5,7 @@ import { ApiError, apiDelete, apiPatch, apiUpload } from "@/lib/api-client";
 import type { Company, OrgNode } from "@/lib/organization";
 import { AddNodeForm, DeleteNodeButton } from "./AddNodeForm";
 import { DarkError, StepCard, darkInput, ghostButton, primaryButton } from "./ui";
+import { Check } from "lucide-react";
 
 /**
  * Step 1: the company's name and logo, and whether it has several حوزه.
@@ -77,7 +78,14 @@ export function CompanyStep({
           className={darkInput}
         />
         <button type="submit" disabled={busy || !name.trim() || name.trim() === company.name} className={`${ghostButton} shrink-0`}>
-          {saved ? "ذخیره شد ✓" : "ذخیرهٔ نام"}
+          {saved ? (
+            <>
+              <Check className="size-4" />
+              ذخیره شد
+            </>
+          ) : (
+            "ذخیرهٔ نام"
+          )}
         </button>
       </form>
 

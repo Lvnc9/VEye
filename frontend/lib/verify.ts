@@ -14,10 +14,23 @@ export type VerifyOutcome =
   | { kind: "not_found"; message: string }
   | { kind: "error"; message: string };
 
-export const VERIFY_STYLES: Record<VerifyState, { badge: string; panel: string; icon: string }> = {
-  valid: { badge: "bg-green-600 text-white", panel: "border-green-200 bg-green-50", icon: "✓" },
-  obsolete: { badge: "bg-red-600 text-white", panel: "border-red-200 bg-red-50", icon: "✕" },
-  pending: { badge: "bg-amber-500 text-white", panel: "border-amber-200 bg-amber-50", icon: "…" },
+/** Per verdict: the seal's colours, the band across the top of the result card, and its text colour. */
+export const VERIFY_STYLES: Record<VerifyState, { badge: string; band: string; text: string }> = {
+  valid: {
+    badge: "bg-emerald-500 text-white shadow-[0_8px_24px_-6px_rgb(16_185_129/0.6)] ring-8 ring-emerald-500/15",
+    band: "from-emerald-500 to-teal-400",
+    text: "text-emerald-700",
+  },
+  obsolete: {
+    badge: "bg-rose-500 text-white shadow-[0_8px_24px_-6px_rgb(244_63_94/0.6)] ring-8 ring-rose-500/15",
+    band: "from-rose-500 to-orange-400",
+    text: "text-rose-700",
+  },
+  pending: {
+    badge: "bg-amber-500 text-white shadow-[0_8px_24px_-6px_rgb(245_158_11/0.6)] ring-8 ring-amber-500/15",
+    band: "from-amber-500 to-yellow-400",
+    text: "text-amber-700",
+  },
 };
 
 export async function fetchVerification(code: string): Promise<VerifyOutcome> {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiGet, apiGetIfSignedIn } from "@/lib/api-client";
 import type { SetupStatus, User } from "@/lib/types";
+import { BrandMark } from "@/components/ui/BrandMark";
 
 /**
  * The public landing page (Phase 10, ADR-010 §A). `/` used to be authenticated-only (an instant
@@ -51,10 +52,8 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center bg-surface px-6 py-12 text-slate-100">
       <div className="veye-rise w-full max-w-md text-center" style={{ "--i": 0 } as React.CSSProperties}>
         <div className="mb-8 flex items-center justify-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface-raised text-xl font-bold text-accent">
-            وی
-          </span>
-          <span className="text-lg font-bold tracking-tight">وی‌آی</span>
+          <BrandMark size="lg" />
+          <span className="text-lg font-bold">وی‌آی</span>
         </div>
 
         <h1 className="text-2xl leading-[1.5] font-bold sm:text-3xl">
@@ -68,7 +67,7 @@ export default function Home() {
             <p className="mt-4 text-sm leading-7 text-slate-400">دریافت وضعیت سامانه ممکن نشد. اتصال خود را بررسی کنید.</p>
             <Link
               href="/login"
-              className="mt-8 inline-block w-full rounded-lg border border-line px-5 py-3 text-sm font-bold text-slate-200 transition-colors hover:bg-white/5 sm:w-auto"
+              className="mt-8 inline-block w-full rounded-xl border border-line px-5 py-3 text-sm font-bold text-slate-200 transition-colors hover:bg-white/5 sm:w-auto"
             >
               ورود به سامانه
             </Link>
@@ -80,7 +79,7 @@ export default function Home() {
             </p>
             <Link
               href="/setup"
-              className="mt-8 inline-block w-full rounded-lg bg-accent px-5 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-accent-strong sm:w-auto"
+              className="mt-8 inline-block w-full rounded-xl bg-accent px-5 py-3 shadow-[0_8px_24px_-8px_rgb(56_189_248/0.6)] text-sm font-bold text-slate-950 transition-colors hover:bg-accent-strong sm:w-auto"
             >
               شروع راه‌اندازی
             </Link>
@@ -92,7 +91,7 @@ export default function Home() {
             </p>
             <Link
               href="/login?next=%2Fsetup"
-              className="mt-8 inline-block w-full rounded-lg bg-accent px-5 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-accent-strong sm:w-auto"
+              className="mt-8 inline-block w-full rounded-xl bg-accent px-5 py-3 shadow-[0_8px_24px_-8px_rgb(56_189_248/0.6)] text-sm font-bold text-slate-950 transition-colors hover:bg-accent-strong sm:w-auto"
             >
               ادامهٔ راه‌اندازی
             </Link>

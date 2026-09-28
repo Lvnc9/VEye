@@ -12,6 +12,8 @@ import { StartSetupButton } from "@/components/setup/StartSetupButton";
 import { UnitsStep } from "@/components/setup/UnitsStep";
 import { DarkError, StepCard, primaryButton } from "@/components/setup/ui";
 import { apiGetIfSignedIn } from "@/lib/api-client";
+import { Check } from "lucide-react";
+import { BrandMark } from "@/components/ui/BrandMark";
 import { useApiQuery } from "@/lib/use-api-query";
 import type { Company, OrgTreeResponse } from "@/lib/organization";
 import { CHART_STEPS, wizardStepFor, type WizardStep } from "@/lib/setup";
@@ -33,9 +35,7 @@ export function SetupWizard() {
     <main className="min-h-screen bg-surface text-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-8">
         <header className="mb-8 flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-raised text-lg font-bold text-accent">
-            وی
-          </span>
+          <BrandMark />
           <div>
             <h1 className="text-lg font-bold">راه‌اندازی وی‌آی</h1>
             <p className="text-xs text-slate-500">حساب توسعه‌دهنده و ساختار سازمان</p>
@@ -96,7 +96,7 @@ function FirstStep({ status, onDone }: { status: SetupStatus; onDone: () => void
         title="راه‌اندازی شرکت"
         intro={`با حساب ${me.full_name} وارد شده‌اید. در گام بعد نام شرکت، لوگو و حوزه‌ها را تعیین می‌کنید.`}
       >
-        <StartSetupButton onStarted={onDone} className={`${primaryButton} w-full`} errorClassName="text-sm text-red-300" />
+        <StartSetupButton onStarted={onDone} className={`${primaryButton} w-full`} errorClassName="text-sm text-rose-300" />
       </StepCard>
     );
   }
@@ -186,25 +186,44 @@ function SignedInWizard({
 
   const go = (next: WizardStep) => () => setChosen(next);
   const current = step;
+  const currentIndex = CHART_STEPS.findIndex((item) => item.key === current);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="space-y-6">
         <nav aria-label="مراحل راه‌اندازی">
-          <ol className="flex flex-wrap gap-2 text-xs">
+          <ol className="flex flex-wrap items-center gap-y-2 text-xs">
             {CHART_STEPS.map((item, index) => {
               const active = item.key === current;
+              const done = index < currentIndex;
               return (
-                <li key={item.key}>
+                <li key={item.key} className="flex items-center">
+                  {index > 0 && (
+                    <span
+                      aria-hidden
+                      className={`mx-1.5 h-px w-4 transition-colors duration-300 sm:w-6 ${done || active ? "bg-accent/60" : "bg-line"}`}
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={go(item.key)}
                     aria-current={active ? "step" : undefined}
-                    className={`rounded-full border px-3 py-1.5 transition-colors ${
-                      active ? "border-accent bg-accent/15 text-accent" : "border-line text-slate-400 hover:bg-white/5"
+                    className={`flex items-center gap-2 rounded-full border py-1 ps-1 pe-3 transition-colors duration-200 ${
+                      active
+                        ? "border-accent bg-accent/15 text-accent"
+                        : done
+                          ? "border-accent/30 text-slate-200 hover:bg-white/5"
+                          : "border-line text-slate-400 hover:bg-white/5"
                     }`}
                   >
-                    {index + 1}. {item.title}
+                    <span
+                      className={`flex size-6 items-center justify-center rounded-full text-[11px] font-bold transition-colors duration-200 ${
+                        active ? "bg-accent text-slate-950" : done ? "bg-accent/20 text-accent" : "bg-white/5 text-slate-400"
+                      }`}
+                    >
+                      {done ? <Check className="size-3.5" /> : index + 1}
+                    </span>
+                    {item.title}
                   </button>
                 </li>
               );
@@ -212,6 +231,8 @@ function SignedInWizard({
           </ol>
         </nav>
 
+        {/* Each step rises in when you move to it. */}
+        <div key={current} className="veye-page">
         {current === "company" && <CompanyStep company={companyData} nodes={nodes} onChanged={refresh} onNext={go("units")} />}
         {current === "units" && (
           <UnitsStep
@@ -228,6 +249,7 @@ function SignedInWizard({
           <PeopleStep status={status} onRegistered={onPeopleChanged} onBack={go("sections")} onNext={go("ready")} />
         )}
         {current === "ready" && <ReadyStep nodes={nodes} status={status} onBack={go("people")} onPeople={go("people")} />}
+        </div>
       </div>
 
       <aside aria-label="پیش‌نمایش ساختار" className="h-fit rounded-2xl border border-line bg-surface-raised p-4 lg:sticky lg:top-6">
