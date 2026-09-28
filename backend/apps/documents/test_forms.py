@@ -400,3 +400,45 @@ class QuestionElementSchemaTests(SimpleTestCase):
         self.assertIn("پرسش ۱", message)
         self.assertTrue(self.messages({"kind": "questions", "items": []}))
         self.assertTrue(self.messages({"kind": "questions", "items": [{"text": "x", "lines": 20}]}))
+
+
+class EmptyFormDraftMigrationTests(DesignerTestCase):
+    """Migration 0006: an empty فرم draft made on the old code becomes a form."""
+
+    def run_migration(self):
+        import importlib
+
+        from django.apps import apps as registry
+
+        module = importlib.import_module("apps.documents.migrations.0006_empty_form_drafts_become_forms")
+        module.empty_form_drafts_to_forms(registry, None)
+
+    def old_form(self, title):
+        doc = new_doc(self.author, title, DocumentGroup.FORM)
+        type(doc).objects.filter(pk=doc.pk).update(body_kind=BodyKind.BLOCKS, form_settings={})
+        doc.refresh_from_db()
+        return doc
+
+    def test_an_empty_draft_becomes_a_form(self):
+        empty = self.old_form("خالی")
+        self.run_migration()
+        empty.refresh_from_db()
+        self.assertEqual(empty.body_kind, BodyKind.FORM)
+        self.assertEqual(empty.form_settings, form_schema.default_settings())
+
+    def test_forms_with_content_or_past_draft_keep_their_blocks(self):
+        with_content = self.old_form("با محتوا")
+        self.save([short("خط")], doc=with_content)
+        finished = self.old_form("تمام‌شده")
+        finalize(finished)
+        procedure = new_doc(self.author, "روش", DocumentGroup.PROCEDURE)
+        self.run_migration()
+        for doc in (with_content, finished, procedure):
+            doc.refresh_from_db()
+            self.assertEqual(doc.body_kind, BodyKind.BLOCKS, doc.title)
+
+    def test_the_migration_settings_match_the_schema_defaults(self):
+        import importlib
+
+        module = importlib.import_module("apps.documents.migrations.0006_empty_form_drafts_become_forms")
+        self.assertEqual(module.DEFAULT_SETTINGS, form_schema.default_settings())
