@@ -142,19 +142,29 @@ class PreservedQuirkTests(SimpleTestCase):
     """The user asked for fidelity: these are V_1.0 behaviours, kept on purpose.
     (The golden files pin them too; these say what each one is.)"""
 
-    def test_text_merge_is_the_original(self):
-        # Wraps on character count, and drops the last word when it is the one
-        # that forces a wrap.
-        self.assertEqual(renderer.PDFMaker.text_merge("aaa bbb ccc ddd", 12), [" aaa bbb ccc"])
+    def test_text_merge_keeps_every_word_since_2026_09_28(self):
+        # V_1.0 dropped the word that forced a wrap ([" aaa bbb ccc"]) and, with
+        # an identity test, flushed a repeated short word early.
+        self.assertEqual(renderer.PDFMaker.text_merge("aaa bbb ccc ddd", 12), [" aaa bbb ccc", "ddd"])
+        self.assertEqual(renderer.PDFMaker.text_merge("x y x y", 180), [" x y x y"])
+        self.assertEqual(renderer.PDFMaker.text_merge("کوتاه", 180), [" کوتاه"])
 
-    def test_body_text_wraps_on_character_count_not_width(self):
-        maker = renderer.PDFMaker(whole_code="PR-01-01", title="ت")
-        maker.draw_header()
-        long_line = "ب" * 171
-        with mock.patch.object(maker.c, "drawRightString") as draw:
-            maker.add_body_text(long_line)
-        # 171 characters > 170 -> chunks of 70: 70 + 70 + 31.
-        self.assertEqual(draw.call_count, 3)
+    def test_body_text_wraps_by_width_since_2026_09_28(self):
+        # The owner's decision (2026-09-28): no drawn line is wider than the text
+        # area. V_1.0 left 90-170 character lines whole (running off the page) and
+        # cut longer ones into 70-character chunks mid-word.
+        # 160 characters: V_1.0 drew this as one line, far wider than the page.
+        for words in (20, 60):
+            with self.subTest(characters=len(" ".join(["کلمه‌ای"] * words))):
+                maker = renderer.PDFMaker(whole_code="PR-01-01", title="ت")
+                maker.draw_header()
+                with mock.patch.object(maker.c, "drawRightString", wraps=maker.c.drawRightString) as draw:
+                    maker.add_body_text(" ".join(["کلمه‌ای"] * words))
+                drawn = [call.args[2] for call in draw.call_args_list]
+                self.assertGreater(len(drawn), 1)
+                width = maker.page_width - 2 * maker.margin
+                for text in drawn:
+                    self.assertLessEqual(maker.c.stringWidth(text, "Vazir", 12), width + 0.01)
 
     def test_preview_watermark_absent_from_page_one(self):
         maker = renderer.PDFMaker(whole_code="PR-01-01", title="ت", preview_mode=True)
@@ -162,3 +172,47 @@ class PreservedQuirkTests(SimpleTestCase):
         with mock.patch.object(maker.c, "_draw_preview_on_current_page") as watermark:
             maker.c.showPage()  # end of page 1 draws the *next* page's watermark
             self.assertEqual(watermark.call_count, 1)
+
+
+class BodyWrapTests(SimpleTestCase):
+    """renderer.wrap_body_line — the width wrap (owner's decision, 2026-09-28)."""
+
+    @staticmethod
+    def measure(text, style):
+        # One point per character, two for bold: easy to reason about.
+        return len(text) * (2 if style == "bold" else 1)
+
+    def test_a_line_that_fits_is_returned_unchanged(self):
+        line = "کوتاه **پررنگ** است"
+        self.assertEqual(renderer.wrap_body_line(line, 100, self.measure), [line])
+
+    def test_words_survive_in_reading_order(self):
+        words = [f"واژه{i}" for i in range(30)]
+        lines = renderer.wrap_body_line(" ".join(words), 40, self.measure)
+        self.assertGreater(len(lines), 1)
+        self.assertEqual(" ".join(lines).split(), words)
+        for line in lines:
+            self.assertLessEqual(self.measure(line, "normal"), 40)
+            self.assertEqual(line, line.strip())
+
+    def test_markers_are_closed_and_reopened_across_a_break(self):
+        lines = renderer.wrap_body_line("آغاز **این بخش پررنگ طولانی است** پایان", 20, self.measure)
+        for line in lines:
+            self.assertEqual(line.count("**") % 2, 0, line)
+        joined = "".join(text for line in lines for text, _ in renderer.marker_runs(line))
+        self.assertEqual(joined.replace(" ", ""), "آغازاینبخشپررنگطولانیاستپایان")
+        styles = {style for line in lines for _, style in renderer.marker_runs(line) if "پررنگ" in _}
+        self.assertEqual(styles, {"bold"})
+
+    def test_a_word_wider_than_the_line_is_cut(self):
+        lines = renderer.wrap_body_line("ب" * 25, 10, self.measure)
+        self.assertEqual(lines, ["ب" * 10, "ب" * 10, "ب" * 5])
+
+    def test_the_heading_stays_bold_on_every_piece(self):
+        maker = renderer.PDFMaker(whole_code="PR-01-01", title="ت")
+        maker.draw_header()
+        heading = " ".join(["عنوان"] * 60)
+        with mock.patch.object(maker.c, "setFont", wraps=maker.c.setFont) as set_font:
+            maker.add_body_text(heading + "\nمتن", not_body=True)
+        bold_calls = [c for c in set_font.call_args_list if c.args[0] == "Vazir-Bold" and c.args[1] == 14]
+        self.assertGreater(len(bold_calls), 1)

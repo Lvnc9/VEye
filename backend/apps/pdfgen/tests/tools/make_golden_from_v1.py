@@ -15,7 +15,7 @@ container (it has the pinned ReportLab / bidi / reshaper):
     docker compose exec -T backend python -m apps.pdfgen.tests.tools.make_golden_from_v1 --v1 /tmp/v1
 
 Two intentional normalisations of a stock V_1.0 run, neither of which changes a
-single drawn pixel:
+single drawn pixel (a third, which does, follows):
   * V_1.0 seeds its module-level `SHORT` buffer with " ", so the first Short block
     of a process gets a stray leading space; the port has no such global, so it is
     zeroed here.
@@ -23,6 +23,13 @@ single drawn pixel:
     (`/FormXob.<md5>`) by hashing the path; the port has bytes, and ReportLab
     hashes those instead. Wrapping the path in an ImageReader makes the original
     name it the same way, so the files can be compared byte for byte.
+
+The third is a deliberate behaviour change (the owner's decision of 2026-09-28,
+see renderer.py): V_1.0's two text-losing quirks are fixed. `patch_text_fixes`
+puts exactly the fixed pieces into V_1.0's own PDFMaker — `text_merge` becomes
+`renderer.merge_words`, and in `add_body_text` only the wrap block and the two
+heading-line checks are replaced (by source-text substitution, each asserted to
+match once) — so everything else in the oracle is still V_1.0's code.
 """
 import argparse
 import importlib
@@ -109,6 +116,57 @@ def v1_json(name, case, previous_json_by_url, workdir):
     }
 
 
+#: add_body_text: V_1.0's text → the port's. Nothing else in the method changes.
+BODY_TEXT_FIXES = [
+    (
+        """        wrapped_lines = []
+
+        # For each line, break it into sub-lines of up to 70 characters, 
+        # preserving empty lines to maintain paragraph breaks.
+        for line in raw_lines:
+            if not line:  
+                # Preserve empty line to create a paragraph break
+                wrapped_lines.append("")
+            elif len(line) <= 170:
+                wrapped_lines.append(line)
+            else:
+                start_idx = 0
+                while start_idx < len(line):
+                    wrapped_lines.append(line[start_idx:start_idx+70])
+                    start_idx += 70
+""",
+        """        wrapped_lines = self._wrap_body(raw_lines, not_body, font_size)
+""",
+    ),
+    ("        for idx, line in enumerate(wrapped_lines):", "        for idx, (source, piece, line) in enumerate(wrapped_lines):"),
+    ("            elif not_body and idx == 0:", "            elif not_body and source == 0:"),
+    ("            elif not_body and idx == 1:", "            elif not_body and source == 1 and piece == 0:"),
+]
+
+
+def patch_text_fixes(to_make_pdf):
+    """The third normalisation (see the module docstring)."""
+    import inspect
+    import textwrap
+
+    from apps.pdfgen import renderer
+
+    maker = to_make_pdf.PDFMaker
+    maker.text_merge = staticmethod(renderer.merge_words)
+    maker._wrap_body = renderer.PDFMaker._wrap_body
+    maker._body_width = renderer.PDFMaker._body_width
+    to_make_pdf.wrap_body_line = renderer.wrap_body_line
+
+    source = textwrap.dedent(inspect.getsource(maker.add_body_text))
+    indented = textwrap.indent(source, "    ")
+    for old, new in BODY_TEXT_FIXES:
+        assert indented.count(old) == 1, f"V_1.0 add_body_text no longer contains: {old[:60]!r}"
+        indented = indented.replace(old, new)
+    namespace = {}
+    exec(textwrap.dedent(indented), vars(to_make_pdf), namespace)
+    maker.add_body_text = namespace["add_body_text"]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--v1", required=True, help="dir holding other_folder/, Vazir.ttf, Vazir-Bold.ttf")
@@ -140,6 +198,7 @@ def main():
 
     canvas.Canvas.drawImage = draw_image
     convert = importlib.import_module("other_folder.deliver_convert")
+    patch_text_fixes(importlib.import_module("other_folder.to_make_pdf"))
     convert.subprocess.run = lambda *a, **k: None  # the viewer launch
     convert.sys.exit = lambda *a: None
 

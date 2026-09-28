@@ -8,7 +8,13 @@ included (see .claude/docs/08-pdf-engine.md for the list). What changed:
     as bytes;
   * fonts are registered once at startup (apps.pdfgen.apps.PdfgenConfig.ready)
     rather than by every PDFMaker, and the module keeps no mutable global state;
-  * the crash-level bugs are fixed (each is marked "V_1.0 crashed" below).
+  * the crash-level bugs are fixed (each is marked "V_1.0 crashed" below);
+  * two text-losing quirks are fixed — decided by the owner on 2026-09-28, once the
+    designer's live paper made them visible: body lines wrap by their real width
+    (`wrap_body_line`, V_1.0 wrapped by character count so 90-170 character lines
+    ran off the page), and `text_merge` keeps every word (`merge_words`, V_1.0
+    dropped the word that forced a wrap and duplicated chunks of repeated words).
+    Both are marked "Fixed 2026-09-28" below.
 
 `get_display` MUST come from bidi.algorithm (python-bidi==0.6.11): the Rust
 `bidi.get_display` shipped alongside it orders mixed digits/Latin/Persian
@@ -25,6 +31,117 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
+
+
+# --------------------------------------------------------------------------
+# Fixed 2026-09-28 (owner's decision): the two text-losing quirks. Pure functions,
+# so the golden-file tool can put exactly these into V_1.0's code for the oracle.
+# --------------------------------------------------------------------------
+
+_MARKER_SPLIT = re.compile(r"(\*\*.*?\*\*|~~.*?~~|--.*?--)")
+_MARKER_OF = {"bold": "**", "italic": "~~", "underline": "--"}
+_SPACES = re.compile(r"(\s+)")
+
+
+def marker_runs(line):
+    """(text, style) runs of one line, split the way draw_rtl_styled_line splits it."""
+    runs = []
+    for fragment in _MARKER_SPLIT.split(line):
+        if not fragment:
+            continue
+        if fragment.startswith("**") and fragment.endswith("**") and len(fragment) >= 4:
+            runs.append((fragment[2:-2], "bold"))
+        elif fragment.startswith("~~") and fragment.endswith("~~") and len(fragment) >= 4:
+            runs.append((fragment[2:-2], "italic"))
+        elif fragment.startswith("--") and fragment.endswith("--") and len(fragment) >= 4:
+            runs.append((fragment[2:-2], "underline"))
+        else:
+            runs.append((fragment, "normal"))
+    return runs
+
+
+def wrap_body_line(line, width, measure):
+    """Break one body line into lines no wider than `width` points.
+
+    `measure(text, style)` is the drawn width of a fragment in that style. A line
+    that fits is returned as it is — so a document without long lines prints
+    exactly as before. Otherwise the logical text is broken between words (a word
+    wider than the line is cut between characters) *before* it is shaped and
+    reordered; a style marker that spans a break is closed and reopened, so every
+    line keeps its pairs.
+    """
+    runs = marker_runs(line)
+    if sum(measure(text, style) for text, style in runs) <= width:
+        return [line]
+
+    atoms = []  # (text, style), words and the spaces between them
+    for text, style in runs:
+        atoms.extend((piece, style) for piece in _SPACES.split(text) if piece)
+
+    lines, current, used = [], [], 0.0
+    for text, style in atoms:
+        size = measure(text, style)
+        if text.isspace():
+            if current and used + size <= width:
+                current.append((text, style))
+                used += size
+            elif current:
+                lines.append(current)
+                current, used = [], 0.0
+            continue
+        if used + size <= width:
+            current.append((text, style))
+            used += size
+            continue
+        if current:
+            lines.append(current)
+            current, used = [], 0.0
+        if size <= width:
+            current, used = [(text, style)], size
+            continue
+        piece = ""
+        for char in text:  # one word wider than the line
+            if piece and measure(piece + char, style) > width:
+                lines.append([(piece, style)])
+                piece = ""
+            piece += char
+        current, used = [(piece, style)], measure(piece, style)
+    if current:
+        lines.append(current)
+
+    out = []
+    for atoms_of_line in lines:
+        while atoms_of_line and atoms_of_line[-1][0].isspace():
+            atoms_of_line = atoms_of_line[:-1]
+        merged = []
+        for text, style in atoms_of_line:
+            if merged and merged[-1][1] == style:
+                merged[-1] = (merged[-1][0] + text, style)
+            else:
+                merged.append((text, style))
+        out.append("".join(
+            f"{_MARKER_OF[style]}{text}{_MARKER_OF[style]}" if style in _MARKER_OF else text
+            for text, style in merged
+        ))
+    return out
+
+
+def merge_words(text, limit=180):
+    """V_1.0's `text_merge`, keeping every word: chunks of at most `limit`
+    characters, each starting with the space V_1.0 put there. V_1.0 compared with
+    `i is group[-1]` (identity, so a repeated short word flushed early and was
+    printed twice) and never flushed the last chunk when its word forced a wrap
+    (so that word was lost)."""
+    length = ""
+    big = []
+    for word in text.split(" "):
+        if len(length + " " + word) <= limit:
+            length = length + " " + word
+        else:
+            big.append(length)
+            length = word
+    big.append(length)
+    return big
 
 
 def _image(data):
@@ -562,24 +679,11 @@ class PDFMaker:
         
         # Split the input text by newlines without filtering out empty lines to preserve paragraphs
         raw_lines = body_text.split("\n")
-        wrapped_lines = []
-
-        # For each line, break it into sub-lines of up to 70 characters, 
-        # preserving empty lines to maintain paragraph breaks.
-        for line in raw_lines:
-            if not line:  
-                # Preserve empty line to create a paragraph break
-                wrapped_lines.append("")
-            elif len(line) <= 170:
-                wrapped_lines.append(line)
-            else:
-                start_idx = 0
-                while start_idx < len(line):
-                    wrapped_lines.append(line[start_idx:start_idx+70])
-                    start_idx += 70
+        # Fixed 2026-09-28: wrapped by width (V_1.0: 70-character chunks past 170).
+        wrapped_lines = self._wrap_body(raw_lines, not_body, font_size)
 
         # Now process these wrapped lines
-        for idx, line in enumerate(wrapped_lines):
+        for idx, (source, piece, line) in enumerate(wrapped_lines):
             self._check_page_break(60)
             x_right = self.page_width - self.margin
             
@@ -592,14 +696,14 @@ class PDFMaker:
             if "**" in line or "~~" in line or "--" in line:
                 self.draw_rtl_styled_line(x_right, self.current_y, line, font_size)
             # Apply special handling for first or second line if not_body is True
-            elif not_body and idx == 0:
+            elif not_body and source == 0:
                 bold_font = (self.font_name + "-Bold" if (self.font_name + "-Bold")
                              in pdfmetrics.getRegisteredFontNames()
                              else self.font_name)
                 self.c.setFont(bold_font, font_size + 2)
                 line_rtl = self.prepare_rtl(line)
                 self.c.drawRightString(x_right, self.current_y, line_rtl)
-            elif not_body and idx == 1:
+            elif not_body and source == 1 and piece == 0:
                 self.c.setFont(self.font_name, font_size)
                 line_rtl = self.prepare_rtl(line)
                 self.c.drawRightString(x_right, self.current_y, "\t\t\t" + line_rtl)
@@ -670,19 +774,34 @@ class PDFMaker:
         """
         Utility that wraps text in 90-character chunks. 
         This can help in splitting text for multiline.
+        Fixed 2026-09-28: keeps every word (see merge_words).
         """
-        length = ""
-        big = []
-        group = text.split(" ")
-        for i in group:
-            if len(length + " " + i) <= limit:
-                length = length + " " + i
-                if i is group[-1]:
-                    big.append(length)
-            else:
-                big.append(length)
-                length = i
-        return big
+        return merge_words(text, limit)
+
+    def _body_width(self, text, style, font_size, heading):
+        """Drawn width of a fragment of a body line, as add_body_text draws it."""
+        bold = self.font_name + "-Bold"
+        has_bold = bold in pdfmetrics.getRegisteredFontNames()
+        if heading:
+            return self.c.stringWidth(self.prepare_rtl(text), bold if has_bold else self.font_name, font_size + 2)
+        face = bold if style == "bold" and has_bold else self.font_name
+        return self.c.stringWidth(self.prepare_rtl(text), face, font_size)
+
+    def _wrap_body(self, raw_lines, not_body, font_size):
+        """[(source line, piece, text)] — every source line wrapped to the page's
+        text width. Fixed 2026-09-28 (see wrap_body_line)."""
+        width = self.page_width - 2 * self.margin
+        wrapped = []
+        for source, line in enumerate(raw_lines):
+            if not line:
+                # Preserve empty line to create a paragraph break
+                wrapped.append((source, 0, ""))
+                continue
+            # The heading line (not_body, first line, no markers) is drawn bold and larger.
+            heading = not_body and source == 0 and not ("**" in line or "~~" in line or "--" in line)
+            pieces = wrap_body_line(line, width, lambda text, style: self._body_width(text, style, font_size, heading))
+            wrapped.extend((source, piece, text) for piece, text in enumerate(pieces))
+        return wrapped
 
     def attachments(self, element, x_offset=30, font_size=12):
         """
