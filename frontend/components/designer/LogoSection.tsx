@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ApiError, apiDelete, apiUpload } from "@/lib/api-client";
 import { buttonClass } from "@/components/ui/Button";
+import { ImagePlus, ImageUp, Trash2 } from "lucide-react";
 
 /** A logo picker: saved as soon as a file is picked or removed, independently of
  *  any «ذخیره». `endpoint` takes POST (multipart `logo`) and DELETE, and answers
@@ -57,12 +58,15 @@ export function LogoSection({
 
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <div className="flex size-24 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.3)_1px,transparent_0)] bg-[length:10px_10px] bg-slate-50">
+      <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl p-2 border border-dashed border-slate-300 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.3)_1px,transparent_0)] bg-[length:10px_10px] bg-slate-50">
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- an authenticated API image, not a static asset
           <img src={logoUrl} alt={alt} className="max-h-full max-w-full object-contain" />
         ) : (
-          <span className="text-xs text-slate-500">بدون لوگو</span>
+          <span className="flex flex-col items-center gap-1 text-xs text-slate-500">
+            <ImagePlus className="size-6 text-slate-300" />
+            بدون لوگو
+          </span>
         )}
       </div>
       {canEdit && (
@@ -81,6 +85,7 @@ export function LogoSection({
               onClick={() => input.current?.click()}
               className={buttonClass({ size: "sm" })}
             >
+              <ImageUp />
               {logoUrl ? "تغییر لوگو" : "انتخاب لوگو"}
             </button>
             {logoUrl && (
@@ -90,6 +95,7 @@ export function LogoSection({
                 onClick={() => void removeLogo()}
                 className={buttonClass({ size: "sm", variant: "danger-ghost" })}
               >
+                <Trash2 />
                 حذف لوگو
               </button>
             )}
