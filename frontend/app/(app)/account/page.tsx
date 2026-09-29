@@ -46,9 +46,9 @@ export default function AccountPage() {
           </span>
           <div className="min-w-0 flex-1 pt-3">
             <h1 className="truncate text-2xl font-bold leading-10 text-slate-900">{user.full_name}</h1>
-            <p className="flex items-center gap-1.5 text-sm text-slate-500">
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-slate-500">
               <ShieldCheck className="size-4 text-emerald-500" />
-              {user.title}
+              <span className="whitespace-nowrap">{user.title}</span>
               {user.company && (
                 <>
                   <span className="text-slate-300">·</span>
