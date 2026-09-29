@@ -55,6 +55,22 @@ class LivePreviewTests(TestCase):
             "sections": sections,
         }
 
+    def test_a_rich_body_is_drawn_and_rolled_back(self):
+        rich = {"v": 1, "doc": {"type": "doc", "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": "متن غنی", "marks": [{"type": "bold"}]}]},
+            {"type": "table", "content": [{"type": "tableRow", "content": [{"type": "tableCell", "content": [{"type": "paragraph"}]}]}]},
+        ]}}
+        block = {"type": SectionType.LONG_EXPLANATION, "heading": "شرح", "body": "", "extra_boxes": [], "file_ids": [], "rich": rich}
+        response = self.post(self.body([block]))
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertGreaterEqual(response.data["page_count"], 2)
+        self.assertEqual(self.doc.sections.count(), 0, "rolled back")
+
+    def test_a_rich_body_outside_the_whitelist_is_refused(self):
+        rich = {"v": 1, "doc": {"type": "doc", "content": [{"type": "image", "attrs": {"src": "x"}}]}}
+        block = {"type": SectionType.LONG_EXPLANATION, "heading": "", "body": "", "extra_boxes": [], "file_ids": [], "rich": rich}
+        self.assertEqual(self.post(self.body([block])).status_code, 400)
+
     def test_unsaved_edits_are_drawn_but_never_stored(self):
         seen = {}
         real = render.render

@@ -15,6 +15,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from apps.core.constants import RESPONSIBILITY_ROLE_ORDER, BodyKind, SectionType
 from apps.core.exceptions import ConflictError
 
+from . import rich_content
 from .files import inspect_upload, normalize_logo
 from .models import (
     AttachmentReference,
@@ -60,6 +61,16 @@ def _section_content(item: dict) -> dict:
     if kind == SectionType.SHORT_EXPLANATION:
         return {"lines": item["lines"]}
     if kind == SectionType.LONG_EXPLANATION:
+        rich = item.get("rich")
+        if rich:
+            # The editor's document is the truth; `body` mirrors its text (search, old readers)
+            # and the marker boxes are folded into it, so nothing prints twice.
+            return {
+                "heading": item["heading"],
+                "body": rich_content.plain_text(rich),
+                "extra_boxes": [],
+                "rich": rich,
+            }
         return {
             "heading": item["heading"],
             "body": item["body"],

@@ -160,7 +160,11 @@ def load(document_id: int) -> provider.PdfInput:
             lines = [line for line in section.content.get("lines", []) if line != ""]
             blocks.append((provider.TEXT, "".join(_lines(line) + "\n" for line in lines)))
         elif kind == SectionType.LONG_EXPLANATION:
-            blocks.append((provider.TEXT, _long_text(section.content)))
+            rich = section.content.get("rich")
+            if rich:  # written in the rich editor (2026-09-29): its own layout engine
+                blocks.append((provider.RICH, (_lines(section.content.get("heading", "")), rich["doc"])))
+            else:
+                blocks.append((provider.TEXT, _long_text(section.content)))
         elif kind == SectionType.RESPONSIBILITIES:
             blocks.append((provider.RESPONSIBILITIES, _responsibilities(section)))
         elif kind == SectionType.CHANGES_TABLE:

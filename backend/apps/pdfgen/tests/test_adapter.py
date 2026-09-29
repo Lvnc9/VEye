@@ -130,6 +130,30 @@ class AdapterTests(TestCase):
         )
         self.assertEqual(self.blocks(doc, provider.TEXT), ["H\nفقط جعبه"])
 
+    def test_a_rich_long_block_goes_to_the_rich_layout_with_its_heading(self):
+        doc = make_doc(self.author)
+        rich = {"v": 1, "doc": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "متن غنی"}]}]}}
+        Section.objects.create(
+            document=doc, position=0, type=SectionType.LONG_EXPLANATION,
+            content={"heading": "2-شرح\r\n", "body": "متن غنی", "extra_boxes": [], "rich": rich},
+        )
+        Section.objects.create(
+            document=doc, position=1, type=SectionType.LONG_EXPLANATION,
+            content={"heading": "3-قدیمی", "body": "**متن**", "extra_boxes": []},
+        )
+        blocks = adapter.load(doc.pk).blocks
+        self.assertEqual(blocks[0], (provider.RICH, ("2-شرح\n", rich["doc"])))
+        self.assertEqual(blocks[1], (provider.TEXT, "3-قدیمی\n**متن**"), "a block without `rich` prints as before")
+
+    def test_a_rich_block_with_an_empty_document_still_prints_its_heading(self):
+        doc = make_doc(self.author)
+        Section.objects.create(
+            document=doc, position=0, type=SectionType.LONG_EXPLANATION,
+            content={"heading": "فقط عنوان", "body": "", "extra_boxes": [], "rich": {"v": 1, "doc": {"type": "doc", "content": []}}},
+        )
+        [(tag, payload)] = adapter.load(doc.pk).blocks
+        self.assertEqual((tag, payload[0]), (provider.RICH, "فقط عنوان"))
+
     def test_blocks_keep_their_page_order(self):
         doc = make_doc(self.author)
         kinds = [SectionType.CHANGES_TABLE, SectionType.SHORT_EXPLANATION, SectionType.ATTACHMENT]

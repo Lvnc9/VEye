@@ -32,7 +32,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
-from . import header
+from . import header, richtext
 
 #: Boxed page header (owner's request, 2026-09-29; see header.py). The box hangs
 #: from `HEADER_MARGIN` below the top edge; text on pages >= 2 starts `HEADER_GAP`
@@ -649,6 +649,12 @@ class PDFMaker:
         self.current_y -= 30
         self.idx_texts += 1
         return self.current_y
+
+    def add_rich(self, heading, doc):
+        """A تشریحی بلند block written in the designer's rich editor (owner's request,
+        2026-09-29): its heading, then a Word-like body — see richtext.py. Blocks with the
+        old marker text still go through `add_body_text`."""
+        richtext.render(self, heading, doc)
 
     def add_table(self, data, col_widths, row_height=30, font_size=10):
         """

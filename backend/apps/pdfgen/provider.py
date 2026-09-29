@@ -19,6 +19,8 @@ TEXT = "text"
 RESPONSIBILITIES = "responsibilities"
 TABLE = "table"
 ATTACHMENTS = "attachments"
+#: A تشریحی بلند block written in the rich editor: (heading, ProseMirror doc) — richtext.py.
+RICH = "rich"
 
 TABLE_HEADER = ["شماره ردیف", "تاریخ", "عنوان"]
 TABLE_COLUMN_WIDTHS = [50, 100, 200]
@@ -85,6 +87,8 @@ def deliver_to_pdf(data: PdfInput, *, preview: bool = False, invariant: bool = F
     for tag, payload in data.blocks:
         if tag == ATTACHMENTS:
             pdf_maker.attachments(payload)
+        elif tag == RICH:
+            pdf_maker.add_rich(*payload)
         elif tag == RESPONSIBILITIES:
             pdf_maker.responsibilities(payload)
         elif tag == TABLE:

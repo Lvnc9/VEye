@@ -4,6 +4,8 @@ The body is one ordered list of blocks. Each block has a `type` (the V_1.0
 `dynamic_items` discriminator) and a payload whose shape depends on it, so the
 input serializer dispatches on `type` rather than declaring one big union.
 """
+import json
+
 from django.urls import reverse
 from rest_framework import serializers
 
@@ -14,10 +16,11 @@ from apps.core.constants import (
     SectionType,
 )
 
-from . import form_schema
+from . import form_schema, rich_content
 from .serializers import DocumentDetailSerializer
 
 MAX_SECTIONS = 100
+MAX_RICH_JSON = 500_000
 
 _FIELD_LABELS = {
     "lines": "خطوط",
@@ -68,10 +71,23 @@ class LongExplanationInput(_SectionInput):
     body = _text(max_length=100_000)
     extra_boxes = serializers.ListField(child=_text(max_length=100_000), max_length=50, default=list)
     file_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), max_length=200, default=list)
+    #: The Word-like body of the designer's editor (rich_content.py). Absent or null: the block is
+    #: the old `body` / `extra_boxes` marker text.
+    rich = serializers.JSONField(required=False, allow_null=True, default=None)
 
     def validate_file_ids(self, value):
         # A file can hang off a block once; keep first occurrence, keep order.
         return list(dict.fromkeys(value))
+
+    def validate_rich(self, value):
+        if value is None:
+            return None
+        if len(json.dumps(value, ensure_ascii=False)) > MAX_RICH_JSON:
+            raise serializers.ValidationError("متن بلند از حد مجاز حجیم‌تر است.")
+        try:
+            return rich_content.clean(value)
+        except rich_content.RichContentError as error:
+            raise serializers.ValidationError(str(error)) from None
 
 
 class _RoleRowInput(serializers.Serializer):
@@ -274,6 +290,7 @@ def _section_payload(document, section, request) -> dict:
             "heading": content.get("heading", ""),
             "body": content.get("body", ""),
             "extra_boxes": content.get("extra_boxes", []),
+            "rich": content.get("rich"),
             "files": [file_payload(document, f, request) for f in section.files.all()],
         }
 
