@@ -36,6 +36,11 @@ boxed header replaces V_1.0's grey band (page 1) and small strip (pages 2+), and
 body starts lower on pages >= 2. `patch_header` binds the port's `draw_header`,
 `_draw_small_header` and header gap onto V_1.0's classes, so the oracle still
 draws everything else itself.
+
+The fifth is the owner's change to the ضمائم rows (2026-09-29): the QR sits at the far
+left edge of the page on the caption's line. `patch_attachments` binds the port's
+`attachments` onto V_1.0's PDFMaker (handing it the QR files' bytes, which is what the
+port receives instead of paths).
 """
 import argparse
 import importlib
@@ -195,6 +200,20 @@ def patch_header(to_make_pdf):
     maker.__init__ = init
 
 
+def patch_attachments(to_make_pdf):
+    """The fifth normalisation (see the module docstring)."""
+    from apps.pdfgen import renderer
+
+    maker = to_make_pdf.PDFMaker
+    port = renderer.PDFMaker.attachments
+
+    def attachments(self, element, *args, **kwargs):
+        rows = [[text, code, Path(qr).read_bytes() if qr and os.path.exists(qr) else None] for text, code, qr in element]
+        return port(self, rows, *args, **kwargs)
+
+    maker.attachments = attachments
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--v1", required=True, help="dir holding other_folder/, Vazir.ttf, Vazir-Bold.ttf")
@@ -229,6 +248,7 @@ def main():
     to_make_pdf = importlib.import_module("other_folder.to_make_pdf")
     patch_text_fixes(to_make_pdf)
     patch_header(to_make_pdf)
+    patch_attachments(to_make_pdf)
     convert.subprocess.run = lambda *a, **k: None  # the viewer launch
     convert.sys.exit = lambda *a: None
 

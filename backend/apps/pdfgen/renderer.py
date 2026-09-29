@@ -40,6 +40,9 @@ from . import header
 HEADER_MARGIN = 40
 HEADER_GAP = 98
 
+#: Width in pixels of the white border of a QR PNG (qr.py: border=4 boxes x box_size=10).
+QR_QUIET_PX = 40
+
 
 # --------------------------------------------------------------------------
 # Fixed 2026-09-28 (owner's decision): the two text-losing quirks. Pure functions,
@@ -734,11 +737,10 @@ class PDFMaker:
 
     def attachments(self, element, x_offset=30, font_size=12):
         """
-        Draw a “ضمائم:” label, then place a QR at the extreme right
-        and the text (with optional inline styling) to the left, right-aligned.
-        
-        This version properly measures the text width so that the next text
-        appears exactly 30 points to the left of the previous text.
+        Draw a “ضمائم:” label, then one line per attachment: the caption (with
+        optional inline styling) right-aligned at the right margin, «کد …» just
+        left of it, and the document's QR at the far left of the page. (Changed
+        2026-09-29 at the owner's request: V_1.0 put the QR at the right.)
         """
         self.initialize_first_page()
         self._check_page_break(200)
@@ -757,56 +759,56 @@ class PDFMaker:
         self.c.setFont(self.font_name, font_size)
         self.c.setFillColorRGB(0, 0, 0)
     
-        # Prepare fixed space for QR
-        qr_width = 50
-        qr_height = 50
-        qr_x = self.page_width - self.margin - qr_width
-        qr_y = self.current_y - (qr_height - font_size)  # Align roughly to baseline
+        # Changed 2026-09-29 (the owner's request): one line per attachment — the
+        # caption at the right margin, its «کد …» just left of it, and the QR code
+        # at the far left edge of the page on the same line. V_1.0 put the QR at
+        # the right, the text to its left and a caption longer than the row ran
+        # off the page.
+        qr_size = 50
+        qr_gap = 14
+        text_right = self.page_width - self.margin
+        lead = 13
 
         for el in element:
-            self._check_page_break(50)
             text, thin, qr = el
-            # Draw the QR image
-            
-            qr_x = self.page_width - self.margin - qr_width
-            qr_y = self.current_y - (qr_height - font_size)
-            
             qr_img = _image(qr)
+            # The PNG has a white quiet zone (qr.py: 4 boxes of 10 px) that would
+            # look like a gap; hang it off the margin so the black modules touch it.
+            quiet = 0.0
             if qr_img is not None:
-                self.c.drawImage(qr_img, qr_x, qr_y, width=qr_width, height=qr_height, mask="auto")
+                quiet = qr_size * QR_QUIET_PX / qr_img.getSize()[0]
+            qr_x = self.margin - quiet
+            text_left = self.margin + qr_size - 2 * quiet + qr_gap
+
+            code_text = "کد " + thin
+            code_width = self.c.stringWidth(self.prepare_rtl(code_text), self.font_name, 8)
+            width = text_right - text_left - code_width - 8
+            lines = wrap_body_line(text, width, lambda t, style: self._body_width(t, style, 10, False)) or [""]
+            pitch = max(60, len(lines) * lead + 20)
+            self._check_page_break(pitch - 10)
+
+            centre = self.current_y - 13
+            if qr_img is not None:
+                self.c.drawImage(qr_img, qr_x, centre - qr_size / 2, width=qr_size, height=qr_size, mask="auto")
             else:
                 # Fallback if QR path not found
-                self.c.rect(qr_x, qr_y, qr_width, qr_height, fill=1)
-    
-            # The main text is drawn first in one line, right-aligned starting at text_right_edge
-            text_right_edge = qr_x - x_offset + 20
-    
-            # Draw the main text
-            self.draw_rtl_styled_line(text_right_edge, self.current_y - 30, text, 10)
-    
-            # Measure how wide that text was (in points)
-            text_rtl = self.prepare_rtl(text)
-            main_text_width = self.c.stringWidth(text_rtl, self.font_name, 10)
-    
-            # Now place the 'thin' text 30 points to the left of where the previous text ended
-            # Because the drawn text is right-aligned within draw_rtl_styled_line,
-            # the "starting X" actually accounts for the total width inside that method.
-            # So we subtract the measured width + 30 more points to place it further to the left.
-            next_text_right_edge = text_right_edge - main_text_width - 5
-            self.draw_rtl_styled_line(
-            next_text_right_edge,
-            self.current_y - 30,
-            "کد " +  thin,  # Make text italic
-            8,
-        )
-    
-            # Adjust the vertical position
-            self.current_y -= (qr_height - 30)
+                self.c.rect(self.margin, centre - qr_size / 2, qr_size, qr_size, fill=1)
+
+            y = centre + (len(lines) - 1) * lead / 2 - 3.5
+            for index, line in enumerate(lines):
+                self.draw_rtl_styled_line(text_right, y, line, 10)
+                if index == 0:
+                    first_width = sum(
+                        self._body_width(t, style, 10, False) for t, style in marker_runs(line)
+                    )
+                    self.draw_rtl_styled_line(text_right - first_width - 5, y, code_text, 8)
+                y -= lead
+
             self.c.setFont(self.font_name, 12)
-            self.current_y -= 40
+            self.current_y -= pitch
 
         self.current_y -= 20
-        
+
         self.idx_texts += 1
 
 
