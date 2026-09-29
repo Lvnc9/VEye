@@ -6,6 +6,8 @@
  * exchanges.
  */
 
+import type { RichDoc } from "./rich-doc";
+
 // ---------------------------------------------------------------------------
 // Personnel / RBAC
 // ---------------------------------------------------------------------------
@@ -454,6 +456,8 @@ export interface LongSection extends SectionBase {
   heading: string;
   body: string;
   extra_boxes: string[];
+  /** The rich body (2026-09-29); null for a block that is still the old marker text. */
+  rich: RichDoc | null;
   files: DocumentFileInfo[];
 }
 

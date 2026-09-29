@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { ApiError, apiUploadWithProgress } from "@/lib/api-client";
 import { FileRow } from "@/components/FileRow";
 import type { DocumentFileInfo, LongSection } from "@/lib/types";
-import { RichTextArea } from "./RichTextArea";
-import { AddButton, FieldLabel, IconButton, inputClass, type BlockProps } from "./ui";
+import { RichEditor } from "./rich/RichEditor";
+import { legacyToRich } from "@/lib/rich-doc";
+import { FieldLabel, IconButton, inputClass, type BlockProps } from "./ui";
 import { buttonClass } from "@/components/ui/Button";
 import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
@@ -64,6 +65,8 @@ export function LongBlock({
   const [error, setError] = useState<string | null>(null);
   const counter = useRef(0);
   const toast = useToast();
+  // What a legacy block (old **/~~/-- text and extra boxes) looks like in the editor.
+  const fallback = useMemo(() => legacyToRich(section.body, section.extra_boxes), [section.body, section.extra_boxes]);
   const pickers = {
     picture: useRef<HTMLInputElement>(null),
     document: useRef<HTMLInputElement>(null),
@@ -129,46 +132,14 @@ export function LongBlock({
 
       <div>
         <FieldLabel>متن</FieldLabel>
-        <RichTextArea
-          value={section.body}
+        <RichEditor
+          // A block still in the old marker format opens converted; nothing is stored until it is edited.
+          value={section.rich}
+          fallback={fallback}
           disabled={disabled}
-          rows={8}
-          onChange={(body) => update((s) => ({ ...s, body }))}
+          onChange={(rich) => update((s) => ({ ...s, rich }))}
         />
       </div>
-
-      {section.extra_boxes.map((box, position) => (
-        <div key={position}>
-          <div className="mb-1 flex items-center justify-between">
-            <FieldLabel>کادر متن اضافه {position + 1}</FieldLabel>
-            {!disabled && (
-              <IconButton
-                label="حذف این کادر"
-                tone="danger"
-                onClick={() =>
-                  update((s) => ({ ...s, extra_boxes: s.extra_boxes.filter((_, i) => i !== position) }))
-                }
-              >
-                <X />
-              </IconButton>
-            )}
-          </div>
-          <RichTextArea
-            value={box}
-            disabled={disabled}
-            rows={5}
-            onChange={(value) =>
-              update((s) => ({ ...s, extra_boxes: s.extra_boxes.map((b, i) => (i === position ? value : b)) }))
-            }
-          />
-        </div>
-      ))}
-
-      {!disabled && (
-        <AddButton onClick={() => update((s) => ({ ...s, extra_boxes: [...s.extra_boxes, ""] }))}>
-          افزودن کادر متن
-        </AddButton>
-      )}
 
       <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">
         <FieldLabel>فایل‌های پیوست</FieldLabel>

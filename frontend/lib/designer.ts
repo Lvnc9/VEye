@@ -3,6 +3,7 @@
  * turning a server response into editable state, turning state back into a save
  * payload, and the local checks that mirror the server's validation.
  */
+import { emptyRich } from "./rich-doc";
 import {
   SINGLETON_SECTIONS,
   type ContentResponse,
@@ -38,7 +39,7 @@ export function newSection(type: SectionType): DesignerSection {
     case "Short Explanation":
       return { key, type, lines: ["", ""] };
     case "Long Explanation":
-      return { key, type, heading: "", body: "", extra_boxes: [], files: [] };
+      return { key, type, heading: "", body: "", extra_boxes: [], rich: emptyRich(), files: [] };
     case "Responsibilities":
       return { key, type, roles: emptyRoles(), notes: [] };
     case "Changes Table":
@@ -103,6 +104,7 @@ export function toPayload(state: DesignerState): SavePayload {
             heading: section.heading,
             body: section.body,
             extra_boxes: section.extra_boxes,
+            rich: section.rich,
             file_ids: section.files.map((file) => file.id),
           };
         case "Responsibilities":

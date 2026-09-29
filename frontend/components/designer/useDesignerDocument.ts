@@ -158,6 +158,8 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
     if (locked) return;
     const onKey = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      // The rich editor keeps its own history for typing; the document's undo is for everything else.
+      if (event.target instanceof Element && event.target.closest(".rich-editor")) return;
       if (event.code === "KeyZ" && !event.shiftKey) dispatch({ type: "undo" });
       else if ((event.code === "KeyZ" && event.shiftKey) || event.code === "KeyY") dispatch({ type: "redo" });
       else return;

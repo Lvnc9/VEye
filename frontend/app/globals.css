@@ -247,3 +247,107 @@
     animation: none;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* The rich text editor of the تشریحی بلند block (components/designer/rich).   */
+/* What is drawn here is a preview of the print: the PDF is the truth.         */
+/* -------------------------------------------------------------------------- */
+
+.rich-editor .rich-scroll {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.rich-editor .rich-content {
+  min-height: 16rem;
+  padding: 1rem 1.25rem 1.5rem;
+  font-size: 12pt;
+  line-height: 1.7;
+  color: #0f172a;
+  outline: none;
+  overflow-wrap: anywhere;
+}
+
+.rich-editor .rich-content > * + * {
+  margin-top: 0.35rem;
+}
+
+.rich-editor .rich-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: inline-start;
+  height: 0;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.rich-editor .rich-content h1 { font-size: 18pt; font-weight: 700; margin-top: 0.8rem; }
+.rich-editor .rich-content h2 { font-size: 16pt; font-weight: 700; margin-top: 0.7rem; }
+.rich-editor .rich-content h3 { font-size: 14pt; font-weight: 700; margin-top: 0.6rem; }
+
+.rich-editor .rich-content [data-indent="1"] { padding-inline-start: 24pt; }
+.rich-editor .rich-content [data-indent="2"] { padding-inline-start: 48pt; }
+.rich-editor .rich-content [data-indent="3"] { padding-inline-start: 72pt; }
+.rich-editor .rich-content [data-indent="4"] { padding-inline-start: 96pt; }
+.rich-editor .rich-content [data-indent="5"] { padding-inline-start: 120pt; }
+.rich-editor .rich-content [data-indent="6"] { padding-inline-start: 144pt; }
+
+.rich-editor .rich-content ul,
+.rich-editor .rich-content ol { padding-inline-start: 1.6rem; }
+.rich-editor .rich-content ul { list-style: disc; }
+.rich-editor .rich-content ul ul { list-style: "–  "; }
+.rich-editor .rich-content ul ul ul { list-style: "·  "; }
+.rich-editor .rich-content ol { list-style: decimal; }
+.rich-editor .rich-content li > p { margin: 0; }
+
+.rich-editor .rich-content a { color: #1d4ed8; text-decoration: underline; cursor: text; }
+.rich-editor .rich-content hr { border: 0; border-top: 1px solid #475569; margin: 0.9rem 0; }
+
+.rich-editor .rich-page-break {
+  position: relative;
+  margin: 1rem 0;
+  border-top: 2px dashed #94a3b8;
+  text-align: center;
+}
+.rich-editor .rich-page-break::before {
+  content: "شکست صفحه";
+  position: absolute;
+  top: -0.8rem;
+  inset-inline: 0;
+  margin-inline: auto;
+  width: max-content;
+  padding: 0 0.6rem;
+  background: #fff;
+  font-size: 11px;
+  color: #64748b;
+}
+.rich-editor .rich-page-break.ProseMirror-selectednode { border-top-color: #0369a1; }
+
+.rich-editor .tableWrapper { overflow-x: auto; margin: 0.6rem 0; }
+.rich-editor table { border-collapse: collapse; table-layout: fixed; width: 100%; margin: 0; }
+.rich-editor td,
+.rich-editor th {
+  position: relative;
+  min-width: 2.5rem;
+  border: 1px solid #0f172a;
+  padding: 0.3rem 0.5rem;
+  vertical-align: top;
+}
+.rich-editor th { background: #ececec; font-weight: 700; text-align: start; }
+.rich-editor td > *,
+.rich-editor th > * { margin: 0; }
+.rich-editor .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(3 105 161 / 0.15);
+  pointer-events: none;
+}
+.rich-editor .column-resize-handle {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -2px;
+  width: 4px;
+  background: #0369a1;
+  pointer-events: none;
+}
+.rich-editor.resize-cursor { cursor: col-resize; }

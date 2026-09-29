@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { emptyRich } from "./rich-doc";
 import {
   rekey,
   ROLE_ORDER,
@@ -54,6 +55,25 @@ describe("toPayload", () => {
     const [section] = toPayload(state([long])).sections;
     expect(section.file_ids).toEqual([7, 9]);
     expect(section).not.toHaveProperty("files");
+  });
+
+  it("a new Long block starts in the rich format, and a legacy one is sent without `rich`", () => {
+    const fresh = newSection("Long Explanation");
+    if (fresh.type !== "Long Explanation") throw new Error();
+    expect(fresh.rich).toEqual(emptyRich());
+    expect(toPayload(state([fresh])).sections[0].rich).toEqual(emptyRich());
+
+    const legacy = { ...fresh, rich: null };
+    expect(toPayload(state([legacy])).sections[0].rich).toBeNull();
+  });
+
+  it("an edit of the rich body changes the snapshot; an untouched legacy block does not", () => {
+    const fresh = newSection("Long Explanation");
+    if (fresh.type !== "Long Explanation") throw new Error();
+    const edited = { ...fresh, rich: { ...emptyRich(), doc: { type: "doc" as const, content: [{ type: "paragraph", content: [{ type: "text", text: "x" }] }] } } };
+    expect(snapshot(state([edited]))).not.toBe(snapshot(state([fresh])));
+    const legacy = { ...fresh, rich: null };
+    expect(snapshot(state([legacy]))).toBe(snapshot(state([{ ...legacy }])));
   });
 
   it("never sends a change row's date — the server owns it", () => {
@@ -131,7 +151,7 @@ describe("fromResponse — keys across a save", () => {
     previous_changes: [],
     sections: [
       { id: 10, type: "Short Explanation", lines: [""] },
-      { id: 11, type: "Long Explanation", heading: "", body: "", extra_boxes: [], files: [] },
+      { id: 11, type: "Long Explanation", heading: "", body: "", extra_boxes: [], rich: null, files: [] },
     ],
   } as ContentResponse;
 
