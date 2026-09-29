@@ -5,7 +5,7 @@ import { ApiError, apiDelete, apiPatch, apiUpload } from "@/lib/api-client";
 import type { Company, OrgNode } from "@/lib/organization";
 import { AddNodeForm, DeleteNodeButton } from "./AddNodeForm";
 import { DarkError, StepCard, darkInput, ghostButton, primaryButton } from "./ui";
-import { Check } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 
 /**
  * Step 1: the company's name and logo, and whether it has several حوزه.
@@ -92,9 +92,9 @@ export function CompanyStep({
       <div className="flex items-center gap-4">
         {company.logo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={company.logo_url} alt="لوگوی شرکت" className="h-16 w-16 rounded-lg border border-line bg-white object-contain p-1" />
+          <img src={company.logo_url} alt="لوگوی شرکت" className="size-16 rounded-xl border border-line bg-white object-contain p-1 shadow-lg" />
         ) : (
-          <span className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-line text-xs text-slate-500">
+          <span className="flex size-16 items-center justify-center rounded-xl border border-dashed border-line text-xs text-slate-500">
             بدون لوگو
           </span>
         )}
@@ -125,22 +125,25 @@ export function CompanyStep({
         </div>
       </div>
 
-      <fieldset className="space-y-2 rounded-lg border border-line p-4">
-        <legend className="px-2 text-sm text-slate-300">آیا شرکت چند حوزه دارد؟</legend>
-        <label className="flex items-center gap-2 text-sm text-slate-200">
-          <input type="radio" name="multi" checked={multi === true} onChange={() => setMulti(true)} />
+      <fieldset className="space-y-2">
+        <legend className="mb-2 text-sm text-slate-300">آیا شرکت چند حوزه دارد؟</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-slate-200 transition-colors hover:bg-white/5 has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+          <input type="radio" name="multi" checked={multi === true} onChange={() => setMulti(true)} className="accent-sky-400" />
           بله، حوزه‌بندی دارد
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-200">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-slate-200 transition-colors hover:bg-white/5 has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
           <input
             type="radio"
             name="multi"
+            className="accent-sky-400"
             checked={multi === false}
             disabled={domains.length > 0}
             onChange={() => setMulti(false)}
           />
           خیر، واحدها مستقیم زیر شرکت هستند
         </label>
+        </div>
         {domains.length > 0 && <p className="text-xs text-slate-500">برای انتخاب «خیر» ابتدا حوزه‌های افزوده‌شده را حذف کنید.</p>}
       </fieldset>
 
@@ -149,7 +152,7 @@ export function CompanyStep({
           <AddNodeForm kind="DOMAIN" parentId={company.root} placeholder="نام حوزه، مثلاً «حوزه تولید»" onChanged={onChanged} />
           <ul className="space-y-1">
             {domains.map((domain) => (
-              <li key={domain.id} className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-sm text-slate-200">
+              <li key={domain.id} className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2.5 text-sm text-slate-200 ring-1 ring-inset ring-white/5 animate-fade-in">
                 {domain.name}
                 <DeleteNodeButton node={domain} onChanged={onChanged} />
               </li>
@@ -161,6 +164,7 @@ export function CompanyStep({
       <div className="flex justify-end">
         <button type="button" onClick={onNext} disabled={!canContinue} className={primaryButton}>
           ادامه: واحدها
+          <ArrowLeft className="size-4" />
         </button>
       </div>
       {!canContinue && (

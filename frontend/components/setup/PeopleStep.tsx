@@ -7,6 +7,7 @@ import type { Person } from "@/lib/organization";
 import type { SetupStatus } from "@/lib/types";
 import { useApiQuery } from "@/lib/use-api-query";
 import { StepCard, ghostButton, primaryButton } from "./ui";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 interface PeoplePage {
   count: number;
@@ -49,7 +50,7 @@ export function PeopleStep({
         {blocked ?? "مسئول شرکت ثبت شده است؛ می‌توانید راه‌اندازی را به پایان برسانید."}
       </p>
 
-      <div className="rounded-xl border border-line p-4">
+      <div className="rounded-2xl border border-line bg-surface p-4">
         <PersonnelForm
           tone="dark"
           onRegistered={() => {
@@ -60,7 +61,7 @@ export function PeopleStep({
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-slate-200">
+        <h3 className="mb-3 text-sm font-bold text-slate-200">
           ثبت‌شده‌ها{people.data ? ` (${people.data.count})` : ""}
         </h3>
         {people.error ? (
@@ -70,7 +71,7 @@ export function PeopleStep({
         ) : (
           <ul className="max-h-64 space-y-1 overflow-y-auto">
             {list.map((person) => (
-              <li key={person.id} className="rounded-lg bg-white/5 px-3 py-2 text-sm text-slate-200">
+              <li key={person.id} className="rounded-xl bg-white/5 px-3 py-2.5 text-sm text-slate-200 ring-1 ring-inset ring-white/5">
                 <span className="font-medium">{person.full_name}</span>
                 <span className="text-xs text-slate-400">
                   {person.memberships.length === 0
@@ -87,10 +88,12 @@ export function PeopleStep({
 
       <div className="flex justify-between">
         <button type="button" onClick={onBack} className={ghostButton}>
+          <ArrowRight className="size-4" />
           بازگشت
         </button>
         <button type="button" onClick={onNext} className={primaryButton}>
           ادامه: آمادهٔ شروع
+          <ArrowLeft className="size-4" />
         </button>
       </div>
     </StepCard>

@@ -7,6 +7,7 @@ import { finishBlockedReason } from "@/lib/setup";
 import type { SetupStatus } from "@/lib/types";
 import { OrgTreeList } from "@/components/OrgTreeList";
 import { DarkError, StepCard, ghostButton, primaryButton } from "./ui";
+import { ArrowRight, Rocket } from "lucide-react";
 
 /** Step 5: the finished chart and «ورود به نرم‌افزار». Finishing needs nothing structural — a company
  *  with only its root is a valid chart — but it does need a مدیر عامل: an active lead on the company
@@ -55,17 +56,17 @@ export function ReadyStep({
           ["واحد", counts.UNIT],
           ["بخش", counts.SECTION],
         ].map(([label, count]) => (
-          <div key={label} className="rounded-xl border border-line p-3">
-            <dd className="text-2xl font-bold text-accent">{count}</dd>
+          <div key={label} className="rounded-2xl border border-line bg-surface p-4 veye-rise" style={{ "--i": 0 } as React.CSSProperties}>
+            <dd className="text-3xl font-bold text-accent tabular-nums">{count}</dd>
             <dt className="text-xs text-slate-400">{label}</dt>
           </div>
         ))}
       </dl>
-      <div className="max-h-72 overflow-y-auto rounded-xl border border-line p-3">
+      <div className="max-h-72 overflow-y-auto rounded-2xl border border-line bg-surface p-3">
         <OrgTreeList nodes={nodes} tone="dark" />
       </div>
       {blocked && (
-        <div role="status" className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-200">
+        <div role="status" className="space-y-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-200">
           <p>{blocked}</p>
           <button type="button" onClick={onPeople} className="underline hover:text-amber-100">
             رفتن به مرحلهٔ «پرسنل»
@@ -75,10 +76,12 @@ export function ReadyStep({
       {error && <DarkError message={error} />}
       <div className="flex justify-between">
         <button type="button" onClick={onBack} disabled={busy} className={ghostButton}>
+          <ArrowRight className="size-4" />
           بازگشت
         </button>
         <button type="button" onClick={finish} disabled={busy || blocked !== null} className={primaryButton}>
           {busy ? "لحظه‌ای صبر کنید..." : "ورود به نرم‌افزار"}
+          {!busy && <Rocket className="size-4" />}
         </button>
       </div>
     </StepCard>

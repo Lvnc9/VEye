@@ -3,6 +3,7 @@
 import { chartLayout, type OrgNode } from "@/lib/organization";
 import { AddNodeForm, DeleteNodeButton } from "./AddNodeForm";
 import { StepCard, ghostButton, primaryButton } from "./ui";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 /** Step 3: بخش‌ها. One card per active واحد, grouped under its حوزه (or «مستقیم زیر شرکت» for a
  *  واحد straight under the company). Each card has its own inline add form, so adding several
@@ -25,20 +26,20 @@ export function SectionsStep({
   return (
     <StepCard title="بخش‌ها" intro="بخش‌های هر واحد را همین‌جا بیفزایید. بخش‌ها همان‌جا هستند که افراد و پروژه‌ها جا می‌گیرند.">
       {floors.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line p-4 text-sm text-slate-400">
+        <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-slate-400">
           هنوز واحدی ندارید. به مرحلهٔ قبل برگردید و واحد بسازید، یا این مرحله را رد کنید.
         </p>
       ) : (
         <div className="space-y-6">
           {floors.map((floor) => (
             <div key={floor.node?.id ?? "loose"} className="space-y-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <h3 className="text-xs font-bold text-slate-400">
                 {floor.node ? floor.node.name : "مستقیم زیر شرکت"}
               </h3>
               <div className="space-y-4">
                 {floor.rooms.map((room) => (
-                  <div key={room.node.id} className="space-y-3 rounded-xl border border-line p-4">
-                    <h4 className="text-sm font-semibold text-slate-100">{room.node.name}</h4>
+                  <div key={room.node.id} className="space-y-3 rounded-2xl border border-line bg-surface p-4">
+                    <h4 className="text-sm font-bold text-slate-100">{room.node.name}</h4>
                     <AddNodeForm
                       kind="SECTION"
                       parentId={room.node.id}
@@ -52,7 +53,7 @@ export function SectionsStep({
                         {room.desks.map((section) => (
                           <li
                             key={section.id}
-                            className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm text-slate-200"
+                            className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2.5 text-sm text-slate-200 ring-1 ring-inset ring-white/5 animate-fade-in"
                           >
                             {section.name}
                             <DeleteNodeButton node={section} onChanged={onChanged} />
@@ -69,10 +70,12 @@ export function SectionsStep({
       )}
       <div className="flex justify-between">
         <button type="button" onClick={onBack} className={ghostButton}>
+          <ArrowRight className="size-4" />
           بازگشت
         </button>
         <button type="button" onClick={onNext} className={primaryButton}>
           ادامه: پرسنل
+          <ArrowLeft className="size-4" />
         </button>
       </div>
     </StepCard>
