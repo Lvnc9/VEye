@@ -42,7 +42,10 @@ export function OrgChart({ nodes, company, showArchived, selectedId, onSelect }:
     const box = frame?.getBoundingClientRect();
     if (!box || !content.current) return;
     // offsetWidth/Height are the layout size: unaffected by the transform being fitted.
-    setView(fitView({ width: box.width, height: box.height }, { width: content.current.offsetWidth, height: content.current.offsetHeight }));
+    // Keep the building clear of the floating zoom bar along the top.
+    const TOOLBAR = 56;
+    const view = fitView({ width: box.width, height: box.height - TOOLBAR }, { width: content.current.offsetWidth, height: content.current.offsetHeight });
+    setView({ ...view, y: view.y + TOOLBAR });
   }, []);
 
   // A callback ref, not an effect: fit the whole building into view once, when it first appears.

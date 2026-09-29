@@ -23,11 +23,19 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { buttonClass } from "@/components/ui/Button";
 import { controlClass } from "@/components/ui/Field";
-import { X } from "lucide-react";
+import { Archive, ArchiveRestore, Crown, MessageCircle, MessagesSquare, Network, PencilLine, Plus, Search, Trash2, UserPlus, Users, X } from "lucide-react";
+import { cx } from "@/components/ui/cx";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/IconButton";
 
 const input = `${controlClass} w-full px-3 py-2 text-sm`;
+
+const KIND_BAND: Record<OrgNodeKind, string> = {
+  COMPANY: "bg-gradient-to-l from-slate-700 to-slate-900",
+  DOMAIN: "bg-gradient-to-l from-indigo-400 to-indigo-600",
+  UNIT: "bg-gradient-to-l from-brand-400 to-brand-600",
+  SECTION: "bg-gradient-to-l from-emerald-400 to-emerald-600",
+};
 const smallButton = buttonClass({ variant: "secondary", size: "sm" });
 const primary = buttonClass({ variant: "primary", size: "sm" });
 
@@ -48,11 +56,18 @@ export function NodePanel({
   onStructureChanged: (next?: { selectId?: number | null }) => void;
 }) {
   return (
-    <aside aria-label={`جزئیات ${node.name}`} className="space-y-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card animate-fade-in">
+    <aside
+      key={node.id}
+      aria-label={`جزئیات ${node.name}`}
+      className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card animate-fade-in lg:sticky lg:top-4"
+    >
+      {/* A band in the node kind's colour. */}
+      <div aria-hidden className={cx("h-1.5", KIND_BAND[node.kind])} />
+      <div className="space-y-5 p-5">
       <header className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <span className={`rounded-full px-2 py-0.5 text-[10px] ${ORG_KIND_TONE[node.kind]}`}>{ORG_KIND_LABELS[node.kind]}</span>
-          <h2 className="mt-1 text-lg font-bold text-slate-900">
+          <h2 className="mt-1.5 truncate text-lg font-bold text-slate-900">
             {node.name}
             {!node.is_active && <span className="ms-2 text-xs font-normal text-amber-700">(بایگانی‌شده)</span>}
           </h2>
@@ -66,6 +81,7 @@ export function NodePanel({
       <GroupChat node={node} nodes={nodes} />
       <Members node={node} />
       {(node.can_add_child || node.can_edit) && <StructureActions node={node} onChanged={onStructureChanged} />}
+      </div>
     </aside>
   );
 }
@@ -106,8 +122,9 @@ function GroupChat({ node, nodes }: { node: OrgNode; nodes: OrgNode[] }) {
         type="button"
         disabled={busy}
         onClick={async () => setError(await open("/chat/conversations/node/", { node: node.id }, "باز کردن گفتگو ممکن نشد."))}
-        className={`${primary} w-full py-2`}
+        className={cx(primary, "h-10 w-full")}
       >
+        <MessagesSquare />
         {node.kind === "COMPANY" ? "گفتگوی همهٔ شرکت" : `گفتگوی گروه ${node.name}`}
       </button>
       {node.kind !== "COMPANY" && (
@@ -143,8 +160,12 @@ function Members({ node }: { node: OrgNode }) {
   const rows = members.data?.results ?? [];
   return (
     <section aria-label="افراد" className="space-y-3">
-      <h3 className="text-sm font-bold text-slate-800">
-        افراد {members.data ? <span className="font-normal text-slate-500">({members.data.count})</span> : null}
+      <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
+        <Users className="size-4 text-brand-600" />
+        افراد
+        {members.data && (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-600 tabular-nums">{members.data.count}</span>
+        )}
       </h3>
       {error && <ErrorBanner message={error} />}
       {members.loading ? (
@@ -152,7 +173,10 @@ function Members({ node }: { node: OrgNode }) {
       ) : members.error ? (
         <ErrorBanner message={members.error} />
       ) : rows.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500">هنوز کسی در این گره نیست.</p>
+        <p className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-5 text-center text-xs text-slate-500">
+          <Users className="size-5 text-slate-300" />
+          هنوز کسی در این گره نیست.
+        </p>
       ) : (
         <ul className="space-y-2">
           {rows.map((m) => (
@@ -161,42 +185,51 @@ function Members({ node }: { node: OrgNode }) {
               <div className="min-w-[9rem] flex-1 text-sm">
                 <p className="truncate font-bold text-slate-900">
                   {m.user_name}
-                  {m.is_lead && <span className="ms-2 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-800 ring-1 ring-inset ring-amber-600/25">مسئول</span>}
+                  {m.is_lead && (
+                    <span className="ms-2 inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-800 ring-1 ring-inset ring-amber-600/25">
+                      <Crown className="size-3" />
+                      مسئول
+                    </span>
+                  )}
                 </p>
                 <p className="truncate text-xs text-slate-500">{[m.user_title, memberCaption(m, node.name)].filter(Boolean).join(" · ")}</p>
               </div>
-              {user && m.user !== user.id && m.user_is_active && (
-                <button
-                  type="button"
-                  disabled={chat.busy}
-                  aria-label={`گفتگو با ${m.user_name}`}
-                  onClick={async () =>
-                    setError(await chat.open("/chat/conversations/direct/", { user: m.user }, "باز کردن گفتگو ممکن نشد."))
-                  }
-                  className={`${smallButton} shrink-0`}
-                >
-                  گفتگو
-                </button>
-              )}
-              {node.can_manage_members && (
-                <div className="flex shrink-0 gap-1">
-                  <button
-                    type="button"
-                    className={smallButton}
-                    onClick={() => act(() => apiPatch(`/org/memberships/${m.id}/`, { is_lead: !m.is_lead }), "تغییر مسئولیت ممکن نشد.")}
+              <div className="flex shrink-0 items-center gap-0.5">
+                {user && m.user !== user.id && m.user_is_active && (
+                  <IconButton
+                    label={`گفتگو با ${m.user_name}`}
+                    tone="brand"
+                    size="sm"
+                    disabled={chat.busy}
+                    onClick={async () =>
+                      setError(await chat.open("/chat/conversations/direct/", { user: m.user }, "باز کردن گفتگو ممکن نشد."))
+                    }
                   >
-                    {m.is_lead ? "برداشتن مسئولیت" : "مسئول کن"}
-                  </button>
-                  <button
-                    type="button"
-                    className={`${smallButton} text-rose-700`}
-                    aria-label={`حذف ${m.user_name} از ${node.name}`}
-                    onClick={() => act(() => apiDelete(`/org/memberships/${m.id}/`), "حذف عضو ممکن نشد.")}
-                  >
-                    حذف
-                  </button>
-                </div>
-              )}
+                    <MessageCircle />
+                  </IconButton>
+                )}
+                {node.can_manage_members && (
+                  <>
+                    <IconButton
+                      label={m.is_lead ? "برداشتن مسئولیت" : "مسئول کن"}
+                      size="sm"
+                      aria-pressed={m.is_lead}
+                      className={m.is_lead ? "text-amber-500 hover:bg-amber-50 hover:text-amber-600" : undefined}
+                      onClick={() => act(() => apiPatch(`/org/memberships/${m.id}/`, { is_lead: !m.is_lead }), "تغییر مسئولیت ممکن نشد.")}
+                    >
+                      <Crown />
+                    </IconButton>
+                    <IconButton
+                      label={`حذف ${m.user_name} از ${node.name}`}
+                      tone="danger"
+                      size="sm"
+                      onClick={() => act(() => apiDelete(`/org/memberships/${m.id}/`), "حذف عضو ممکن نشد.")}
+                    >
+                      <Trash2 />
+                    </IconButton>
+                  </>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -214,16 +247,20 @@ function AddMember({ node, memberIds, onAdded, onError }: { node: OrgNode; membe
 
   return (
     <div className="space-y-2 border-t border-slate-100 pt-3">
-      <label className="block text-xs font-medium text-slate-600" htmlFor={`add-member-${node.id}`}>
+      <label className="flex items-center gap-1.5 text-xs text-slate-600" htmlFor={`add-member-${node.id}`}>
+        <UserPlus className="size-3.5" />
         افزودن فرد به {node.name}
       </label>
-      <input
-        id={`add-member-${node.id}`}
-        value={term}
-        onChange={(event) => setTerm(event.target.value)}
-        placeholder="جستجوی نام (دست‌کم دو حرف)"
-        className={input}
-      />
+      <div className="relative">
+        <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
+        <input
+          id={`add-member-${node.id}`}
+          value={term}
+          onChange={(event) => setTerm(event.target.value)}
+          placeholder="جستجوی نام (دست‌کم دو حرف)"
+          className={cx(input, "pr-9")}
+        />
+      </div>
       {query.length >= 2 && (
         <PeopleResults key={query} query={query} node={node} memberIds={memberIds} onAdded={() => { setTerm(""); onAdded(); }} onError={onError} />
       )}
@@ -254,17 +291,21 @@ function PeopleResults({ query, node, memberIds, onAdded, onError }: { query: st
   if (rows.length === 0) return <p className="text-xs text-slate-500">کسی با این نام پیدا نشد.</p>;
 
   return (
-    <ul className="space-y-1">
+    <ul className="space-y-1.5 animate-fade-in">
       {rows.map((person) => {
         const already = memberIds.has(person.id);
         const places = person.memberships.map((m) => m.node_name).join("، ");
         return (
           <li key={person.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition-colors hover:border-slate-300">
-            <span className="min-w-0">
+            <span className="flex min-w-0 items-center gap-2">
+              <Avatar name={person.full_name} size="sm" />
+              <span className="min-w-0">
               <span className="block truncate">{person.full_name}</span>
               <span className="block truncate text-[11px] text-slate-500">{[person.title, places].filter(Boolean).join(" · ") || "بدون جایگاه سازمانی"}</span>
+              </span>
             </span>
             <button type="button" disabled={already || busy === person.id} onClick={() => add(person)} className={primary}>
+              {!already && <UserPlus />}
               {already ? "عضو است" : "افزودن"}
             </button>
           </li>
@@ -316,7 +357,10 @@ function StructureActions({ node, onChanged }: { node: OrgNode; onChanged: (next
 
   return (
     <section aria-label="ساختار" className="space-y-4 border-t border-slate-100 pt-4">
-      <h3 className="text-sm font-bold text-slate-800">ساختار</h3>
+      <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
+        <Network className="size-4 text-brand-600" />
+        ساختار
+      </h3>
       {error && <ErrorBanner message={error} />}
 
       {node.can_add_child && node.is_active && childKinds.length > 0 && (
@@ -326,7 +370,7 @@ function StructureActions({ node, onChanged }: { node: OrgNode; onChanged: (next
           </label>
           <div className="flex gap-2">
             {childKinds.length > 1 && (
-              <select aria-label="نوع" value={kind} onChange={(e) => setKind(e.target.value as OrgNodeKind)} className="rounded-lg border border-slate-300 bg-white px-2 text-sm">
+              <select aria-label="نوع" value={kind} onChange={(e) => setKind(e.target.value as OrgNodeKind)} className={`${controlClass} px-2 text-sm`}>
                 {childKinds.map((k) => (
                   <option key={k} value={k}>
                     {ORG_KIND_LABELS[k]}
@@ -342,7 +386,8 @@ function StructureActions({ node, onChanged }: { node: OrgNode; onChanged: (next
               maxLength={255}
               className={input}
             />
-            <button type="submit" disabled={busy || !name.trim()} className={primary}>
+            <button type="submit" disabled={busy || !name.trim()} className={cx(primary, "h-auto shrink-0")}>
+              <Plus />
               افزودن
             </button>
           </div>
@@ -353,7 +398,12 @@ function StructureActions({ node, onChanged }: { node: OrgNode; onChanged: (next
         <>
           <form onSubmit={saveName} className="flex gap-2">
             <input aria-label="نام" value={rename} onChange={(e) => setRename(e.target.value)} maxLength={255} className={input} />
-            <button type="submit" disabled={busy || !rename.trim() || rename.trim() === node.name} className={smallButton}>
+            <button
+              type="submit"
+              disabled={busy || !rename.trim() || rename.trim() === node.name}
+              className={cx(smallButton, "h-auto shrink-0")}
+            >
+              <PencilLine />
               تغییر نام
             </button>
           </form>
@@ -362,14 +412,22 @@ function StructureActions({ node, onChanged }: { node: OrgNode; onChanged: (next
             <div className="flex flex-wrap gap-2">
               {node.is_active ? (
                 <button type="button" disabled={busy} onClick={() => setConfirming("archive")} className={smallButton}>
+                  <Archive />
                   بایگانی
                 </button>
               ) : (
                 <button type="button" disabled={busy} onClick={() => run(() => apiPost(`/org/nodes/${node.id}/unarchive/`), "بازگردانی ممکن نشد.")} className={smallButton}>
+                  <ArchiveRestore />
                   بازگردانی از بایگانی
                 </button>
               )}
-              <button type="button" disabled={busy} onClick={() => setConfirming("delete")} className={`${smallButton} text-rose-700`}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirming("delete")}
+                className={buttonClass({ variant: "danger-ghost", size: "sm" })}
+              >
+                <Trash2 />
                 حذف
               </button>
             </div>
