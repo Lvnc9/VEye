@@ -23,6 +23,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { CountBadge } from "@/components/ui/Badge";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { cx } from "@/components/ui/cx";
+import { ToastProvider } from "@/components/ui/Toast";
 import { unreadBadge } from "@/lib/chat";
 import { CurrentUserProvider, useCurrentUser } from "@/lib/current-user";
 import { useInboxSummary } from "@/lib/use-inbox-summary";
@@ -293,7 +294,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <CurrentUserProvider>
-      <Shell>{children}</Shell>
+      <ToastProvider>
+        <Shell>{children}</Shell>
+      </ToastProvider>
     </CurrentUserProvider>
   );
 }

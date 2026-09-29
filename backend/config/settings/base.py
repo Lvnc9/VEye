@@ -217,6 +217,8 @@ FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://localhost:3000")
 # CORS / CSRF (cross-origin cookie-based auth: Next.js -> Django)
 # ---------------------------------------------------------------------------
 CORS_ALLOW_CREDENTIALS = True
+# The file page (frontend /documents/<id>/files/<fid>) names the saved file from this header.
+CORS_EXPOSE_HEADERS = ["Content-Disposition"]
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:3000"])
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=["http://localhost:3000"])
 

@@ -8,6 +8,9 @@ import { RichTextArea } from "./RichTextArea";
 import { AddButton, FieldLabel, IconButton, inputClass, type BlockProps } from "./ui";
 import { buttonClass } from "@/components/ui/Button";
 import { X } from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
+import { copyText } from "@/lib/clipboard";
+import { documentFileLink } from "@/lib/file-link";
 
 /** The three upload buttons and the file types V_1.0's dialogs offered
  *  (utils.py:1638-1666; `xlsx` added — V_1.0 listed every Excel flavour except
@@ -60,6 +63,7 @@ export function LongBlock({
   const [uploads, setUploads] = useState<PendingUpload[]>([]);
   const [error, setError] = useState<string | null>(null);
   const counter = useRef(0);
+  const toast = useToast();
   const pickers = {
     picture: useRef<HTMLInputElement>(null),
     document: useRef<HTMLInputElement>(null),
@@ -97,6 +101,15 @@ export function LongBlock({
     event.target.value = ""; // so picking the same file again still fires
     setError(null);
     files.forEach((file) => void upload(file));
+  }
+
+  async function copyLink(file: DocumentFileInfo) {
+    const copied = await copyText(documentFileLink(window.location.origin, documentId, file.id));
+    toast(
+      copied
+        ? { tone: "success", title: "لینک فایل کپی شد", detail: `«${file.name}» — اکنون می‌توانید آن را جایگذاری (Paste) کنید.` }
+        : { tone: "danger", title: "کپی لینک ممکن نشد", detail: "مرورگر اجازهٔ دسترسی به کلیپ‌بورد را نداد." },
+    );
   }
 
   return (
@@ -216,6 +229,7 @@ export function LongBlock({
                 key={file.id}
                 name={file.name}
                 href={file.download_url}
+                onCopyLink={() => copyLink(file)}
                 size={file.size}
                 kindLabel={file.kind_label}
                 action={

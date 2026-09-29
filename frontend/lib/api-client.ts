@@ -17,6 +17,7 @@
  */
 
 import { extractErrorMessage } from "./api-errors";
+import { filenameFromDisposition } from "./file-link";
 import { loginRedirectUrl } from "./login";
 
 const API_BASE_URL =
@@ -149,6 +150,38 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
     return (await response.json()) as T;
   }
   return undefined as T;
+}
+
+/**
+ * A binary GET (an attached file): the bytes plus the name the server asked for. Same silent token
+ * refresh as `apiRequest`, and a dead session goes to /login and comes back here.
+ */
+export async function apiDownload(
+  path: string,
+  fallbackName: string,
+  _isRetry = false,
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(buildUrl(path), { credentials: "include" });
+  if (response.status === 401 && !_isRetry) {
+    if (await refreshAccessToken()) return apiDownload(path, fallbackName, true);
+    if (typeof window !== "undefined") {
+      window.location.href = loginRedirectUrl(window.location.pathname, window.location.search);
+    }
+    throw new ApiError("نشست شما منقضی شده است. لطفاً دوباره وارد شوید.", 401);
+  }
+  if (!response.ok) {
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch {
+      data = undefined;
+    }
+    throw new ApiError(extractErrorMessage(data, response.status), response.status, data);
+  }
+  return {
+    blob: await response.blob(),
+    filename: filenameFromDisposition(response.headers.get("content-disposition"), fallbackName),
+  };
 }
 
 export function apiGet<T>(path: string, params?: QueryParams): Promise<T> {
