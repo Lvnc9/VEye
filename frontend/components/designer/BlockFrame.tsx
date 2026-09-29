@@ -3,7 +3,16 @@
 import type { ReactNode } from "react";
 import { SECTION_TYPE_LABELS, type SectionType } from "@/lib/types";
 import { IconButton } from "./ui";
-import { ChevronDown, ChevronUp, GripVertical, X } from "lucide-react";
+import { AlignRight, ChevronDown, ChevronUp, FileText, GitCompareArrows, GripVertical, Paperclip, Users, X } from "lucide-react";
+
+/** An icon per block type, so the kinds are told apart at a glance. */
+const TYPE_ICON: Record<SectionType, typeof AlignRight> = {
+  "Short Explanation": AlignRight,
+  "Long Explanation": FileText,
+  Responsibilities: Users,
+  "Changes Table": GitCompareArrows,
+  Attachment: Paperclip,
+};
 import type { useDragReorder } from "./useDragReorder";
 
 type Drag = ReturnType<typeof useDragReorder>;
@@ -59,6 +68,10 @@ export function BlockFrame({
           <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-bold text-brand-700 ring-1 ring-inset ring-brand-600/15 tabular-nums">
             {index}
           </span>
+          {(() => {
+            const Icon = TYPE_ICON[type];
+            return <Icon aria-hidden className="size-4 text-slate-400" />;
+          })()}
           {SECTION_TYPE_LABELS[type]}
         </h3>
         {!disabled && (
