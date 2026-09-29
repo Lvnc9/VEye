@@ -32,6 +32,14 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
+from . import header
+
+#: Boxed page header (owner's request, 2026-09-29; see header.py). The box hangs
+#: from `HEADER_MARGIN` below the top edge; text on pages >= 2 starts `HEADER_GAP`
+#: below `margin` (V_1.0: a 50 pt gap under a small header).
+HEADER_MARGIN = 40
+HEADER_GAP = 98
+
 
 # --------------------------------------------------------------------------
 # Fixed 2026-09-28 (owner's decision): the two text-losing quirks. Pure functions,
@@ -339,67 +347,22 @@ class HeaderFooterCanvas(canvas.Canvas):
 
     def _draw_small_header(self):
         """
-        Draws the small header on pages >=2 in #6c7482:
-          - Logo on left
-          - title_text in #6c7482
-          - Bold code_text on the right
-          - A horizontal separator
-        Then resets fill color to black.
+        Draws the boxed header (header.py) on pages >= 2 — the same box as page 1
+        (owner's request, 2026-09-29; V_1.0 drew a small unboxed strip here).
+        Then resets the fill colour to black.
         """
-        self.setFillColorRGB(108/255.0, 116/255.0, 130/255.0)
-
-        margin_top = 20
-        margin_left = 40
-        margin_right = 40
-
-        logo_width = 40
-        logo_height = 40
-        logo_x = margin_left
-        logo_y = self._pagesize[1] - margin_top - logo_height
-
-        if self.logo is not None:
-            self.drawImage(
-                self.logo,
-                logo_x,
-                logo_y,
-                width=logo_width,
-                height=logo_height,
-                mask="auto"
-            )
-        else:
-            self.rect(logo_x, logo_y, logo_width, logo_height, fill=1)
-
-        text_x = logo_x + logo_width + 10
-        text_y = logo_y + (logo_height / 2) - 5
-        #self.setFont(self.font_name, 12)
-
-        # V_1.0 crashed here (KeyError) if the bold font was not registered; every
-        # other bold use is guarded like this.
-        if (self.font_name + "-Bold") in pdfmetrics.getRegisteredFontNames():
-            self.setFont(self.font_name + "-Bold", 14)
-        else:
-            self.setFont(self.font_name, 14)
-        reshaped_title = arabic_reshaper.reshape(self.title_text)
-        bidi_title = get_display(reshaped_title)
-        self.drawString(text_x, text_y, bidi_title)
-
-        # Bold code text on right
-        if (self.font_name + "-Bold") in pdfmetrics.getRegisteredFontNames():
-            self.setFont(self.font_name + "-Bold", 12)
-        code_text_str = self.code_text
-        reshaped_code = arabic_reshaper.reshape(code_text_str)
-        bidi_code = get_display(reshaped_code)
-        code_text_width = self.stringWidth(bidi_code, self.font_name + "-Bold", 12) \
-            if (self.font_name + "-Bold") in pdfmetrics.getRegisteredFontNames() \
-            else self.stringWidth(bidi_code, self.font_name, 12)
-
-        code_x = self._pagesize[0] - margin_right - code_text_width
-        code_y = text_y
-        self.drawString(code_x, code_y, bidi_code)
-
-        sep_y = logo_y - 5
-        self.line(margin_left, sep_y, self._pagesize[0] - margin_right, sep_y)
-
+        rows = getattr(self, "header_rows", None) or header.meta_rows(self.code_text, "", "")
+        width = self._pagesize[0]
+        header.draw_boxed_header(
+            self,
+            title=self.title_text,
+            rows=rows,
+            logo=self.logo,
+            font_name=self.font_name,
+            x0=HEADER_MARGIN,
+            x1=width - HEADER_MARGIN,
+            top=self._pagesize[1] - HEADER_MARGIN,
+        )
         self.setFillColorRGB(0, 0, 0)
 
 
@@ -415,7 +378,7 @@ class PDFMaker:
         self,
         font_name="Vazir",
         logo=None,
-        header_gap=50,
+        header_gap=HEADER_GAP,
         qr=None,
         title="بیانیه خط مشی سیستم مدیریت یکپارچه (IMS)",
         date="",
@@ -521,64 +484,30 @@ class PDFMaker:
         title_text="بیانیه خط مشی سیستم مدیریت یکپارچه (IMS)"
     ):
         """
-        A large initial header drawn on the first page in black text.
+        The boxed header on page 1 (header.py; owner's request, 2026-09-29). The
+        styling arguments are V_1.0's and no longer used. V_1.0 drew the header a
+        second time from `initialize_first_page`; once is enough.
         """
-        header_total_height = top_details_height + bottom_header_height + 30
-        header_top = self.page_height - self.margin
-        self._check_page_break(header_total_height)
-
-        self.c.setFillColorRGB(*header_bg_color)
-        self.c.rect(
-            self.margin,
-            header_top - header_total_height,
-            self.page_width - 2 * self.margin,
-            header_total_height,
-            fill=1,
-            stroke=0
-        )
-        # black text for big header
-        self.c.setFillColorRGB(0, 0, 0)
-        if details is None:
-            # V_1.0 split the code *before* this guard, so a caller that passed
-            # `details` still crashed on a code without three parts.
-            third = self.whole_code.split('-')[2]
-            details = [f"کد: {self.whole_code}", f"شماره بازنگری: {third}", f"تاریخ: {self.date}"]
-
-        self.c.setFont(self.font_name, code_font_size)
-        detail_y = header_top - 15
-        for detail in details:
-            detail_rtl = self.prepare_rtl(detail)
-            self.c.drawString(self.margin + 5, detail_y, detail_rtl)
-            detail_y -= 16
-
-        sep_y = header_top - top_details_height - 15
-        self.c.setLineWidth(1)
-        self.c.line(self.margin, sep_y, self.page_width - self.margin, sep_y)
-
-        # Title
-        title_rtl = self.prepare_rtl(self.title)
-        self.c.setFont(self.font_name, title_font_size)
-        bottom_center_y = sep_y - (bottom_header_height / 2) + 8
-        self.c.drawCentredString(self.page_width / 2, bottom_center_y, title_rtl)
-
-        # Logo on the right
-        logo_width = 60
-        logo_height = 60
-        logo_x = self.page_width - self.margin - logo_width
-        logo_y = sep_y - logo_height - 10
-        if self.c.logo is not None:
-            self.c.drawImage(
-                self.c.logo,
-                logo_x,
-                logo_y,
-                width=logo_width,
-                height=logo_height,
-                mask="auto"
+        if not getattr(self, "_header_drawn", False):
+            if details is None:
+                # V_1.0 split the code *before* this guard, so a caller that passed
+                # `details` still crashed on a code without three parts.
+                third = self.whole_code.split('-')[2]
+                details = header.meta_rows(self.whole_code, third, self.date)
+            self.c.header_rows = list(details)
+            header.draw_boxed_header(
+                self.c,
+                title=self.title,
+                rows=details,
+                logo=self.c.logo,
+                font_name=self.font_name,
+                x0=self.margin,
+                x1=self.page_width - self.margin,
+                top=self.page_height - self.margin,
             )
-        else:
-            self.c.rect(logo_x, logo_y, logo_width, logo_height, fill=1)
+            self._header_drawn = True
 
-        self.current_y = header_top - header_total_height - 40
+        self.current_y = self.page_height - self.margin - self.header_gap
         return self.current_y
 
     def draw_rtl_styled_line(self, x_right, y, text, font_size):

@@ -10,7 +10,8 @@ here: the input is a parameter, the renderer is built per call.
 """
 from dataclasses import dataclass, field
 
-from .renderer import PDFMaker
+from . import header
+from .renderer import HEADER_GAP, PDFMaker
 
 #: Block tags of `PdfInput.blocks`. V_1.0 told them apart with `type(el) is
 #: list / dict` and a magic key; a tag says the same thing without guessing.
@@ -57,10 +58,10 @@ class PdfInput:
 
 
 def deliver_to_pdf(data: PdfInput, *, preview: bool = False, invariant: bool = False) -> bytes:
-    details = [f"کد: {data.whole_code}", f"شماره بازنگری: {data.review}", f"تاریخ: {data.date}"]
+    details = header.meta_rows(data.whole_code, data.review, data.date)
 
     pdf_maker = PDFMaker(
-        header_gap=50,
+        header_gap=HEADER_GAP,
         qr=data.qr,
         date=data.date,
         title=data.title,

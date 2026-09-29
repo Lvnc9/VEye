@@ -30,6 +30,12 @@ puts exactly the fixed pieces into V_1.0's own PDFMaker — `text_merge` becomes
 `renderer.merge_words`, and in `add_body_text` only the wrap block and the two
 heading-line checks are replaced (by source-text substitution, each asserted to
 match once) — so everything else in the oracle is still V_1.0's code.
+
+The fourth is the owner's redesign of the page header (2026-09-29, header.py): the
+boxed header replaces V_1.0's grey band (page 1) and small strip (pages 2+), and the
+body starts lower on pages >= 2. `patch_header` binds the port's `draw_header`,
+`_draw_small_header` and header gap onto V_1.0's classes, so the oracle still
+draws everything else itself.
 """
 import argparse
 import importlib
@@ -167,6 +173,28 @@ def patch_text_fixes(to_make_pdf):
     maker.add_body_text = namespace["add_body_text"]
 
 
+def patch_header(to_make_pdf):
+    """The fourth normalisation (see the module docstring)."""
+    from reportlab.lib.utils import ImageReader
+
+    from apps.pdfgen import renderer
+
+    maker = to_make_pdf.PDFMaker
+    maker.draw_header = renderer.PDFMaker.draw_header
+    # V_1.0 keeps a path and tests it at every draw site; the port keeps an image.
+    to_make_pdf.HeaderFooterCanvas.logo = property(
+        lambda self: ImageReader(self.logo_path) if os.path.exists(self.logo_path) and ".png" in self.logo_path else None
+    )
+    to_make_pdf.HeaderFooterCanvas._draw_small_header = renderer.HeaderFooterCanvas._draw_small_header
+    original_init = maker.__init__
+
+    def init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        self.header_gap = renderer.HEADER_GAP  # V_1.0's Provider passes 50
+
+    maker.__init__ = init
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--v1", required=True, help="dir holding other_folder/, Vazir.ttf, Vazir-Bold.ttf")
@@ -198,7 +226,9 @@ def main():
 
     canvas.Canvas.drawImage = draw_image
     convert = importlib.import_module("other_folder.deliver_convert")
-    patch_text_fixes(importlib.import_module("other_folder.to_make_pdf"))
+    to_make_pdf = importlib.import_module("other_folder.to_make_pdf")
+    patch_text_fixes(to_make_pdf)
+    patch_header(to_make_pdf)
     convert.subprocess.run = lambda *a, **k: None  # the viewer launch
     convert.sys.exit = lambda *a: None
 
