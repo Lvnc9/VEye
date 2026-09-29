@@ -24,9 +24,14 @@ import {
   type ProjectCreateForm,
 } from "@/lib/projects";
 import { useApiQuery } from "@/lib/use-api-query";
-import { buttonClass } from "@/components/ui/Button";
 import { controlClass } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { CalendarClock, Check, FilePenLine, Flag, FolderPlus, ListChecks, Plus, Target, Trash2, Users } from "lucide-react";
+import { Avatar, AvatarStack } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { FormSection } from "@/components/ui/FormSection";
+import { cardClass } from "@/components/ui/Card";
+import { cx } from "@/components/ui/cx";
 
 const input = `${controlClass} w-full px-3 py-2 text-sm`;
 const label = "mb-1.5 block text-sm text-slate-700";
@@ -182,25 +187,36 @@ export default function NewProjectPage() {
 
   const sections = nodeOptions(tree.data.nodes, { kinds: ["SECTION"] });
 
+  const sectionName = sections.find((option) => option.id === form.section)?.label ?? null;
+  const fieldError = (message?: string) =>
+    message ? <p className="mt-1.5 text-xs text-rose-600 animate-fade-in">{message}</p> : null;
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <PageHeader title="پروژهٔ جدید" back={{ href: "/projects", label: "پروژه‌ها" }} />
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="پروژهٔ جدید"
+        subtitle="بخش، اعضا، هدف و ریزهدف‌ها — همه در یک فرم؛ پیش‌نویس خودکار ذخیره می‌شود."
+        back={{ href: "/projects", label: "پروژه‌ها" }}
+      />
 
       {draftState === "banner" && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 animate-fade-in">
-          <span>پیش‌نویس ذخیره‌شده دارید.</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 animate-fade-in">
+          <span className="flex items-center gap-2">
+            <FilePenLine className="size-4 text-amber-600" />
+            پیش‌نویس ذخیره‌شده دارید.
+          </span>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={continueDraft}
-              className="inline-flex h-8 items-center rounded-lg bg-amber-600 px-3 text-xs font-bold text-white transition-colors hover:bg-amber-700"
+              className="inline-flex h-9 items-center rounded-lg bg-amber-600 px-3 text-xs font-bold text-white transition-colors hover:bg-amber-700"
             >
               ادامهٔ پیش‌نویس
             </button>
             <button
               type="button"
               onClick={discardDraft}
-              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-100"
+              className="inline-flex h-9 items-center rounded-lg border border-amber-300 bg-white px-3 text-xs text-amber-900 transition-colors hover:bg-amber-100"
             >
               شروع از نو
             </button>
@@ -208,163 +224,266 @@ export default function NewProjectPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6" noValidate>
-        {serverError && <ErrorBanner message={serverError} />}
-
-        <div>
-          <label className={label} htmlFor="section">
-            بخش
-          </label>
-          {sections.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500">
-              هنوز بخشی در ساختار سازمان تعریف نشده است.
-            </p>
-          ) : (
-            <select
-              id="section"
-              value={form.section ?? ""}
-              onChange={(e) => selectSection(e.target.value ? Number(e.target.value) : null)}
-              className={input}
-            >
-              <option value="">انتخاب کنید…</option>
-              {sections.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          )}
-          {errors.section && <p className="mt-1 text-xs text-rose-600">{errors.section}</p>}
-        </div>
-
-        <div>
-          <label className={label} htmlFor="name">
-            نام پروژه
-          </label>
-          <input id="name" value={form.name} onChange={(e) => set("name", e.target.value)} maxLength={255} className={input} />
-          {errors.name && <p className="mt-1 text-xs text-rose-600">{errors.name}</p>}
-        </div>
-
-        {form.section !== null && (
-          <div>
-            <h2 className={label}>اعضای پروژه</h2>
-            <MemberPicker sectionId={form.section} members={form.members} onChange={applyMembers} />
-          </div>
-        )}
-
-        <div>
-          <label className={label} htmlFor="goal">
-            هدف پروژه
-          </label>
-          <textarea id="goal" value={form.goal} onChange={(e) => set("goal", e.target.value)} rows={3} className={input} />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={label} htmlFor="starts_on">
-              تاریخ شروع (اختیاری)
-            </label>
-            <JalaliDatePicker
-              id="starts_on"
-              value={form.starts_on}
-              max={form.due_on || undefined}
-              onChange={(iso) => set("starts_on", iso ?? "")}
-            />
-          </div>
-          <div>
-            <label className={label} htmlFor="due_on">
-              مهلت پروژه (اختیاری)
-            </label>
-            <JalaliDatePicker
-              id="due_on"
-              value={form.due_on}
-              min={form.starts_on || undefined}
-              onChange={(iso) => set("due_on", iso ?? "")}
-            />
-            {errors.due_on && <p className="mt-1 text-xs text-rose-600">{errors.due_on}</p>}
-          </div>
-        </div>
-
-        <div className="space-y-3 border-t border-slate-100 pt-4">
-          <h2 className={label}>برنامه‌ریزی (ریزهدف‌ها)</h2>
-          {form.objectives.length > 0 && (
-            <ul className="space-y-1">
-              {form.objectives.map((objective) => (
-                <li key={objective.key} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5 text-sm">
-                  <span className="min-w-0 truncate">
-                    {objective.title} — {assigneeNames(objective.assignees)} — {formatJalali(objective.due_on)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeObjective(objective.key)}
-                    className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-rose-600 transition-colors hover:bg-rose-50"
-                  >
-                    حذف
-                  </button>
-                </li>
-              ))}
-            </ul>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+        <form onSubmit={handleSubmit} className={cx(cardClass, "overflow-hidden")} noValidate>
+          {serverError && (
+            <div className="px-5 pt-5 sm:px-6">
+              <ErrorBanner message={serverError} />
+            </div>
           )}
 
-          {form.section !== null && form.members.length > 0 ? (
-            <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs text-slate-600" htmlFor="objective-title">
-                    عنوان ریزهدف
-                  </label>
-                  <input
-                    id="objective-title"
-                    value={draft.title}
-                    onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                    className={input}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-slate-600" htmlFor="objective-due">
-                    مهلت
-                  </label>
-                  <JalaliDatePicker id="objective-due" value={draft.due_on} onChange={(iso) => setDraft({ ...draft, due_on: iso ?? "" })} />
-                </div>
+          <FormSection step={1} title="بخش و نام" description="پروژه در یک بخش از ساختار سازمان تعریف می‌شود.">
+            <div>
+              <label className={label} htmlFor="section">
+                بخش
+              </label>
+              {sections.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-300 px-3 py-3 text-xs text-slate-500">
+                  هنوز بخشی در ساختار سازمان تعریف نشده است.
+                </p>
+              ) : (
+                <select
+                  id="section"
+                  value={form.section ?? ""}
+                  onChange={(e) => selectSection(e.target.value ? Number(e.target.value) : null)}
+                  className={cx(input, "h-11")}
+                >
+                  <option value="">انتخاب کنید…</option>
+                  {sections.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {fieldError(errors.section)}
+            </div>
+
+            <div>
+              <label className={label} htmlFor="name">
+                نام پروژه
+              </label>
+              <input
+                id="name"
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+                maxLength={255}
+                className={cx(input, "h-11")}
+              />
+              {fieldError(errors.name)}
+            </div>
+          </FormSection>
+
+          <FormSection step={2} title="اعضای پروژه" description="شما به‌عنوان مدیر پروژه خودکار افزوده می‌شوید.">
+            {form.section !== null ? (
+              <MemberPicker sectionId={form.section} members={form.members} onChange={applyMembers} />
+            ) : (
+              <p className="flex items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-3 text-xs text-slate-500">
+                <Users className="size-4 text-slate-400" />
+                ابتدا بخش را انتخاب کنید.
+              </p>
+            )}
+          </FormSection>
+
+          <FormSection step={3} title="هدف و زمان‌بندی">
+            <div>
+              <label className={label} htmlFor="goal">
+                هدف پروژه
+              </label>
+              <textarea id="goal" value={form.goal} onChange={(e) => set("goal", e.target.value)} rows={3} className={cx(input, "leading-7")} />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={label} htmlFor="starts_on">
+                  تاریخ شروع (اختیاری)
+                </label>
+                <JalaliDatePicker
+                  id="starts_on"
+                  value={form.starts_on}
+                  max={form.due_on || undefined}
+                  onChange={(iso) => set("starts_on", iso ?? "")}
+                />
               </div>
               <div>
-                <span className="mb-1 block text-xs text-slate-600">مسئولان</span>
-                <ul className="max-h-32 space-y-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">
-                  {form.members.map((member) => (
-                    <li key={member.user}>
-                      <label className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-slate-50">
-                        <input
-                          type="checkbox"
-                          checked={draft.assignees.includes(member.user)}
-                          onChange={() => toggleDraftAssignee(member.user)}
-                        />
-                        <span className="truncate">{member.name}</span>
-                        <span className="truncate text-xs text-slate-500">{member.title}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="flex items-end justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={addObjective}
-                  disabled={!canAddDraftObjective(draft)}
-                  className={buttonClass({ variant: "secondary", size: "md" })}
-                >
-                  افزودن
-                </button>
+                <label className={label} htmlFor="due_on">
+                  مهلت پروژه (اختیاری)
+                </label>
+                <JalaliDatePicker
+                  id="due_on"
+                  value={form.due_on}
+                  min={form.starts_on || undefined}
+                  onChange={(iso) => set("due_on", iso ?? "")}
+                />
+                {fieldError(errors.due_on)}
               </div>
             </div>
-          ) : (
-            <p className="text-xs text-slate-500">برای افزودن ریزهدف، ابتدا بخش و دست‌کم یک عضو را انتخاب کنید.</p>
-          )}
-        </div>
+          </FormSection>
 
-        <button type="submit" disabled={saving} className={buttonClass({ variant: "primary", size: "md", className: "w-full" })}>
-          {saving ? "در حال ایجاد..." : "ایجاد پروژه"}
-        </button>
-      </form>
+          <FormSection
+            step={4}
+            title="برنامه‌ریزی (ریزهدف‌ها)"
+            description="کارهایی که پروژه را جلو می‌برند، هر کدام با مسئول و مهلت."
+            actions={
+              form.objectives.length > 0 && (
+                <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs text-brand-800 ring-1 ring-inset ring-brand-600/15 tabular-nums">
+                  {form.objectives.length} ریزهدف
+                </span>
+              )
+            }
+          >
+            {form.objectives.length > 0 && (
+              <ol className="space-y-2">
+                {form.objectives.map((objective, index) => (
+                  <li
+                    key={objective.key}
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm animate-fade-in"
+                  >
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 tabular-nums">
+                      {(index + 1).toLocaleString("fa-IR")}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-bold text-slate-900">{objective.title}</span>
+                      <span className="block truncate text-xs text-slate-500">{assigneeNames(objective.assignees)}</span>
+                    </span>
+                    <span className="hidden shrink-0 items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-xs text-slate-600 ring-1 ring-inset ring-slate-200 sm:inline-flex">
+                      <CalendarClock className="size-3.5" />
+                      {formatJalali(objective.due_on)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeObjective(objective.key)}
+                      aria-label={`حذف ${objective.title}`}
+                      title="حذف"
+                      className="flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+
+            {form.section !== null && form.members.length > 0 ? (
+              <div className="space-y-4 rounded-2xl border border-dashed border-brand-200 bg-brand-50/30 p-4">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+                  <div>
+                    <label className="mb-1.5 block text-xs text-slate-600" htmlFor="objective-title">
+                      عنوان ریزهدف
+                    </label>
+                    <input
+                      id="objective-title"
+                      value={draft.title}
+                      onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                      className={input}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs text-slate-600" htmlFor="objective-due">
+                      مهلت
+                    </label>
+                    <JalaliDatePicker id="objective-due" value={draft.due_on} onChange={(iso) => setDraft({ ...draft, due_on: iso ?? "" })} />
+                  </div>
+                </div>
+                <div>
+                  <span className="mb-1.5 block text-xs text-slate-600">مسئولان</span>
+                  <div className="flex flex-wrap gap-2">
+                    {form.members.map((member) => {
+                      const on = draft.assignees.includes(member.user);
+                      return (
+                        <button
+                          key={member.user}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => toggleDraftAssignee(member.user)}
+                          className={cx(
+                            "flex items-center gap-2 rounded-full py-1 ps-1 pe-3 text-xs ring-1 ring-inset transition-[background-color,box-shadow] duration-150 active:scale-[0.97]",
+                            on ? "bg-brand-700 text-white ring-brand-700" : "bg-white text-slate-700 ring-slate-200 hover:ring-slate-300",
+                          )}
+                        >
+                          {on ? (
+                            <span className="flex size-6 items-center justify-center rounded-full bg-white/20">
+                              <Check className="size-3.5" />
+                            </span>
+                          ) : (
+                            <Avatar name={member.name} size="xs" />
+                          )}
+                          {member.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button variant="subtle" icon={<Plus />} onClick={addObjective} disabled={!canAddDraftObjective(draft)}>
+                    افزودن ریزهدف
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="flex items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-3 text-xs text-slate-500">
+                <ListChecks className="size-4 text-slate-400" />
+                برای افزودن ریزهدف، ابتدا بخش و دست‌کم یک عضو را انتخاب کنید.
+              </p>
+            )}
+          </FormSection>
+
+          <div className="flex justify-end border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:px-6">
+            <Button type="submit" variant="primary" size="lg" loading={saving} icon={<FolderPlus />} className="min-w-44">
+              {saving ? "در حال ایجاد..." : "ایجاد پروژه"}
+            </Button>
+          </div>
+        </form>
+
+        {/* A live summary of the project being built. */}
+        <aside aria-label="خلاصهٔ پروژه" className={cx(cardClass, "overflow-hidden lg:sticky lg:top-4")}>
+          <div className="relative h-16 overflow-hidden bg-gradient-to-l from-surface to-surface-raised">
+            <span aria-hidden className="absolute -top-10 left-1/3 size-36 rounded-full bg-accent/20 blur-2xl" />
+          </div>
+          <div className="space-y-4 p-5">
+            <div>
+              <p className="truncate text-lg font-bold text-slate-900">{form.name || "نام پروژه"}</p>
+              <p className="truncate text-xs text-slate-500">{sectionName ?? "بخش انتخاب نشده"}</p>
+            </div>
+            <dl className="space-y-2.5 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <dt className="flex items-center gap-2 text-slate-500">
+                  <Users className="size-4" />
+                  اعضا
+                </dt>
+                <dd>
+                  {form.members.length > 0 ? (
+                    <AvatarStack names={form.members.map((m) => m.name)} label={`${form.members.length} عضو`} />
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="flex items-center gap-2 text-slate-500">
+                  <Flag className="size-4" />
+                  شروع
+                </dt>
+                <dd className="text-slate-800">{form.starts_on ? formatJalali(form.starts_on) : "—"}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="flex items-center gap-2 text-slate-500">
+                  <CalendarClock className="size-4" />
+                  مهلت
+                </dt>
+                <dd className="text-slate-800">{form.due_on ? formatJalali(form.due_on) : "—"}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="flex items-center gap-2 text-slate-500">
+                  <Target className="size-4" />
+                  ریزهدف‌ها
+                </dt>
+                <dd className="font-bold text-slate-800 tabular-nums">{form.objectives.length}</dd>
+              </div>
+            </dl>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
