@@ -5,9 +5,16 @@ import { ApiError, apiDelete, apiPost } from "@/lib/api-client";
 import type { ProjectDocumentLink } from "@/lib/projects";
 import type { DocumentRow, Paginated } from "@/lib/types";
 import { useApiQuery } from "@/lib/use-api-query";
-import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { ErrorBanner } from "@/components/StatusBanner";
 import { buttonClass } from "@/components/ui/Button";
 import { controlClass } from "@/components/ui/Field";
+import Link from "next/link";
+import { Check, FileText, Link2, Search, Unlink } from "lucide-react";
+import { Code } from "@/components/Code";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
+import { SkeletonLines } from "@/components/ui/Skeleton";
 
 /** مستندات پیوست‌شده: VEye is a document system, so a project that produced PR-07 should say so.
  *  Linking (and unlinking) needs the project's own edit rights — the same governance as any other
@@ -42,28 +49,38 @@ export function DocumentLinksPanel({ projectId, canEdit }: { projectId: number; 
   const rows = links.data ?? [];
 
   return (
-    <section aria-label="مستندات پیوست‌شده" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
-      <h2 className="mb-4 text-base font-bold text-slate-900">مستندات پیوست‌شده</h2>
+    <Card aria-label="مستندات پیوست‌شده">
+      <CardHeader title="مستندات پیوست‌شده" icon={<FileText />} />
       {error && <ErrorBanner message={error} />}
       {links.loading ? (
-        <LoadingBanner />
+        <SkeletonLines rows={2} />
       ) : links.error ? (
         <ErrorBanner message={links.error} />
       ) : rows.length === 0 ? (
-        <p className="text-sm text-slate-500">هنوز مستندی به این پروژه پیوست نشده است.</p>
+        <EmptyState compact icon={<FileText />} message="هنوز مستندی به این پروژه پیوست نشده است." />
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {rows.map((link) => (
-            <li key={link.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition-colors hover:border-slate-300">
-              <span className="min-w-0 truncate">
-                <span className="latn ml-1">{link.document_full_code}</span>
-                {link.document_title}
-                {link.caption && <span className="text-xs text-slate-500"> — {link.caption}</span>}
+            <li
+              key={link.id}
+              className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm transition-colors hover:border-slate-300"
+            >
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                <FileText className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <Link href={`/documents/${link.document}/edit`} className="block truncate font-bold text-slate-900 transition-colors hover:text-brand-700">
+                  {link.document_title}
+                </Link>
+                <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <Code>{link.document_full_code}</Code>
+                  {link.caption}
+                </span>
               </span>
               {canEdit && (
-                <button type="button" onClick={() => unlink(link.id)} className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-rose-600 transition-colors hover:bg-rose-50">
-                  حذف پیوند
-                </button>
+                <IconButton label="حذف پیوند" tone="danger" size="sm" onClick={() => unlink(link.id)}>
+                  <Unlink />
+                </IconButton>
               )}
             </li>
           ))}
@@ -71,41 +88,45 @@ export function DocumentLinksPanel({ projectId, canEdit }: { projectId: number; 
       )}
 
       {canEdit && (
-        <div className="mt-3 border-t border-slate-100 pt-3">
-          <label htmlFor="link-document-search" className="mb-1 block text-xs font-medium text-slate-600">
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <label htmlFor="link-document-search" className="mb-1.5 flex items-center gap-1.5 text-xs text-slate-600">
+            <Link2 className="size-3.5" />
             پیوست مستند
           </label>
-          <input
-            id="link-document-search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="جست و جوی عنوان یا کد مستند"
-            className={`${controlClass} w-full px-3 py-2 text-sm`}
-          />
+          <div className="relative">
+            <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
+            <input
+              id="link-document-search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="جست و جوی عنوان یا کد مستند"
+              className={`${controlClass} h-10 w-full pr-9 pl-3 text-sm`}
+            />
+          </div>
           {query.trim().length >= 2 && (
             <DocumentResults key={query} query={query} linkedIds={new Set(rows.map((r) => r.document))} onLink={link} />
           )}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
 function DocumentResults({ query, linkedIds, onLink }: { query: string; linkedIds: Set<number>; onLink: (document: DocumentRow) => void }) {
   const documents = useApiQuery<Paginated<DocumentRow>>(`/documents/?search=${encodeURIComponent(query)}&page_size=8`);
-  if (documents.loading) return <p className="mt-1 text-xs text-slate-500">در حال جستجو...</p>;
+  if (documents.loading) return <p className="mt-2 text-xs text-slate-500">در حال جستجو...</p>;
   if (documents.error) return <p className="mt-1 text-xs text-rose-600">{documents.error}</p>;
   const rows = documents.data?.results ?? [];
   if (rows.length === 0) return <p className="mt-1 text-xs text-slate-500">مستندی پیدا نشد.</p>;
   return (
-    <ul className="mt-1 space-y-1">
+    <ul className="mt-2 space-y-1.5 animate-fade-in">
       {rows.map((document) => {
         const already = linkedIds.has(document.id);
         return (
           <li key={document.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition-colors hover:border-slate-300">
-            <span className="min-w-0 truncate">
-              <span className="latn ml-1">{document.full_code}</span>
-              {document.title}
+            <span className="flex min-w-0 items-center gap-2">
+              <Code>{document.full_code}</Code>
+              <span className="truncate">{document.title}</span>
             </span>
             <button
               type="button"
@@ -113,6 +134,7 @@ function DocumentResults({ query, linkedIds, onLink }: { query: string; linkedId
               onClick={() => onLink(document)}
               className={buttonClass({ variant: "secondary", size: "xs", className: "shrink-0" })}
             >
+              {already ? <Check /> : <Link2 />}
               {already ? "پیوست شد" : "پیوست"}
             </button>
           </li>

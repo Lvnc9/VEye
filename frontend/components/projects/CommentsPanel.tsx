@@ -8,9 +8,14 @@ import { draftKey, useLocalDraft } from "@/lib/local-draft";
 import type { ProjectComment } from "@/lib/projects";
 import type { Paginated } from "@/lib/types";
 import { useApiQuery } from "@/lib/use-api-query";
-import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
-import { buttonClass } from "@/components/ui/Button";
-import { controlClass } from "@/components/ui/Field";
+import { ErrorBanner } from "@/components/StatusBanner";
+import { SendHorizontal, StickyNote, Trash2 } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
+import { SkeletonLines } from "@/components/ui/Skeleton";
 
 /** یادداشت‌های پروژه: anyone who can read the project may post; only a comment's own author may
  *  ever delete it (backend enforces this — `can_delete` here only decides whether to show the
@@ -64,59 +69,72 @@ export function CommentsPanel({ projectId }: { projectId: number }) {
   const rows = comments.data?.results ?? [];
 
   return (
-    <section aria-label="یادداشت‌ها" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
-      <h2 className="mb-4 text-base font-bold text-slate-900">یادداشت‌ها</h2>
+    <Card aria-label="یادداشت‌ها">
+      <CardHeader
+        title="یادداشت‌ها"
+        icon={<StickyNote />}
+        actions={
+          rows.length > 0 && (
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 tabular-nums">{rows.length}</span>
+          )
+        }
+      />
       {error && <ErrorBanner message={error} />}
-      <form onSubmit={onFormSubmit} className="mb-4 space-y-2">
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder="یادداشتی بنویسید… (Ctrl+Enter برای ارسال)"
-          aria-label="متن یادداشت"
-          maxLength={4000}
-          rows={2}
-          className={`${controlClass} w-full px-3 py-2 text-sm`}
-        />
-        <div className="flex justify-end">
-          <button type="submit" disabled={posting || !body.trim()} className={buttonClass({ variant: "primary", size: "md" })}>
-            ثبت
-          </button>
+      <form onSubmit={onFormSubmit} className="mb-5 flex items-start gap-3">
+        {user && <Avatar name={user.full_name} className="mt-1" />}
+        <div className="min-w-0 flex-1 rounded-2xl border border-slate-300 bg-white shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15">
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="یادداشتی بنویسید… (Ctrl+Enter برای ارسال)"
+            aria-label="متن یادداشت"
+            maxLength={4000}
+            rows={2}
+            className="block w-full resize-none rounded-t-2xl bg-transparent px-3.5 pt-3 text-sm leading-7 text-slate-900 placeholder:text-slate-400 focus:outline-none"
+          />
+          <div className="flex items-center justify-between gap-2 px-2 pb-2">
+            <span className="ps-1.5 text-[11px] text-slate-400">Ctrl + Enter</span>
+            <Button type="submit" variant="primary" size="sm" icon={<SendHorizontal className="rtl-flip" />} disabled={!body.trim()} loading={posting}>
+              ثبت
+            </Button>
+          </div>
         </div>
       </form>
       {comments.loading ? (
-        <LoadingBanner />
+        <SkeletonLines rows={3} />
       ) : comments.error ? (
         <ErrorBanner message={comments.error} />
       ) : rows.length === 0 ? (
-        <p className="text-sm text-slate-500">هنوز یادداشتی ثبت نشده است.</p>
+        <EmptyState compact icon={<StickyNote />} message="هنوز یادداشتی ثبت نشده است." />
       ) : (
-        <ul className="relative space-y-4 border-s-2 border-slate-200 ps-4">
+        <ul className="space-y-4">
           {rows.map((comment) => (
-            <li key={comment.id} className="relative flex items-start justify-between gap-2 text-sm">
-              <span aria-hidden className="absolute -start-[1.15rem] top-1 h-2.5 w-2.5 rounded-full bg-slate-400 ring-4 ring-white" />
-              <div className="min-w-0">
-                <p className="font-medium text-slate-900">
-                  {comment.author_name}
-                  {comment.author_title && <span className="font-normal text-slate-500"> ({comment.author_title})</span>}
-                  <span className="mr-2 text-xs text-slate-500">{formatJalaliDateTime(comment.created_at)}</span>
+            <li key={comment.id} className="group flex items-start gap-3 text-sm animate-fade-in">
+              <Avatar name={comment.author_name} size="sm" className="mt-0.5" />
+              <div className="min-w-0 flex-1 rounded-2xl rounded-tr-md bg-slate-50 px-3.5 py-2.5 ring-1 ring-inset ring-slate-200/70">
+                <p className="flex flex-wrap items-baseline gap-x-2 text-slate-900">
+                  <span className="font-bold">{comment.author_name}</span>
+                  {comment.author_title && <span className="text-xs text-slate-500">{comment.author_title}</span>}
+                  <span className="text-xs text-slate-500">{formatJalaliDateTime(comment.created_at)}</span>
                 </p>
-                <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{comment.body}</p>
+                <p className="mt-1 whitespace-pre-wrap leading-7 text-slate-700">{comment.body}</p>
               </div>
               {comment.can_delete && (
-                <button
-                  type="button"
+                <IconButton
+                  label="حذف یادداشت"
+                  tone="danger"
+                  size="sm"
                   onClick={() => remove(comment.id)}
-                  aria-label="حذف یادداشت"
-                  className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-rose-600 transition-colors hover:bg-rose-50"
+                  className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
                 >
-                  حذف
-                </button>
+                  <Trash2 />
+                </IconButton>
               )}
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }

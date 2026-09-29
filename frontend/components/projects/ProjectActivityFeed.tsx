@@ -5,6 +5,9 @@ import { apiGet } from "@/lib/api-client";
 import { formatJalali, formatJalaliDateTime } from "@/lib/jalali";
 import { MEETING_EVENT_KINDS, PROJECT_EVENT_TONE, type ProjectActivityEvent } from "@/lib/projects";
 import { ArrowLeft } from "lucide-react";
+import { Activity } from "lucide-react";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 /**
  * A project's activity feed (docs/11 §3.5) — the same shape of thing `WorkflowTimeline.tsx` is for
@@ -30,21 +33,21 @@ export function ProjectActivityFeed({ projectId, version }: { projectId: number;
   const events = loaded?.key === key ? loaded.events : [];
 
   return (
-    <section aria-label="فعالیت‌های پروژه" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
-      <h2 className="mb-4 text-base font-bold text-slate-900">فعالیت‌ها</h2>
+    <Card aria-label="فعالیت‌های پروژه" className="lg:sticky lg:top-4">
+      <CardHeader title="فعالیت‌ها" icon={<Activity />} />
       {events.length === 0 ? (
-        <p className="text-sm text-slate-500">هنوز رویدادی ثبت نشده است.</p>
+        <EmptyState compact icon={<Activity />} message="هنوز رویدادی ثبت نشده است." />
       ) : (
-        <ol className="space-y-3">
+        <ol className="relative max-h-[70vh] space-y-4 overflow-y-auto pe-1 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-slate-200">
           {events.map((event) => (
-            <li key={event.id} className="flex gap-3 text-sm">
+            <li key={event.id} className="relative flex gap-3 text-sm">
               <span
                 aria-hidden
-                className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${PROJECT_EVENT_TONE[event.kind] ?? "bg-slate-400"}`}
+                className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-white ${PROJECT_EVENT_TONE[event.kind] ?? "bg-slate-400"}`}
               />
               <div className="min-w-0">
                 <p className="text-slate-900">
-                  <span className="font-medium">{event.kind_label}</span>
+                  <span className="font-bold">{event.kind_label}</span>
                   {event.subject_title && <span className="text-slate-700"> — {event.subject_title}</span>}
                   <span className="text-slate-500">
                     {" "}
@@ -70,12 +73,12 @@ export function ProjectActivityFeed({ projectId, version }: { projectId: number;
                     </p>
                   )
                 )}
-                {event.note && <p className="mt-0.5 text-slate-600">{event.note}</p>}
+                {event.note && <p className="mt-1 rounded-lg bg-slate-50 px-2.5 py-1 text-slate-600">{event.note}</p>}
               </div>
             </li>
           ))}
         </ol>
       )}
-    </section>
+    </Card>
   );
 }

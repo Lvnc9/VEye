@@ -23,7 +23,13 @@ import { JalaliDatePicker } from "@/components/JalaliDatePicker";
 import { ObjectiveEditDialog } from "@/components/projects/ObjectiveEditDialog";
 import { buttonClass } from "@/components/ui/Button";
 import { controlClass } from "@/components/ui/Field";
-import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, History, PenLine, Pencil, Plus, Target, Trash2, X } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
+import { cx } from "@/components/ui/cx";
 
 const select = "h-7 rounded-lg border-0 px-2 text-xs transition-shadow focus:outline-none focus:ring-4 focus:ring-brand-500/15 disabled:opacity-60";
 const input = `${controlClass} w-full px-3 py-2 text-sm`;
@@ -73,15 +79,18 @@ export function ObjectiveTree({
   }
 
   return (
-    <section aria-label="اهداف" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-bold text-slate-900">اهداف</h2>
-        {project.can_edit && (
-          <button type="button" onClick={() => setAdding((v) => !v)} className="text-sm text-brand-700 underline-offset-4 transition-colors hover:text-brand-800 hover:underline">
-            {adding ? "بستن" : "افزودن ریزهدف"}
-          </button>
-        )}
-      </div>
+    <Card aria-label="اهداف">
+      <CardHeader
+        title="اهداف"
+        icon={<Target />}
+        actions={
+          project.can_edit && (
+            <Button variant={adding ? "ghost" : "subtle"} size="sm" icon={adding ? <X /> : <Plus />} onClick={() => setAdding((v) => !v)}>
+              {adding ? "بستن" : "افزودن ریزهدف"}
+            </Button>
+          )
+        }
+      />
       {error && <ErrorBanner message={error} />}
       {adding && (
         <AddObjectiveForm
@@ -106,7 +115,7 @@ export function ObjectiveTree({
         />
       )}
       {objectives.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">هنوز ریزهدفی افزوده نشده است.</p>
+        <EmptyState compact icon={<Target />} message="هنوز ریزهدفی افزوده نشده است." />
       ) : (
         <ul className="mt-3 space-y-4">
           {objectives.map((objective, index) => (
@@ -161,14 +170,9 @@ export function ObjectiveTree({
                   </select>
                   {objective.can_edit && (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => setEditing(objective)}
-                        className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-xs text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                      >
-                        <Pencil className="size-3.5" />
-                        ویرایش
-                      </button>
+                      <IconButton label={`ویرایش ${objective.title}`} size="sm" onClick={() => setEditing(objective)}>
+                        <Pencil />
+                      </IconButton>
                       <RemoveObjectiveButton project={project} objective={objective} onRemoved={onChanged} onError={setError} />
                     </>
                   )}
@@ -176,7 +180,7 @@ export function ObjectiveTree({
               </div>
 
               {objective.assignees.length > 0 && (
-                <ul className="relative mt-3 me-1.5 space-y-3 border-s-2 border-slate-200 ps-4">
+                <ul className="relative mt-3 me-3 space-y-3 border-s-2 border-slate-200 ps-4">
                   {objectiveAssigneeRows(objective, user?.id ?? null).map((row) => (
                     <li key={row.user} className="relative">
                       <span aria-hidden className="absolute top-4 h-px w-4 -start-4 bg-slate-200" />
@@ -189,7 +193,7 @@ export function ObjectiveTree({
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -216,15 +220,9 @@ function RemoveObjectiveButton({
     }
   }
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={handleClick}
-      aria-label={`حذف ${objective.title}`}
-      className="inline-flex h-7 items-center rounded-lg px-2 text-xs text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50"
-    >
-      حذف
-    </button>
+    <IconButton label={`حذف ${objective.title}`} tone="danger" size="sm" disabled={busy} onClick={handleClick}>
+      <Trash2 />
+    </IconButton>
   );
 }
 
@@ -248,9 +246,11 @@ function AssigneeLeaf({
   const [historyOpen, setHistoryOpen] = useState(false);
 
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50 p-2.5">
-      <p className="text-sm font-medium text-slate-800">
-        {row.name} <span className="font-normal text-slate-500">{row.title}</span>
+    <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-inset ring-slate-200/70">
+      <p className="flex items-center gap-2 text-sm text-slate-800">
+        <Avatar name={row.name} size="xs" />
+        <span className="font-bold">{row.name}</span>
+        <span className="text-xs text-slate-500">{row.title}</span>
       </p>
 
       {editingLatest && row.latestUpdate ? (
@@ -267,29 +267,29 @@ function AssigneeLeaf({
           onError={onError}
         />
       ) : row.latestUpdate ? (
-        <div className="mt-1">
-          <p className="whitespace-pre-wrap text-sm text-slate-700">{row.latestUpdate.body}</p>
+        <div className="mt-2 rounded-lg bg-white px-3 py-2 ring-1 ring-inset ring-slate-200/70">
+          <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{row.latestUpdate.body}</p>
           <p className="mt-0.5 text-xs text-slate-500">{formatJalaliDateTime(row.latestUpdate.created_at)}</p>
         </div>
       ) : (
         <p className="mt-1 text-xs text-slate-500">هنوز گزارشی ثبت نشده است.</p>
       )}
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs">
+      <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">
         {row.canPostUpdate && !writing && (
-          <button type="button" onClick={() => setWriting(true)} className="text-brand-700 underline-offset-4 transition-colors hover:text-brand-800 hover:underline">
+          <Button variant="subtle" size="xs" icon={<PenLine />} onClick={() => setWriting(true)}>
             نوشتن گزارش
-          </button>
+          </Button>
         )}
         {row.canEditLatest && !editingLatest && (
-          <button type="button" onClick={() => setEditingLatest(true)} className="text-brand-700 underline-offset-4 transition-colors hover:text-brand-800 hover:underline">
+          <Button variant="ghost" size="xs" icon={<Pencil />} onClick={() => setEditingLatest(true)}>
             ویرایش
-          </button>
+          </Button>
         )}
         {row.historyCount > 0 && (
-          <button type="button" onClick={() => setHistoryOpen((v) => !v)} className="text-slate-500 underline hover:text-slate-800">
+          <Button variant="ghost" size="xs" icon={<History />} onClick={() => setHistoryOpen((v) => !v)}>
             {historyOpen ? "بستن سوابق" : `سوابق (${row.historyCount})`}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -470,7 +470,7 @@ function UpdateHistory({
   }
 
   return (
-    <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
+    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 animate-fade-in">
       {error && <p className="text-xs text-rose-600">{error}</p>}
       {rows === null ? (
         <p className="text-xs text-slate-500">در حال بارگذاری...</p>
@@ -479,15 +479,15 @@ function UpdateHistory({
       ) : (
         <ul className="space-y-2">
           {rows.map((row) => (
-            <li key={row.id} className="text-sm">
-              <p className="whitespace-pre-wrap text-slate-700">{row.body}</p>
+            <li key={row.id} className="relative ps-4 text-sm before:absolute before:top-2.5 before:right-0 before:size-1.5 before:rounded-full before:bg-slate-300">
+              <p className="whitespace-pre-wrap leading-7 text-slate-700">{row.body}</p>
               <p className="mt-0.5 text-xs text-slate-500">{formatJalaliDateTime(row.created_at)}</p>
             </li>
           ))}
         </ul>
       )}
       {next && (
-        <button type="button" onClick={loadMore} disabled={loadingMore} className="text-xs text-slate-500 underline hover:text-slate-800">
+        <button type="button" onClick={loadMore} disabled={loadingMore} className="text-xs text-brand-700 underline-offset-4 hover:underline">
           {loadingMore ? "در حال بارگذاری..." : "بارگذاری بیشتر"}
         </button>
       )}
@@ -540,16 +540,16 @@ function AddObjectiveForm({
   }
 
   return (
-    <form onSubmit={submit} className="mb-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <form onSubmit={submit} className="mb-5 space-y-3 rounded-2xl border border-dashed border-brand-200 bg-brand-50/30 p-4 animate-fade-in">
       {error && <ErrorBanner message={error} />}
       <div>
-        <label className="mb-1 block text-xs text-slate-600" htmlFor="new-objective-title">
+        <label className="mb-1.5 block text-xs text-slate-600" htmlFor="new-objective-title">
           عنوان
         </label>
         <input id="new-objective-title" value={title} onChange={(e) => setTitle(e.target.value)} className={input} />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-slate-600" htmlFor="new-objective-description">
+        <label className="mb-1.5 block text-xs text-slate-600" htmlFor="new-objective-description">
           شرح (اختیاری)
         </label>
         <textarea
@@ -565,28 +565,44 @@ function AddObjectiveForm({
         {project.members.length === 0 ? (
           <p className="text-xs text-slate-500">این پروژه هنوز عضوی ندارد.</p>
         ) : (
-          <ul className="max-h-32 space-y-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">
-            {project.members.map((member: ProjectMember) => (
-              <li key={member.user}>
-                <label className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-slate-50">
-                  <input type="checkbox" checked={assignees.includes(member.user)} onChange={() => toggle(member.user)} />
-                  <span className="truncate">{member.user_name}</span>
-                  <span className="truncate text-xs text-slate-500">{member.user_title}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
+          <div className="flex flex-wrap gap-2">
+            {project.members.map((member: ProjectMember) => {
+              const on = assignees.includes(member.user);
+              return (
+                <button
+                  key={member.user}
+                  type="button"
+                  aria-pressed={on}
+                  title={member.user_title}
+                  onClick={() => toggle(member.user)}
+                  className={cx(
+                    "flex items-center gap-2 rounded-full py-1 ps-1 pe-3 text-xs ring-1 ring-inset transition-[background-color,box-shadow] duration-150 active:scale-[0.97]",
+                    on ? "bg-brand-700 text-white ring-brand-700" : "bg-white text-slate-700 ring-slate-200 hover:ring-slate-300",
+                  )}
+                >
+                  {on ? (
+                    <span className="flex size-6 items-center justify-center rounded-full bg-white/20">
+                      <Check className="size-3.5" />
+                    </span>
+                  ) : (
+                    <Avatar name={member.user_name} size="xs" />
+                  )}
+                  {member.user_name}
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <div>
-          <label className="mb-1 block text-xs text-slate-600" htmlFor="new-objective-due">
+          <label className="mb-1.5 block text-xs text-slate-600" htmlFor="new-objective-due">
             مهلت
           </label>
           <JalaliDatePicker id="new-objective-due" value={dueOn} onChange={(iso) => setDueOn(iso ?? "")} required />
         </div>
         <div className="w-20">
-          <label className="mb-1 block text-xs text-slate-600" htmlFor="new-objective-weight">
+          <label className="mb-1.5 block text-xs text-slate-600" htmlFor="new-objective-weight">
             وزن
           </label>
           <input
