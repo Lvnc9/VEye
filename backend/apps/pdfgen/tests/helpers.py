@@ -7,7 +7,6 @@ from django.core.files.base import ContentFile
 
 from apps.accounts.models import AccessLevel, AccessRoll, User
 from apps.core.constants import (
-    RESPONSIBILITY_ROLE_ORDER,
     DocumentCategory,
     DocumentStatus,
     SectionType,
@@ -65,15 +64,10 @@ def _add_sections(document, sections, created, author=None):
             row_section = Section.objects.create(
                 document=document, position=position, type=SectionType.RESPONSIBILITIES
             )
-            rows = [
-                ResponsibilityRow(section=row_section, position=i, role=role, post=post, supervisor=sup, text=text)
-                for i, (role, (post, sup, text)) in enumerate(zip(RESPONSIBILITY_ROLE_ORDER, section[1]))
-            ]
-            rows += [
-                ResponsibilityRow(section=row_section, position=len(rows) + i, text=note)
-                for i, note in enumerate(section[2])
-            ]
-            ResponsibilityRow.objects.bulk_create(rows)
+            ResponsibilityRow.objects.bulk_create(
+                ResponsibilityRow(section=row_section, position=i, domain_name=domain, unit_name=unit, text=text)
+                for i, (domain, unit, text) in enumerate(section[1])
+            )
         elif kind == "changes":
             change_section = Section.objects.create(
                 document=document, position=position, type=SectionType.CHANGES_TABLE

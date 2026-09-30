@@ -390,7 +390,7 @@ class RegisterApiTests(TestCase):
         self.assertFalse(draft.is_finalized)
         self.assertTrue(done.is_finalized)
 
-    def test_signoffs_and_responsibilities_in_payload(self):
+    def test_signoffs_and_responsible_units_in_payload(self):
         doc = new_doc(self.author)
         SignOff.objects.create(document=doc, role=SignOffRole.CREATER, name="علی رضایی", position="کارشناس")
         self.client.force_authenticate(self.author)
@@ -399,7 +399,7 @@ class RegisterApiTests(TestCase):
         self.assertIsNone(row["signoffs"]["confirmer"])
         self.assertIsNone(row["signoffs"]["approver"])
         # Not assigned until the designer (Phase 3) can write Responsibilities.
-        self.assertEqual(row["responsibilities"], {"accountant": None, "questioner": None, "responder": None})
+        self.assertEqual(row["responsible_units"], [])
 
     def test_retrieve_unknown_is_404(self):
         self.client.force_authenticate(self.author)

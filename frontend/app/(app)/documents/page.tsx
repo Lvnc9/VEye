@@ -18,7 +18,6 @@ import {
   type DocumentStatus,
   type Paginated,
   type PdfStatus,
-  type ResponsibilityPair,
   type SignOffSummary,
 } from "@/lib/types";
 import { useCurrentUser } from "@/lib/current-user";
@@ -51,9 +50,7 @@ const COLUMNS = [
   "گروه",
   "بازنگری",
   "کد",
-  "حسابکش",
-  "پاسخ خواه",
-  "پاسخگو",
+  "واحدهای مسئول",
   "تدوین",
   "تائید",
   "تصویب",
@@ -84,11 +81,16 @@ function SignOffCell({ signoff }: { signoff: SignOffSummary | null }) {
   );
 }
 
-function ResponsibilityCell({ pair }: { pair: ResponsibilityPair | null }) {
-  if (!pair) return <span className="text-slate-300">—</span>;
+/** «واحدهای مسئول»: the واحد named in the document's Responsibilities block, one under another. */
+function ResponsibleUnitsCell({ units }: { units: string[] }) {
+  if (units.length === 0) return <span className="text-slate-300">—</span>;
   return (
-    <span title={`ناظر: ${pair.supervisor}`}>
-      {pair.post}
+    <span title={units.join("، ")} className="block max-w-48">
+      {units.map((unit) => (
+        <span key={unit} className="block truncate">
+          {unit}
+        </span>
+      ))}
     </span>
   );
 }
@@ -604,13 +606,7 @@ export default function DocumentRegisterPage() {
                         <Code>{row.code}</Code>
                       </td>
                       <td className="px-3 py-3.5 text-slate-600">
-                        <ResponsibilityCell pair={row.responsibilities.accountant} />
-                      </td>
-                      <td className="px-3 py-3.5 text-slate-600">
-                        <ResponsibilityCell pair={row.responsibilities.questioner} />
-                      </td>
-                      <td className="px-3 py-3.5 text-slate-600">
-                        <ResponsibilityCell pair={row.responsibilities.responder} />
+                        <ResponsibleUnitsCell units={row.responsible_units} />
                       </td>
                       <td className="px-3 py-3.5 text-slate-700">
                         <SignOffCell signoff={row.signoffs.creater} />

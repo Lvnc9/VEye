@@ -28,7 +28,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     action = serializers.CharField(read_only=True)
     can_revise = serializers.SerializerMethodField()
     can_edit = serializers.BooleanField(source="is_editable", read_only=True)
-    responsibilities = serializers.SerializerMethodField()
+    responsible_units = serializers.SerializerMethodField()
     signoffs = serializers.SerializerMethodField()
     pdf_status = serializers.SerializerMethodField()
     pdf_built_at = serializers.SerializerMethodField()
@@ -53,7 +53,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "action",
             "can_revise",
             "can_edit",
-            "responsibilities",
+            "responsible_units",
             "signoffs",
             "pdf_status",
             "pdf_built_at",
@@ -98,8 +98,8 @@ class DocumentSerializer(serializers.ModelSerializer):
             has_next = hasattr(obj, "next_revision")
         return obj.is_finalized and not has_next
 
-    def get_responsibilities(self, obj: Document):
-        return obj.responsibility_summary()
+    def get_responsible_units(self, obj: Document):
+        return obj.responsible_units()
 
     def get_signoffs(self, obj: Document):
         by_role = {s.role: s for s in obj.signoffs.all()}

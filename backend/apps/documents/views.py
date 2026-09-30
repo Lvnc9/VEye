@@ -45,9 +45,9 @@ class DocumentViewSet(
         params = self.request.query_params
         qs = Document.objects.prefetch_related(
             "signoffs",
-            # The register's حسابکش / پاسخ خواه / پاسخگو columns are read from the
-            # Responsibilities section; fetching it here keeps that to two queries
-            # for the whole page rather than two per row.
+            # The register's «واحدهای مسئول» column is read from the Responsibilities
+            # section; fetching it here keeps that to two queries for the whole page
+            # rather than two per row.
             Prefetch(
                 "sections",
                 queryset=Section.objects.filter(type=SectionType.RESPONSIBILITIES)

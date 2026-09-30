@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { emptyRich } from "./rich-doc";
 import {
   rekey,
-  ROLE_ORDER,
   canAddSection,
   fromResponse,
   moveSection,
@@ -23,9 +22,11 @@ describe("newSection", () => {
     const short = newSection("Short Explanation");
     expect(short.type === "Short Explanation" && short.lines).toEqual(["", ""]);
 
+    // The owner's redesign (2026-09-30): the block starts with one empty row on screen.
     const resp = newSection("Responsibilities");
-    expect(resp.type === "Responsibilities" && resp.roles.map((r) => r.role)).toEqual(ROLE_ORDER);
-    expect(resp.type === "Responsibilities" && resp.notes).toEqual([]);
+    expect(resp.type === "Responsibilities" && resp.rows).toEqual([
+      { domain: null, unit: null, domain_name: "", unit_name: "", text: "" },
+    ]);
   });
 
   it("does not seed a Changes Table with V_1.0's hardcoded demo rows", () => {
@@ -281,5 +282,54 @@ describe("rekey", () => {
     expect(again.sections.map((s) => s.key)).not.toEqual(state.sections.map((s) => s.key));
     expect(new Set(again.sections.map((s) => s.key)).size).toBe(2);
     expect(snapshot(again)).toBe(snapshot(state));
+  });
+});
+
+describe("the Responsibilities block", () => {
+  it("sends only the five fields of each row, never the editor flag", () => {
+    const block = newSection("Responsibilities");
+    if (block.type !== "Responsibilities") throw new Error();
+    block.rows = [{ domain: 3, unit: 7, domain_name: "IT", unit_name: "هوش مصنوعی", text: "کار", standalone: true }];
+    const [section] = toPayload(state([block])).sections;
+    expect(section.rows).toEqual([{ domain: 3, unit: 7, domain_name: "IT", unit_name: "هوش مصنوعی", text: "کار" }]);
+  });
+
+  it("shows one empty row for a saved block with none, and marks a واحد with no حوزه as standalone", () => {
+    const response = {
+      document: {} as DocumentRow, version: 1, editable: true, logo_url: null, footnote1: "", footnote2: "",
+      show_company_name: false, body_kind: "blocks", form_settings: null, previous_changes: [],
+      sections: [
+        { id: 1, type: "Responsibilities", rows: [] },
+        { id: 2, type: "Responsibilities", rows: [{ domain: null, unit: 9, domain_name: "", unit_name: "مستقل", text: "" }] },
+      ],
+    } as ContentResponse;
+    const [empty, standalone] = fromResponse(response).sections;
+    expect(empty.type === "Responsibilities" && empty.rows).toHaveLength(1);
+    expect(standalone.type === "Responsibilities" && standalone.rows[0].standalone).toBe(true);
+  });
+
+  it("asks for a واحد when a حوزه is chosen without one", () => {
+    const block = newSection("Responsibilities");
+    if (block.type !== "Responsibilities") throw new Error();
+    block.rows = [{ domain: 3, unit: null, domain_name: "IT", unit_name: "", text: "" }];
+    expect(validate(state([block]))).toEqual(["بخش 1: برای ردیف 1 یک واحد انتخاب کنید."]);
+    block.rows = [{ domain: 3, unit: 7, domain_name: "IT", unit_name: "X", text: "" }];
+    expect(validate(state([block]))).toEqual([]);
+  });
+
+  it("turns a draft saved before the redesign into free-text rows when it is restored", () => {
+    const old = {
+      key: "s1", type: "Responsibilities",
+      roles: [
+        { role: "responder", post: "مدیر", supervisor: "ناظر", text: "شرح" },
+        { role: "receiver", post: "", supervisor: "", text: "" },
+      ],
+      notes: ["یادداشت", "  "],
+    } as unknown as DesignerSection;
+    const [restored] = rekey({ version: 1, footnote1: "", footnote2: "", showCompanyName: false, sections: [old] }).sections;
+    expect(restored.type === "Responsibilities" && restored.rows.map((r) => r.text)).toEqual([
+      "الف:  سمت: مدیر    ناظر: ناظر\nشرح",
+      "یادداشت",
+    ]);
   });
 });

@@ -209,12 +209,6 @@ export interface SignOffSummary {
   signed_date: string | null;
 }
 
-/** [post, supervisor] — the سمت / ناظر pair of one Responsibilities row. */
-export interface ResponsibilityPair {
-  post: string;
-  supervisor: string;
-}
-
 export interface DocumentRow {
   id: number;
   category: DocumentCategory;
@@ -236,12 +230,8 @@ export interface DocumentRow {
   can_revise: boolean;
   /** True while the document is a draft — the only time its body can change. */
   can_edit: boolean;
-  /** null until the designer can assign Responsibilities (Phase 3). */
-  responsibilities: {
-    accountant: ResponsibilityPair | null;
-    questioner: ResponsibilityPair | null;
-    responder: ResponsibilityPair | null;
-  };
+  /** The register's «واحدهای مسئول»: the واحد named in the document's Responsibilities block, each once. */
+  responsible_units: string[];
   signoffs: Record<SignOffRole, SignOffSummary | null>;
   /** State of the issued (official) PDF — "none" until the first build. */
   pdf_status: PdfStatus;
@@ -380,15 +370,6 @@ export const SECTION_TYPES: SectionType[] = [
  *  across revisions). */
 export const SINGLETON_SECTIONS: SectionType[] = ["Responsibilities", "Changes Table"];
 
-export type ResponsibilityRoleKey = "responder" | "receiver" | "cash_account" | "supervisor";
-
-export const RESPONSIBILITY_ROLE_LABELS: Record<ResponsibilityRoleKey, string> = {
-  responder: "پاسخگو",
-  receiver: "پاسخ‌خواه",
-  cash_account: "حسابکش",
-  supervisor: "ناظر",
-};
-
 export type FileKind = "PICTURE" | "DOCUMENT" | "VIDEO";
 
 export interface DocumentFileInfo {
@@ -400,11 +381,17 @@ export interface DocumentFileInfo {
   download_url: string;
 }
 
-export interface RoleRow {
-  role: ResponsibilityRoleKey;
-  post: string;
-  supervisor: string;
+/** One line of the Responsibilities block: «حوزه X  واحد Y  جهت <text>» (redesigned 2026-09-30). The ids point at
+ *  the org chart; the names are what prints (the server copies them from the chart on save, and keeps them
+ *  when a node is deleted). A row converted from the old fixed-role shape has neither and is just its text. */
+export interface ResponsibilityRow {
+  domain: number | null;
+  unit: number | null;
+  domain_name: string;
+  unit_name: string;
   text: string;
+  /** Editor-only, never sent: the company has حوزه and this row deliberately names a واحد that has none. */
+  standalone?: boolean;
 }
 
 export interface ChangeRow {
@@ -463,8 +450,7 @@ export interface LongSection extends SectionBase {
 
 export interface ResponsibilitiesSection extends SectionBase {
   type: "Responsibilities";
-  roles: RoleRow[];
-  notes: string[];
+  rows: ResponsibilityRow[];
 }
 
 export interface ChangesSection extends SectionBase {

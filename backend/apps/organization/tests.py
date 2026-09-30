@@ -1676,16 +1676,20 @@ class DocumentAxisTests(SampleTree, TestCase):
         for capability in (Capability.MANAGE_ORGANIZATION, Capability.MANAGE_MEMBERSHIP, Capability.CREATE_PROJECT):
             self.assertFalse(lead.has_capability(capability))  # widening is access.py's job, not a capability's
 
+    #: The one module under apps/documents that may read the org *tree* (Phase 14: the Responsibilities
+    #: block names a حوزه / واحد). Nothing there may touch memberships.
+    ORG_TREE_READERS = {"responsibility_nodes.py"}
+
     def test_no_document_module_reads_the_org_tables(self):
         """A structural guard: the workflow cannot depend on memberships if nothing in
-        apps/documents (or User.capabilities) so much as mentions them."""
+        apps/documents (or User.capabilities) so much as mentions them, and only the modules
+        listed in ORG_TREE_READERS import the org app at all."""
         documents = pathlib.Path(inspect.getfile(Membership)).parents[1] / "documents"
-        offenders = [
-            path.name
-            for path in documents.glob("*.py")
-            if not path.name.startswith("test") and any(word in path.read_text() for word in ("apps.organization", "Membership", "memberships"))
-        ]
-        self.assertEqual(offenders, [])
+        modules = [path for path in documents.glob("*.py") if not path.name.startswith("test")]
+        memberships = [path.name for path in modules if any(word in path.read_text() for word in ("Membership", "memberships"))]
+        org_readers = [path.name for path in modules if "apps.organization" in path.read_text()]
+        self.assertEqual(memberships, [])
+        self.assertEqual(sorted(set(org_readers) - self.ORG_TREE_READERS), [])
         self.assertNotIn("membership", inspect.getsource(User.capabilities.fget).lower())
 
 

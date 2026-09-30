@@ -10,13 +10,12 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from apps.core.constants import (
-    RESPONSIBILITY_ROLE_ORDER,
     BodyKind,
-    ResponsibilityRole,
     SectionType,
 )
 
 from . import form_schema, rich_content
+from . import responsibility_nodes
 from .serializers import DocumentDetailSerializer
 
 MAX_SECTIONS = 100
@@ -28,11 +27,9 @@ _FIELD_LABELS = {
     "body": "متن",
     "extra_boxes": "کادرهای متن",
     "file_ids": "فایل‌ها",
-    "roles": "نقش‌ها",
-    "notes": "توضیحات",
-    "post": "سمت",
-    "supervisor": "ناظر",
-    "text": "متن",
+    "domain": "حوزه",
+    "unit": "واحد",
+    "text": "توضیحات",
     "rows": "ردیف‌ها",
     "items": "ضمیمه‌ها",
     "caption": "عنوان ضمیمه",
@@ -90,21 +87,30 @@ class LongExplanationInput(_SectionInput):
             raise serializers.ValidationError(str(error)) from None
 
 
-class _RoleRowInput(serializers.Serializer):
-    role = serializers.ChoiceField(choices=ResponsibilityRole.choices)
-    post = _text(max_length=255)
-    supervisor = _text(max_length=255)
+class _ResponsibilityRowInput(serializers.Serializer):
+    """One line of the Responsibilities block: an optional حوزه, a واحد, and the text after «جهت».
+    Only the ids are trusted; the printed names are copied from the org chart on save
+    (responsibility_nodes.resolve), except where an id is null — then the row's own snapshot stays."""
+
+    domain = serializers.IntegerField(required=False, allow_null=True, default=None, min_value=1)
+    unit = serializers.IntegerField(required=False, allow_null=True, default=None, min_value=1)
+    domain_name = _text(max_length=255)
+    unit_name = _text(max_length=255)
     text = _text(max_length=5000)
 
 
 class ResponsibilitiesInput(_SectionInput):
-    roles = serializers.ListField(child=_RoleRowInput(), min_length=4, max_length=4)
-    notes = serializers.ListField(child=_text(max_length=5000), max_length=50, default=list)
+    rows = serializers.ListField(
+        child=_ResponsibilityRowInput(), max_length=responsibility_nodes.MAX_ROWS, default=list
+    )
 
-    def validate_roles(self, value):
-        if sorted(r["role"] for r in value) != sorted(ResponsibilityRole.values):
-            raise serializers.ValidationError("هر چهار ردیف مسئولیت باید دقیقاً یک‌بار ارسال شود.")
-        return value
+    def validate_rows(self, value):
+        document = self.context.get("document")
+        kept = responsibility_nodes.stored_node_ids(document) if document is not None else set()
+        try:
+            return responsibility_nodes.resolve(value, kept=kept)
+        except responsibility_nodes.RowError as error:
+            raise serializers.ValidationError(error.messages) from None
 
 
 class _ChangeRowInput(serializers.Serializer):
@@ -204,7 +210,7 @@ class ContentInputSerializer(serializers.Serializer):
                 messages.append(f"بخش {number}: نوع بخش نامعتبر است.")
                 continue
 
-            serializer = serializer_class(data=raw)
+            serializer = serializer_class(data=raw, context=self.context)
             if not serializer.is_valid():
                 title = SectionType(section_type).label
                 for path, message in _flatten(serializer.errors):
@@ -299,21 +305,19 @@ def _section_payload(document, section, request) -> dict:
         }
 
     if kind == SectionType.RESPONSIBILITIES:
-        rows = list(section.responsibility_rows.all())
-        by_role = {r.role: r for r in rows if r.role}
-        roles = []
-        for role in RESPONSIBILITY_ROLE_ORDER:
-            row = by_role.get(role)
-            roles.append(
+        return {
+            **base,
+            "rows": [
                 {
-                    "role": role,
-                    "role_label": ResponsibilityRole(role).label,
-                    "post": row.post if row else "",
-                    "supervisor": row.supervisor if row else "",
-                    "text": row.text if row else "",
+                    "domain": row.domain_id,
+                    "unit": row.unit_id,
+                    "domain_name": row.domain_name,
+                    "unit_name": row.unit_name,
+                    "text": row.text,
                 }
-            )
-        return {**base, "roles": roles, "notes": [r.text for r in rows if not r.role]}
+                for row in section.responsibility_rows.all()
+            ],
+        }
 
     if kind == SectionType.CHANGES_TABLE:
         return {

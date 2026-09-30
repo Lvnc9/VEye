@@ -12,7 +12,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, ValidationError
 
-from apps.core.constants import RESPONSIBILITY_ROLE_ORDER, BodyKind, SectionType
+from apps.core.constants import BodyKind, SectionType
 from apps.core.exceptions import ConflictError
 
 from . import rich_content
@@ -81,26 +81,18 @@ def _section_content(item: dict) -> dict:
 
 def _sync_responsibilities(section: Section, item: dict) -> None:
     section.responsibility_rows.all().delete()
-    by_role = {row["role"]: row for row in item["roles"]}
-    rows = [
+    ResponsibilityRow.objects.bulk_create(
         ResponsibilityRow(
             section=section,
             position=position,
-            role=role,
-            post=by_role[role]["post"],
-            supervisor=by_role[role]["supervisor"],
-            text=by_role[role]["text"],
+            domain_id=row["domain"],
+            unit_id=row["unit"],
+            domain_name=row["domain_name"],
+            unit_name=row["unit_name"],
+            text=row["text"],
         )
-        for position, role in enumerate(RESPONSIBILITY_ROLE_ORDER)
-    ]
-    # Rows past the four roles carry description text only — printed under
-    # «توضیحات» (deliver_convert.py:99-114).
-    offset = len(rows)
-    rows += [
-        ResponsibilityRow(section=section, position=offset + i, text=text)
-        for i, text in enumerate(item["notes"])
-    ]
-    ResponsibilityRow.objects.bulk_create(rows)
+        for position, row in enumerate(item["rows"])
+    )
 
 
 def _sync_changes(section: Section, item: dict, today) -> None:
@@ -341,9 +333,10 @@ def copy_content(source: Document, target: Document) -> None:
                 ResponsibilityRow(
                     section=section,
                     position=row.position,
-                    role=row.role,
-                    post=row.post,
-                    supervisor=row.supervisor,
+                    domain_id=row.domain_id,
+                    unit_id=row.unit_id,
+                    domain_name=row.domain_name,
+                    unit_name=row.unit_name,
                     text=row.text,
                 )
                 for row in old_section.responsibility_rows.all()

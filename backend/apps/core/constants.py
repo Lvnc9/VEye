@@ -124,46 +124,6 @@ class BodyKind(models.TextChoices):
     FORM = "form", "فرم"
 
 
-#: The letters the PDF prints beside the four Responsibility rows
-#: (other_folder/deliver_convert.py:99-114).
-RESPONSIBILITY_ROW_LABELS = ["الف", "ب", "ج", "د"]
-
-
-class ResponsibilityRole(models.TextChoices):
-    """The four fixed rows of a Responsibilities block, in V_1.0's on-screen
-    order (other_folder/utils.py:1373-1403, where they are labeled Responder /
-    Reciver / Cash Account / Supervisor). Each row carries a سمت (post), a ناظر
-    (supervisor) and a description; V_1.0 stores them as a flat 8-slot `options`
-    array — index i is the post, index i+4 the supervisor.
-    """
-
-    RESPONDER = "responder", "پاسخگو"
-    RECEIVER = "receiver", "پاسخ‌خواه"
-    CASH_ACCOUNT = "cash_account", "حسابکش"
-    SUPERVISOR = "supervisor", "ناظر"
-
-
-#: Row order, which is also the order the PDF letters الف/ب/ج/د are assigned.
-RESPONSIBILITY_ROLE_ORDER = [
-    ResponsibilityRole.RESPONDER,
-    ResponsibilityRole.RECEIVER,
-    ResponsibilityRole.CASH_ACCOUNT,
-    ResponsibilityRole.SUPERVISOR,
-]
-
-#: Which row feeds which register column (حسابکش / پاسخ خواه / پاسخگو).
-#:
-#: V_1.0 filled them by *position* (utils.py:574-594: rows 1, 2, 3 -> accountant,
-#: questioner, responder), which put the text typed in the row labeled
-#: "Responder" under حسابکش and the "Cash Account" row under پاسخگو. The product
-#: owner confirmed that was a swap and the columns should follow the row labels.
-REGISTER_COLUMN_ROLE = {
-    "accountant": ResponsibilityRole.CASH_ACCOUNT,
-    "questioner": ResponsibilityRole.RECEIVER,
-    "responder": ResponsibilityRole.RESPONDER,
-}
-
-
 class FileKind(models.TextChoices):
     """The three upload buttons of a Long Explanation block (Add Picture /
     Add File / Add Video, utils.py:1638-1666)."""

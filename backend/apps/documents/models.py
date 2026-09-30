@@ -7,14 +7,12 @@ from django.db.models import CheckConstraint, Index, Q, UniqueConstraint
 
 from apps.core.constants import (
     GROUP_CODE_PREFIX,
-    REGISTER_COLUMN_ROLE,
     BodyKind,
     DocumentCategory,
     DocumentEventKind,
     DocumentGroup,
     DocumentStatus,
     FileKind,
-    ResponsibilityRole,
     SectionType,
     SignOffRole,
 )
@@ -222,17 +220,15 @@ class Document(TimeStampedModel):
         submitted for confirmation its content is locked until it is returned."""
         return self.status == DocumentStatus.DRAFT
 
-    def responsibility_summary(self):
-        """The حسابکش / پاسخ خواه / پاسخگو register columns.
+    def responsible_units(self) -> list[str]:
+        """The register's «واحدهای مسئول» column: the واحد named in the document's Responsibilities
+        block, in the order written, each once (owner's decision, 2026-09-30; it replaced the
+        حسابکش / پاسخ‌خواه / پاسخگو columns, whose four fixed roles no longer exist). Names are the
+        snapshots stored on the rows, so a rename or an archived واحد never changes a printed
+        document's register line.
 
-        V_1.0 denormalized three [post, supervisor] pairs onto the index row so the
-        register could render without loading document bodies. Here they are
-        derived from the document's Responsibilities section, following the *row
-        labels* (see REGISTER_COLUMN_ROLE). A value is None until the row has a
-        post or a supervisor.
-
-        The register list prefetches `responsibility_sections` so this costs no
-        query per row; elsewhere it falls back to one query.
+        The register list prefetches `responsibility_sections` so this costs no query per row;
+        elsewhere it falls back to one query.
         """
         sections = getattr(self, "responsibility_sections", None)
         if sections is None:
@@ -241,18 +237,14 @@ class Document(TimeStampedModel):
                 .order_by("position", "id")
                 .prefetch_related("responsibility_rows")
             )
-
-        summary = {column: None for column in REGISTER_COLUMN_ROLE}
         if not sections:
-            return summary
-
+            return []
         # A document has at most one Responsibilities block (enforced on save).
-        rows = {row.role: row for row in sections[0].responsibility_rows.all() if row.role}
-        for column, role in REGISTER_COLUMN_ROLE.items():
-            row = rows.get(role)
-            if row is not None and (row.post or row.supervisor):
-                summary[column] = {"post": row.post, "supervisor": row.supervisor}
-        return summary
+        names: list[str] = []
+        for row in sections[0].responsibility_rows.all():
+            if row.unit_name and row.unit_name not in names:
+                names.append(row.unit_name)
+        return names
 
     def previous_change_rows(self):
         """Change-table rows written in *earlier revisions* of this document,
@@ -403,33 +395,32 @@ class Section(TimeStampedModel):
 
 
 class ResponsibilityRow(TimeStampedModel):
-    """A row of a Responsibilities block.
+    """One line of a Responsibilities block (redesigned 2026-09-30, owner's request): a حوزه
+    (only when the company has any), a واحد, and what the واحد is responsible for. It prints as
 
-    Four rows have a `role` and carry a سمت (post), a ناظر (supervisor) and a
-    description. Any further rows have no role and are description-only notes,
-    which the PDF prints under «توضیحات» (deliver_convert.py:99-114).
+        حوزه IT  واحد هوش مصنوعی  جهت <text>
 
-    `post` and `supervisor` are free text. V_1.0's dropdowns for them each held a
-    single hardcoded placeholder ('Organiztion Post' / 'SuperVisor',
-    utils.py:1452,1476), so no list of posts ever existed.
+    `domain` / `unit` point at the org chart, but the printed names are **snapshots**
+    (`domain_name`, `unit_name`, written by the server when the block is saved): a document that
+    was issued must not change when a node is renamed, archived or deleted (`SET_NULL`). A row
+    converted from the old shape (four fixed roles with a سمت and a ناظر, plus free notes) has no
+    unit — its old text is kept whole in `text` and printed as it was written.
     """
 
     section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name="responsibility_rows")
     position = models.PositiveSmallIntegerField()
-    role = models.CharField(max_length=16, choices=ResponsibilityRole.choices, blank=True)
-    post = models.CharField(max_length=255, blank=True)
-    supervisor = models.CharField(max_length=255, blank=True)
+    domain = models.ForeignKey(
+        "organization.OrgNode", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    unit = models.ForeignKey(
+        "organization.OrgNode", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    domain_name = models.CharField(max_length=255, blank=True)
+    unit_name = models.CharField(max_length=255, blank=True)
     text = models.TextField(blank=True)
 
     class Meta:
         ordering = ["position", "id"]
-        constraints = [
-            UniqueConstraint(
-                fields=["section", "role"],
-                condition=~Q(role=""),
-                name="uniq_responsibility_role_per_section",
-            )
-        ]
 
 
 class ChangeTableRow(TimeStampedModel):

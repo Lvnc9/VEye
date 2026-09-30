@@ -17,7 +17,6 @@ from django.utils import timezone
 from PIL import Image
 
 from apps.core.constants import (
-    RESPONSIBILITY_ROW_LABELS,
     DocumentGroup,
     DocumentStatus,
     SectionType,
@@ -119,20 +118,33 @@ def _long_text(content: dict) -> str:
     return _lines(content.get("heading", "")) + "\n" + body
 
 
-def _responsibilities(section: Section) -> list:
-    """[[label line, text], ...] — V_1.0's `all_documents['Responsibilities']`.
+def _plain(value: str) -> str:
+    """A node's name without the designer's inline markers, so it is never restyled."""
+    text = value or ""
+    for marker in ("**", "~~", "--"):
+        text = text.replace(marker, "")
+    return text.strip()
 
-    The four role rows print «الف:  سمت: … ناظر: …»; any further rows are
-    description-only notes printed under «توضیحات: »."""
-    rows = []
-    for index, row in enumerate(section.responsibility_rows.all()):
-        if row.role and index < len(RESPONSIBILITY_ROW_LABELS):
-            label = f"{RESPONSIBILITY_ROW_LABELS[index]}:  "
-            key = label + f"سمت: {row.post}    ناظر: {row.supervisor}"
-        else:
-            key = "توضیحات: "
-        rows.append([key, _lines(row.text)])
-    return rows
+
+def _responsibilities(section: Section) -> list:
+    """One line per row (owner's redesign, 2026-09-30): «حوزه IT  واحد هوش مصنوعی  جهت <text>».
+    The حوزه is left out when the row has none (a company without حوزه); a row with no واحد at all —
+    one converted from the old fixed-role shape — is just its text; a row with a واحد but no text
+    stops after the واحد. The names are the snapshots stored on the row."""
+    lines = []
+    for row in section.responsibility_rows.all():
+        parts = []
+        if row.domain_name:
+            parts.append(f"حوزه {_plain(row.domain_name)}")
+        if row.unit_name:
+            parts.append(f"واحد {_plain(row.unit_name)}")
+        head = "  ".join(parts)
+        text = _lines(row.text).strip()
+        if head and text:
+            lines.append(f"{head}  جهت {text}")
+        elif head or text:
+            lines.append(head or text)
+    return lines
 
 
 def company_name() -> str:
@@ -179,7 +191,9 @@ def load(document_id: int) -> provider.PdfInput:
             else:
                 blocks.append((provider.TEXT, _long_text(section.content)))
         elif kind == SectionType.RESPONSIBILITIES:
-            blocks.append((provider.RESPONSIBILITIES, _responsibilities(section)))
+            lines = _responsibilities(section)
+            if lines:  # a block with no rows says nothing, so it prints no heading either
+                blocks.append((provider.RESPONSIBILITIES, lines))
         elif kind == SectionType.CHANGES_TABLE:
             rows = []
             for row in section.change_rows.all():

@@ -17,8 +17,11 @@ from PIL import Image
 from rest_framework.test import APIClient
 
 from apps.accounts.models import AccessLevel, AccessRoll
-from apps.core.constants import DocumentGroup, DocumentStatus, ResponsibilityRole
+from apps.core.constants import DocumentGroup, DocumentStatus
 from apps.core.exceptions import ConflictError
+
+from apps.organization import tree
+from apps.organization.models import Company, OrgNode
 
 from . import content, services
 from .models import (
@@ -56,15 +59,29 @@ def long_block(heading="", body="", extra_boxes=(), file_ids=(), **extra):
     }
 
 
-def resp(overrides=None, notes=(), **extra):
-    """A Responsibilities block with all four roles; `overrides` maps a role to
-    the fields to set on it."""
-    overrides = overrides or {}
-    roles = [
-        {"role": role, "post": "", "supervisor": "", "text": "", **overrides.get(role, {})}
-        for role in ResponsibilityRole.values
-    ]
-    return {"type": RESP, "roles": roles, "notes": list(notes), **extra}
+def resp(*rows, **extra):
+    """A Responsibilities block (redesigned 2026-09-30): each row is a dict of `domain` / `unit`
+    (org node ids), the snapshot names, and `text`."""
+    return {"type": RESP, "rows": [dict(row) for row in rows], **extra}
+
+
+def make_org():
+    """A company with a حوزه «IT» (units «هوش مصنوعی», «توسعه»), a حوزه «فروش», and a واحد straight under
+    the company («مدیریت سیستم‌ها»)."""
+    root = tree.create_root(name="شرکت")
+    Company.objects.create(pk=1, root=root)
+    it = tree.create_node(kind="DOMAIN", name="IT", parent=root)
+    sales = tree.create_node(kind="DOMAIN", name="فروش", parent=root)
+    return {
+        "root": root,
+        "it": it,
+        "sales": sales,
+        "ai": tree.create_node(kind="UNIT", name="هوش مصنوعی", parent=it),
+        "dev": tree.create_node(kind="UNIT", name="توسعه", parent=it),
+        "deals": tree.create_node(kind="UNIT", name="بستن معاملات", parent=sales),
+        "free": tree.create_node(kind="UNIT", name="مدیریت سیستم‌ها", parent=root),
+        "section": None,
+    }
 
 
 def changes(*texts, **extra):
@@ -163,10 +180,7 @@ class ContentRoundTripTests(DesignerTestCase):
             [
                 short("1-هدف", "", "متن سوم"),
                 long_block("2-توضیحات", "متن **مهم** و ~~مایل~~ و --زیرخط--", ["کادر اضافه"]),
-                resp(
-                    {ResponsibilityRole.CASH_ACCOUNT: {"post": "مدیر مالی", "supervisor": "ناظر مالی", "text": "شرح"}},
-                    notes=["توضیح ۱", "توضیح ۲"],
-                ),
+                resp({"text": "**شرح** ۱"}, {"text": "شرح ۲"}),
                 changes("اصلاح بند ۳"),
                 attach(("فرم درخواست", other.pk)),
             ],
@@ -183,10 +197,7 @@ class ContentRoundTripTests(DesignerTestCase):
         self.assertEqual(saved["sections"][0]["lines"], ["1-هدف", "", "متن سوم"], "blank lines are kept")
         self.assertEqual(saved["sections"][1]["extra_boxes"], ["کادر اضافه"])
 
-        roles = {r["role"]: r for r in saved["sections"][2]["roles"]}
-        self.assertEqual(roles["cash_account"]["post"], "مدیر مالی")
-        self.assertEqual(saved["sections"][2]["notes"], ["توضیح ۱", "توضیح ۲"])
-        self.assertEqual([r["role"] for r in saved["sections"][2]["roles"]], list(ResponsibilityRole.values))
+        self.assertEqual([r["text"] for r in saved["sections"][2]["rows"]], ["**شرح** ۱", "شرح ۲"])
 
         self.assertEqual(saved["sections"][3]["rows"][0]["text"], "اصلاح بند ۳")
         item = saved["sections"][4]["items"][0]
@@ -251,7 +262,7 @@ class ContentRoundTripTests(DesignerTestCase):
         self.assertEqual(Section.objects.filter(document=self.doc).count(), 3, "no sections were duplicated")
 
     def test_sections_left_out_of_a_save_are_deleted_with_their_children(self):
-        first = self.save([short("الف"), resp(notes=["x"]), changes("تغییر")])
+        first = self.save([short("الف"), resp({"text": "x"}), changes("تغییر")])
         self.assertTrue(ResponsibilityRow.objects.exists())
         self.assertTrue(ChangeTableRow.objects.exists())
 
@@ -297,15 +308,6 @@ class ValidationTests(DesignerTestCase):
 
     def test_unknown_block_type(self):
         self.assertRejected([{"type": "Nonsense"}], "بخش 1", "نامعتبر")
-
-    def test_responsibilities_need_all_four_distinct_roles(self):
-        block = resp()
-        block["roles"] = block["roles"][:3]
-        self.assertRejected([block], "بخش 1")
-
-        block = resp()
-        block["roles"][3] = {**block["roles"][0]}  # responder twice, supervisor missing
-        self.assertRejected([block], "هر چهار ردیف")
 
     def test_only_one_responsibilities_and_one_changes_block(self):
         self.assertRejected([resp(), resp()], "فقط یک بخش")
@@ -701,64 +703,144 @@ class LogoTests(DesignerTestCase):
 
 
 class RegisterColumnTests(DesignerTestCase):
-    def columns(self, doc=None):
+    """The register's «واحدهای مسئول» column (2026-09-30; it replaced حسابکش / پاسخ‌خواه / پاسخگو)."""
+
+    def units(self, doc=None):
         doc = doc or self.doc
-        row = next(
-            r for r in self.client.get(reverse("document-list")).data["results"] if r["id"] == doc.pk
-        )
-        return row["responsibilities"]
+        row = next(r for r in self.client.get(reverse("document-list")).data["results"] if r["id"] == doc.pk)
+        return row["responsible_units"]
 
-    def test_columns_follow_the_row_labels_not_the_position(self):
-        """V_1.0 filled حسابکش / پاسخ خواه / پاسخگو from rows 1 / 2 / 3, i.e. the
-        row labeled 'Responder' landed under حسابکش and 'Cash Account' under
-        پاسخگو. The product owner confirmed that was a swap."""
-        self.save(
-            [
-                resp(
-                    {
-                        ResponsibilityRole.RESPONDER: {"post": "پست-پاسخگو", "supervisor": "ن۱"},
-                        ResponsibilityRole.RECEIVER: {"post": "پست-دریافت", "supervisor": "ن۲"},
-                        ResponsibilityRole.CASH_ACCOUNT: {"post": "پست-حسابکش", "supervisor": "ن۳"},
-                        ResponsibilityRole.SUPERVISOR: {"post": "پست-ناظر", "supervisor": "ن۴"},
-                    }
-                )
-            ]
-        )
-        columns = self.columns()
-        self.assertEqual(columns["accountant"], {"post": "پست-حسابکش", "supervisor": "ن۳"})
-        self.assertEqual(columns["questioner"], {"post": "پست-دریافت", "supervisor": "ن۲"})
-        self.assertEqual(columns["responder"], {"post": "پست-پاسخگو", "supervisor": "ن۱"})
-        self.assertEqual(set(columns), {"accountant", "questioner", "responder"}, "the 4th row has no column")
+    def test_the_units_named_in_the_block_in_the_order_written_each_once(self):
+        self.save([resp({"unit_name": "هوش مصنوعی", "text": "الف"}, {"unit_name": "توسعه"}, {"unit_name": "هوش مصنوعی", "text": "ب"})])
+        self.assertEqual(self.units(), ["هوش مصنوعی", "توسعه"])
 
-    def test_an_empty_row_is_none_not_a_blank_pair(self):
-        self.save([resp({ResponsibilityRole.RESPONDER: {"post": "فقط سمت"}})])
-        columns = self.columns()
-        self.assertEqual(columns["responder"], {"post": "فقط سمت", "supervisor": ""})
-        self.assertIsNone(columns["accountant"])
-        self.assertIsNone(columns["questioner"])
+    def test_a_row_with_only_text_names_no_unit(self):
+        self.save([resp({"text": "شرح قدیمی"})])
+        self.assertEqual(self.units(), [])
 
-    def test_a_row_with_only_a_description_does_not_fill_the_column(self):
-        self.save([resp({ResponsibilityRole.RESPONDER: {"text": "شرح بدون سمت"}})])
-        self.assertIsNone(self.columns()["responder"])
-
-    def test_a_document_without_the_block_has_no_columns(self):
+    def test_a_document_without_the_block_has_no_units(self):
         self.save([short("الف")])
-        self.assertEqual(self.columns(), {"accountant": None, "questioner": None, "responder": None})
+        self.assertEqual(self.units(), [])
 
     def test_the_register_does_not_query_per_row(self):
         for i in range(8):
             doc = new_doc(self.author, f"سند {i}", DocumentGroup.INSTRUCTION)
-            self.save([resp({ResponsibilityRole.RESPONDER: {"post": f"پست {i}"}})], doc=doc)
+            self.save([resp({"unit_name": f"واحد {i}"})], doc=doc)
         # count + page + sign-offs + responsibility sections + their rows
         with self.assertNumQueries(5):
             rows = self.client.get(reverse("document-list")).data["results"]
-        self.assertEqual(sum(1 for r in rows if r["responsibilities"]["responder"]), 8)
+        self.assertEqual(sum(1 for r in rows if r["responsible_units"]), 8)
 
     def test_can_edit_flag(self):
         finished = finalize(new_doc(self.author, "تمام‌شده", DocumentGroup.INSTRUCTION))
         rows = {r["id"]: r for r in self.client.get(reverse("document-list")).data["results"]}
         self.assertTrue(rows[self.doc.pk]["can_edit"])
         self.assertFalse(rows[finished.pk]["can_edit"])
+
+
+class ResponsibilitiesBlockTests(DesignerTestCase):
+    """The block's rows against the org chart (owner's redesign, 2026-09-30)."""
+
+    def setUp(self):
+        super().setUp()
+        self.org = make_org()
+
+    def row(self, **fields):
+        return {"domain": None, "unit": None, "domain_name": "", "unit_name": "", "text": "", **fields}
+
+    def rows(self, saved):
+        return saved["sections"][0]["rows"]
+
+    def assertRejected(self, block, *fragments):
+        response = self.put([block])
+        self.assertEqual(response.status_code, 400, response.data)
+        text = " ".join(str(m) for m in response.data.get("sections", []))
+        for fragment in fragments:
+            self.assertIn(fragment, text)
+
+    def test_a_row_round_trips_with_ids_and_names_copied_from_the_chart(self):
+        saved = self.save([resp(self.row(domain=self.org["it"].pk, unit=self.org["ai"].pk, text="نگهداری داده‌ها"))])
+        [row] = self.rows(saved)
+        self.assertEqual(
+            row,
+            {"domain": self.org["it"].pk, "unit": self.org["ai"].pk, "domain_name": "IT", "unit_name": "هوش مصنوعی", "text": "نگهداری داده‌ها"},
+        )
+        self.assertEqual(self.get_content()["sections"], saved["sections"])
+
+    def test_names_come_from_the_chart_never_from_the_client(self):
+        saved = self.save([resp(self.row(unit=self.org["ai"].pk, unit_name="نام جعلی", domain_name="حوزه جعلی"))])
+        [row] = self.rows(saved)
+        self.assertEqual((row["unit_name"], row["domain_name"]), ("هوش مصنوعی", "IT"))
+
+    def test_a_unit_names_its_domain_even_when_the_client_leaves_it_out(self):
+        [row] = self.rows(self.save([resp(self.row(unit=self.org["deals"].pk))]))
+        self.assertEqual((row["domain"], row["domain_name"]), (self.org["sales"].pk, "فروش"))
+
+    def test_a_unit_straight_under_the_company_has_no_domain(self):
+        [row] = self.rows(self.save([resp(self.row(unit=self.org["free"].pk, text="پیگیری"))]))
+        self.assertEqual((row["domain"], row["domain_name"], row["unit_name"]), (None, "", "مدیریت سیستم‌ها"))
+
+    def test_several_rows_keep_their_order(self):
+        saved = self.save([resp(self.row(unit=self.org["dev"].pk), self.row(unit=self.org["ai"].pk), self.row(text="آزاد"))])
+        self.assertEqual([r["unit_name"] for r in self.rows(saved)], ["توسعه", "هوش مصنوعی", ""])
+
+    def test_a_unit_that_belongs_to_another_domain_is_refused(self):
+        self.assertRejected(
+            resp(self.row(domain=self.org["sales"].pk, unit=self.org["ai"].pk)),
+            "ردیف 1", "به حوزهٔ «فروش» تعلق ندارد",
+        )
+
+    def test_a_node_of_the_wrong_kind_is_refused(self):
+        self.assertRejected(resp(self.row(domain=self.org["ai"].pk, unit=self.org["ai"].pk)), "حوزه نیست")
+        self.assertRejected(resp(self.row(unit=self.org["it"].pk)), "واحد نیست")
+
+    def test_an_unknown_node_is_refused(self):
+        self.assertRejected(resp(self.row(unit=99999999)), "پیدا نشد")
+
+    def test_a_domain_without_a_unit_is_refused(self):
+        self.assertRejected(resp(self.row(domain=self.org["it"].pk, text="شرح")), "واحد را انتخاب کنید")
+
+    def test_an_archived_unit_cannot_be_picked_afresh(self):
+        tree.archive_node(self.org["dev"])
+        self.assertRejected(resp(self.row(unit=self.org["dev"].pk)), "بایگانی شده")
+
+    def test_but_a_row_that_already_names_it_keeps_it(self):
+        self.save([resp(self.row(unit=self.org["dev"].pk, text="کار"))])
+        tree.archive_node(OrgNode.objects.get(pk=self.org["dev"].pk))
+        saved = self.save([resp(self.row(unit=self.org["dev"].pk, text="کار ویرایش‌شده"))])
+        [row] = self.rows(saved)
+        self.assertEqual((row["unit"], row["text"]), (self.org["dev"].pk, "کار ویرایش‌شده"))
+
+    def test_blank_rows_are_dropped(self):
+        saved = self.save([resp(self.row(), self.row(text="  "), self.row(unit=self.org["ai"].pk), self.row())])
+        self.assertEqual([r["unit_name"] for r in self.rows(saved)], ["هوش مصنوعی"])
+
+    def test_a_row_with_only_text_is_kept_like_a_converted_old_row(self):
+        [row] = self.rows(self.save([resp(self.row(text="الف:  سمت: مدیر\nشرح"))]))
+        self.assertEqual((row["unit"], row["unit_name"], row["text"]), (None, "", "الف:  سمت: مدیر\nشرح"))
+
+    def test_the_printed_names_survive_a_rename_and_a_deletion_of_the_node(self):
+        saved = self.save([resp(self.row(unit=self.org["free"].pk, text="کار"))])
+        unit = OrgNode.objects.get(pk=self.org["free"].pk)
+        unit.name = "نام تازه"
+        unit.save()
+        self.assertEqual(self.rows(self.get_content())[0]["unit_name"], "مدیریت سیستم‌ها", "a rename changes nothing printed")
+        tree.delete_node(unit)  # the row keeps its snapshot; only the link goes
+        [row] = self.rows(self.get_content())
+        self.assertEqual((row["unit"], row["unit_name"]), (None, "مدیریت سیستم‌ها"))
+        # and the client can save that payload back as it got it
+        again = self.save([resp(row)])
+        self.assertEqual(self.rows(again)[0]["unit_name"], "مدیریت سیستم‌ها")
+
+    def test_too_many_rows(self):
+        self.assertRejected(resp(*[self.row(text=str(i)) for i in range(101)]))
+
+    def test_a_revision_copies_the_rows(self):
+        self.save([resp(self.row(unit=self.org["ai"].pk, text="کار"))])
+        self.doc.refresh_from_db()
+        target = new_doc(self.author, "دیگر", DocumentGroup.PROCEDURE)
+        content.copy_content(self.doc, target)
+        self.assertEqual(self.rows(self.get_content(target))[0]["unit_name"], "هوش مصنوعی")
 
 
 class CopyForwardTests(DesignerTestCase):
@@ -772,7 +854,7 @@ class CopyForwardTests(DesignerTestCase):
             [
                 short("۱-هدف", "متن"),
                 long_block("۲-توضیحات", "**متن**", ["کادر"], [fid]),
-                resp({ResponsibilityRole.RESPONDER: {"post": "مدیر", "supervisor": "ناظر"}}, notes=["یادداشت"]),
+                resp({"unit_name": "هوش مصنوعی", "text": "یادداشت"}),
                 changes("ویرایش اول"),
                 attach(("ضمیمه", target.pk)),
             ],
@@ -795,8 +877,8 @@ class CopyForwardTests(DesignerTestCase):
         self.assertEqual(new["sections"][0]["lines"], ["۱-هدف", "متن"])
         self.assertEqual(new["sections"][1]["body"], "**متن**")
         self.assertEqual(new["sections"][1]["extra_boxes"], ["کادر"])
-        self.assertEqual(new["sections"][2]["roles"], old["sections"][2]["roles"])
-        self.assertEqual(new["sections"][2]["notes"], ["یادداشت"])
+        self.assertEqual(new["sections"][2]["rows"], old["sections"][2]["rows"])
+        self.assertEqual(new["sections"][2]["rows"][0]["text"], "یادداشت")
         self.assertEqual(new["sections"][4]["items"][0]["document"]["id"], target.pk)
         self.assertIsNotNone(new["logo_url"])
 

@@ -14,7 +14,6 @@ from PIL import Image
 from apps.core.constants import (
     DocumentCategory,
     DocumentStatus,
-    ResponsibilityRole,
     SectionType,
     SignOffRole,
 )
@@ -196,23 +195,53 @@ class AdapterTests(TestCase):
             [provider.TABLE, provider.TEXT, provider.ATTACHMENTS],
         )
 
-    def test_responsibilities_use_row_letters_and_notes(self):
+    def test_a_responsibilities_row_prints_domain_unit_and_purpose(self):
         doc = make_doc(self.author)
         section = Section.objects.create(document=doc, position=0, type=SectionType.RESPONSIBILITIES)
-        order = [
-            ResponsibilityRole.RESPONDER, ResponsibilityRole.RECEIVER,
-            ResponsibilityRole.CASH_ACCOUNT, ResponsibilityRole.SUPERVISOR,
-        ]
-        for i, role in enumerate(order):
-            ResponsibilityRow.objects.create(
-                section=section, position=i, role=role, post=f"سمت{i}", supervisor=f"ناظر{i}", text=f"متن{i}"
-            )
-        ResponsibilityRow.objects.create(section=section, position=4, text="یادداشت")
-        (rows,) = self.blocks(doc, provider.RESPONSIBILITIES)
-        self.assertEqual(rows[0], ["الف:  سمت: سمت0    ناظر: ناظر0", "متن0"])
-        self.assertEqual(rows[3], ["د:  سمت: سمت3    ناظر: ناظر3", "متن3"])
-        self.assertEqual(rows[4], ["توضیحات: ", "یادداشت"])
-        self.assertEqual(len(rows), 5)
+        for i, (domain, unit, text) in enumerate(
+            [
+                ("IT", "هوش مصنوعی", "نگهداری داده‌ها"),
+                ("", "واحد مستقل", "پیگیری"),  # a company without حوزه
+                ("IT", "توسعه", ""),  # nothing after the واحد
+                ("", "", "الف:  سمت: مدیر\nشرح قدیمی"),  # a converted old row: just its text
+                ("", "", ""),  # says nothing: not printed
+            ]
+        ):
+            ResponsibilityRow.objects.create(section=section, position=i, domain_name=domain, unit_name=unit, text=text)
+        (lines,) = self.blocks(doc, provider.RESPONSIBILITIES)
+        self.assertEqual(
+            lines,
+            [
+                "حوزه IT  واحد هوش مصنوعی  جهت نگهداری داده‌ها",
+                "واحد واحد مستقل  جهت پیگیری",
+                "حوزه IT  واحد توسعه",
+                "الف:  سمت: مدیر\nشرح قدیمی",
+            ],
+        )
+
+    def test_the_printed_names_are_the_stored_snapshots_not_the_charts_current_names(self):
+        root = tree.create_root(name="شرکت")
+        Company.objects.create(pk=1, root=root)
+        unit = tree.create_node(kind="UNIT", name="نام قدیم", parent=root)
+        doc = make_doc(self.author)
+        section = Section.objects.create(document=doc, position=0, type=SectionType.RESPONSIBILITIES)
+        ResponsibilityRow.objects.create(section=section, position=0, unit=unit, unit_name="نام قدیم", text="کار")
+        unit.name = "نام تازه"
+        unit.save()
+        (lines,) = self.blocks(doc, provider.RESPONSIBILITIES)
+        self.assertEqual(lines, ["واحد نام قدیم  جهت کار"])
+
+    def test_markers_in_a_node_name_do_not_restyle_the_line(self):
+        doc = make_doc(self.author)
+        section = Section.objects.create(document=doc, position=0, type=SectionType.RESPONSIBILITIES)
+        ResponsibilityRow.objects.create(section=section, position=0, unit_name="R--D**", text="**مهم** است")
+        (lines,) = self.blocks(doc, provider.RESPONSIBILITIES)
+        self.assertEqual(lines, ["واحد RD  جهت **مهم** است"])
+
+    def test_a_block_with_no_rows_prints_nothing_at_all(self):
+        doc = make_doc(self.author)
+        Section.objects.create(document=doc, position=0, type=SectionType.RESPONSIBILITIES)
+        self.assertEqual(self.blocks(doc, provider.RESPONSIBILITIES), [])
 
     def test_attachments_carry_caption_target_code_and_target_qr(self):
         doc = make_doc(self.author)

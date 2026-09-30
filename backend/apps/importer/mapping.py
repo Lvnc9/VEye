@@ -23,7 +23,6 @@ import jdatetime
 from apps.core.constants import (
     GROUP_CODE_PREFIX,
     LEGACY_CATEGORY_VALUES,
-    RESPONSIBILITY_ROLE_ORDER,
     DocumentCategory,
     DocumentGroup,
     DocumentStatus,
@@ -31,6 +30,7 @@ from apps.core.constants import (
     SignOffRole,
 )
 from apps.core.text import normalize_letters, normalize_title
+from apps.documents import responsibility_nodes
 
 MAX_REVISION = 99
 
@@ -253,21 +253,26 @@ def _text_list(value) -> list:
 
 def _responsibilities(content: dict, notes: list) -> dict:
     """`options` is 8 slots (post i, supervisor i+4); `entries[i]` the text of row i and
-    `entries[4:]` description-only notes (utils.py:1373-1403 / 574-594)."""
+    `entries[4:]` description-only notes (utils.py:1373-1403 / 574-594).
+
+    V_2's block has no fixed roles any more (2026-09-30: حوزه / واحد / توضیحات), and V_1.0's data
+    names no حوزه or واحد, so every non-empty V_1.0 row becomes a free line of text
+    (`responsibility_nodes.legacy_text`): «الف:  سمت: X    ناظر: Y», then its description."""
     options = _text_list(content.get("options")) + [""] * 8
     entries = _text_list(content.get("entries"))
-    roles = []
-    for index, role in enumerate(RESPONSIBILITY_ROLE_ORDER):
+    rows = []
+    for index in range(len(responsibility_nodes.LEGACY_LETTERS)):
         post, supervisor = clean(options[index]), clean(options[index + 4])
-        roles.append(
-            {
-                "role": role,
-                "post": "" if post.lower() in RESPONSIBILITY_PLACEHOLDERS else post,
-                "supervisor": "" if supervisor.lower() in RESPONSIBILITY_PLACEHOLDERS else supervisor,
-                "text": entries[index] if index < len(entries) else "",
-            }
+        text = responsibility_nodes.legacy_text(
+            index,
+            "" if post.lower() in RESPONSIBILITY_PLACEHOLDERS else post,
+            "" if supervisor.lower() in RESPONSIBILITY_PLACEHOLDERS else supervisor,
+            entries[index] if index < len(entries) else "",
         )
-    return {"roles": roles, "notes": [text for text in entries[len(RESPONSIBILITY_ROLE_ORDER):]]}
+        if text:
+            rows.append({"text": text})
+    rows += [{"text": text} for text in entries[len(responsibility_nodes.LEGACY_LETTERS):] if text.strip()]
+    return {"rows": rows}
 
 
 def _changes(content: dict, fallback: dt.date | None, notes: list) -> list:

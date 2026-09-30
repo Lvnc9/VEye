@@ -53,6 +53,11 @@ page and close the last page with the sign-off strip; a superseded revision carr
 every page (the canvas's watermark methods are the port's). `patch_signoff` binds all of that
 onto V_1.0's classes; `LAYOUT` says which case is being drawn (V_1.0 knows neither group nor
 status at draw time).
+
+The eighth is the redesign of the Responsibilities block (2026-09-30): one line per row,
+«حوزه X  واحد Y  جهت <text>», wrapped by width. `patch_responsibilities` binds the port's
+`responsibilities` onto V_1.0's PDFMaker; the case's lines come from `cases.responsibility_lines`
+(V_1.0's four fixed rows «الف: سمت: … ناظر: …» no longer exist).
 """
 import argparse
 import importlib
@@ -112,10 +117,10 @@ def v1_json(name, case, previous_json_by_url, workdir):
             items.append({"type": "Long Explanation", "content": {
                 "main_entry": section[1], "main_textbox": section[2], "additional_textboxes": [], "links": []}})
         elif kind == "responsibilities":
-            rows, notes = section[1], section[2]
-            options = [r[0] for r in rows] + [r[1] for r in rows]
-            entries = [r[2] for r in rows] + list(notes)
-            items.append({"type": "Responsibilities", "content": {"options": options, "entries": entries}})
+            # V_1.0 has no such block any more (the port's redesign, 2026-09-30): its Provider is only
+            # given something to call `responsibilities` with; the port's method, bound by
+            # `patch_responsibilities`, prints the case's own lines.
+            items.append({"type": "Responsibilities", "content": {"options": [""] * 8, "entries": [""] * 4}})
         elif kind == "changes":
             items.append({"type": "Changes Table", "content": {"rows": [
                 {"column_number": str(i), "edition": f"{case['revision']:02d}", "date": jalali(d),
@@ -228,7 +233,7 @@ def patch_attachments(to_make_pdf):
 
 #: What the case being drawn needs: the sign-off strip instead of the control table (پوستر / فرم)
 #: and «منسوخ» on every page. Set per case by `main`.
-LAYOUT = {"strip": False, "obsolete": False}
+LAYOUT = {"strip": False, "obsolete": False, "responsibilities": []}
 
 
 def patch_signoff(to_make_pdf):
@@ -290,6 +295,18 @@ def patch_signoff(to_make_pdf):
     maker.generate_pdf = generate_pdf
 
 
+def patch_responsibilities(to_make_pdf):
+    """The eighth normalisation (see the module docstring)."""
+    from apps.pdfgen import renderer
+
+    port = renderer.PDFMaker.responsibilities
+
+    def responsibilities(self, element, *args, **kwargs):
+        return port(self, LAYOUT["responsibilities"], *args, **kwargs)
+
+    to_make_pdf.PDFMaker.responsibilities = responsibilities
+
+
 def patch_changes_table(to_make_pdf):
     """The sixth normalisation (see the module docstring)."""
     from apps.pdfgen import renderer
@@ -334,6 +351,7 @@ def main():
     patch_attachments(to_make_pdf)
     patch_changes_table(to_make_pdf)
     patch_signoff(to_make_pdf)
+    patch_responsibilities(to_make_pdf)
     convert.subprocess.run = lambda *a, **k: None  # the viewer launch
     convert.sys.exit = lambda *a: None
 
@@ -360,6 +378,10 @@ def main():
 
         LAYOUT["strip"] = case["group"] in ("POSTER", "FORM")
         LAYOUT["obsolete"] = case["status"] == "OBSOLETE"
+        LAYOUT["responsibilities"] = [
+            line for section in case["sections"] if section[0] == "responsibilities"
+            for line in C.responsibility_lines(section[1])
+        ]
         convert.SHORT = ""
         provider = convert.Provider(str(path))
         provider.extract_from_json()

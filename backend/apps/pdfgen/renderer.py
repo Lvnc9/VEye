@@ -32,7 +32,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
-from . import header, richtext, signoff
+from . import header, richtext, rtl, signoff
 
 #: Boxed page header (owner's request, 2026-09-29; see header.py). The box hangs
 #: from `HEADER_MARGIN` below the top edge; text on pages >= 2 starts `HEADER_GAP`
@@ -820,19 +820,22 @@ class PDFMaker:
         self.idx_texts += 1
 
 
-    def responsibilities(self, element:dict, x_offset=30, font_size=12):
+    def responsibilities(self, element, x_offset=30, font_size=12):
         """
-        Draw a “ضمائم:” label, then place a QR at the extreme right
-        and the text (with optional inline styling) to the left, right-aligned.
-        
-        This version properly measures the text width so that the next text
-        appears exactly 30 points to the left of the previous text.
-        """
+        The «مسئولیت ها» block (redesigned 2026-09-30, owner's request). `element` is a list of
+        lines, one per row, each already composed by the adapter — «حوزه IT  واحد هوش مصنوعی  جهت
+        <text>» (the حوزه only when the company has any; a row converted from the old shape is
+        just its text). Each is wrapped to the whole text width by shaped width and drawn from the
+        right margin (rtl.py), inline markers (**bold**, ~~italic~~, --underline--) honoured; rows
+        are separated by a small gap and stay together across pages line by line.
 
+        V_1.0 drew four fixed rows «الف: سمت: … ناظر: …» each followed by a «توضیحات:» line, wrapped
+        by a fixed character count.
+        """
         self.initialize_first_page()
-        self._check_page_break(200)
-    
-        # Label "ضمائم:"
+        self._check_page_break(120)
+
+        # Label "مسئولیت ها:" (numbered like the other blocks)
         line_rtl = self.prepare_rtl(f"{self.idx_texts})" +"مسئولیت ها:")
         x_right = self.page_width - self.margin
         bold_font = (self.font_name + "-Bold" if (self.font_name + "-Bold")
@@ -840,74 +843,22 @@ class PDFMaker:
                     else self.font_name)
         self.c.setFont(bold_font, 14)
         self.c.drawRightString(x_right, self.current_y, line_rtl)
-        self.current_y -= 10
-    
-        # Set normal font for subsequent lines
-        self.c.setFont(self.font_name, font_size)
+        self.current_y -= 28
+
+        font = rtl.Font(self.font_name, bold_font, font_size)
+        lead = font_size * 1.6
+        width = self.page_width - 2 * self.margin
         self.c.setFillColorRGB(0, 0, 0)
-    
-        # Prepare fixed space for QR
-        qr_width = 50
-        qr_height = 50
-        qr_x = self.page_width - self.margin
-        qr_y = self.current_y 
+        for text in element:
+            for line in rtl.wrap(text, font, width):
+                if self.current_y - lead < richtext.BOTTOM:
+                    self._new_page()
+                rtl.draw_line(self.c, line, font, x_right=x_right, y=self.current_y)
+                self.current_y -= lead
+            self.current_y -= 8
 
-        for el in element:
-            self._check_page_break(120)
-            key, value = el
-            # Draw the QR image
-            
-            qr_x = self.page_width
-            qr_y = self.current_y
-            
-    
-            # The main text is drawn first in one line, right-aligned starting at text_right_edge
-            text_right_edge = qr_x - x_offset - 10
-    
-            # Draw the main text
-            self.draw_rtl_styled_line(text_right_edge, self.current_y - 30, key, 12)
-    
-            # Measure how wide that text was (in points)
-            text_rtl = self.prepare_rtl(key)
-            main_text_width = self.c.stringWidth(text_rtl, self.font_name, 12)
-    
-            # Now place the 'thin' text 30 points to the left of where the previous text ended
-            # Because the drawn text is right-aligned within draw_rtl_styled_line,
-            # the "starting X" actually accounts for the total width inside that method.
-            # So we subtract the measured width + 30 more points to place it further to the left.
-            self.current_y -= 20
-
-            next_text_right_edge = text_right_edge - main_text_width - 5
-            value = self.text_merge(value, 100)
-            
-            i = 0
-            if len(value) > 1:
-                ext = ""
-                for txt in value:
-                    if i == 0:
-                        ext = "توضیحات: "
-                    self.draw_rtl_styled_line(
-                        text_right_edge,
-                        self.current_y - 30,
-                        ext + txt,  # Make text italic
-                        12,
-                    )
-                    self.current_y -= 20
-                    i += 1
-            else:
-                self.draw_rtl_styled_line(
-                    text_right_edge,
-                    self.current_y - 30,
-                    "توضیحات: " + value[0],  # Make text italic
-                    12,
-                )
-                    
-            # Adjust the vertical position
-            self.current_y -= (qr_height - 30)
-            self.c.setFont(self.font_name, 12)
-            self.current_y -= 20
-
-        self.current_y -= 60
+        self.current_y -= 32
+        self.c.setFont(self.font_name, 12)
 
         self.idx_texts += 1
 

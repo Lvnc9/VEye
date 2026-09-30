@@ -28,7 +28,6 @@ from rest_framework.exceptions import ValidationError
 
 from apps.accounts.models import AccessLevel, AccessRoll, User
 from apps.core.constants import (
-    RESPONSIBILITY_ROLE_ORDER,
     DocumentEventKind,
     DocumentStatus,
     SectionType,
@@ -267,15 +266,10 @@ def _write_sections(document: Document, content: mapping.ContentRecord):
             Section.objects.create(document=document, position=position, type=kind, content=payload)
         elif kind == SectionType.RESPONSIBILITIES:
             section = Section.objects.create(document=document, position=position, type=kind)
-            rows = [
-                ResponsibilityRow(section=section, position=i, role=r["role"], post=r["post"],
-                                  supervisor=r["supervisor"], text=r["text"])
-                for i, r in enumerate(payload["roles"])
-            ]
-            offset = len(RESPONSIBILITY_ROLE_ORDER)
-            rows += [ResponsibilityRow(section=section, position=offset + i, text=text)
-                     for i, text in enumerate(payload["notes"])]
-            ResponsibilityRow.objects.bulk_create(rows)
+            ResponsibilityRow.objects.bulk_create(
+                ResponsibilityRow(section=section, position=i, text=row["text"])
+                for i, row in enumerate(payload["rows"])
+            )
         elif kind == SectionType.CHANGES_TABLE:
             section = Section.objects.create(document=document, position=position, type=kind)
             ChangeTableRow.objects.bulk_create(

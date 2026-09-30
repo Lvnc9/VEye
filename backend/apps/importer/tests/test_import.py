@@ -125,12 +125,16 @@ class CommitTests(ImportBase):
         self.assertEqual(sections[0].content, {"lines": ["1-هدف", "این یک نمونه است."]})
         self.assertEqual(sections[1].content, {"heading": "2-شرح", "body": "متن بلند **مهم**", "extra_boxes": ["جعبهٔ اضافه"]})
 
-    def test_responsibilities_rows_placeholders_and_notes(self):
+    def test_responsibilities_become_free_text_rows_placeholders_dropped_and_notes_kept(self):
         rows = list(ResponsibilityRow.objects.filter(section__document=self.doc("PR-01-01")).order_by("position"))
-        self.assertEqual([(r.role, r.post, r.supervisor, r.text) for r in rows[:4]], [
-            ("responder", "مدیر برنامه", "ناظر کیفی", "شرح الف"), ("receiver", "", "", "شرح ب"),
-            ("cash_account", "کارشناس", "", "شرح ج"), ("supervisor", "", "", "شرح د")])
-        self.assertEqual([(r.role, r.text) for r in rows[4:]], [("", "یادداشت")])
+        self.assertEqual([r.text for r in rows], [
+            "الف:  سمت: مدیر برنامه    ناظر: ناظر کیفی\nشرح الف",
+            "ب:  شرح ب",
+            "ج:  سمت: کارشناس\nشرح ج",
+            "د:  شرح د",
+            "یادداشت",
+        ])
+        self.assertTrue(all((r.unit_id, r.domain_id, r.unit_name, r.domain_name) == (None, None, "", "") for r in rows))
 
     def test_only_this_revisions_own_change_rows_are_imported_and_history_is_derived(self):
         own = list(ChangeTableRow.objects.filter(section__document=self.doc("PR-01-01")))

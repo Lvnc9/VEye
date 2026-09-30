@@ -166,24 +166,30 @@ class ContentTests(SimpleTestCase):
         self.assertEqual(len(links), 1)
         self.assertIn("2", links[0].message)  # says how many were left behind
 
-    def test_responsibilities_split_the_eight_option_slots_and_drop_the_placeholders(self):
+    def test_responsibilities_split_the_eight_option_slots_drop_the_placeholders_and_become_text_rows(self):
         # options[i] = post, options[i+4] = supervisor; both dropdowns held one hardcoded placeholder.
+        # V_2 has no fixed roles any more (2026-09-30): each old row is one free line of text.
         rec = content([{"type": "Responsibilities", "content": {
             "options": ["مدیر", "Organiztion Post", "کارشناس", "", "ناظر ۱", "SuperVisor", "", "ناظر ۴"],
             "entries": ["متن ۱", "متن ۲", "متن ۳", "متن ۴", "یادداشت الف", "یادداشت ب"]}}])
         _, payload = rec.sections[0]
-        self.assertEqual([(r["role"], r["post"], r["supervisor"], r["text"]) for r in payload["roles"]], [
-            ("responder", "مدیر", "ناظر ۱", "متن ۱"),
-            ("receiver", "", "", "متن ۲"),                # both placeholders -> empty
-            ("cash_account", "کارشناس", "", "متن ۳"),
-            ("supervisor", "", "ناظر ۴", "متن ۴"),
+        self.assertEqual([r["text"] for r in payload["rows"]], [
+            "الف:  سمت: مدیر    ناظر: ناظر ۱\nمتن ۱",
+            "ب:  متن ۲",                                # both placeholders -> nothing but its text
+            "ج:  سمت: کارشناس\nمتن ۳",
+            "د:  ناظر: ناظر ۴\nمتن ۴",
+            "یادداشت الف",
+            "یادداشت ب",
         ])
-        self.assertEqual(payload["notes"], ["یادداشت الف", "یادداشت ب"])
+        self.assertTrue(all(set(r) == {"text"} for r in payload["rows"]), "no حوزه or واحد exists in V_1.0's data")
 
     def test_short_options_and_entries_are_padded_not_crashed(self):
         rec = content([{"type": "Responsibilities", "content": {"options": ["مدیر"], "entries": ["فقط یکی"]}}])
-        roles = rec.sections[0][1]["roles"]
-        self.assertEqual((roles[0]["post"], roles[0]["text"], roles[3]["text"]), ("مدیر", "فقط یکی", ""))
+        self.assertEqual([r["text"] for r in rec.sections[0][1]["rows"]], ["الف:  سمت: مدیر\nفقط یکی"])
+
+    def test_an_empty_responsibilities_block_has_no_rows(self):
+        rec = content([{"type": "Responsibilities", "content": {"options": [], "entries": []}}])
+        self.assertEqual(rec.sections[0][1]["rows"], [])
 
     def test_changes_table_keeps_only_this_revisions_own_rows(self):
         entry = lambda text, when, kind="entry": {"column_number": "1", "edition": "01", "date": when,

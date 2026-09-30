@@ -33,13 +33,29 @@ BODY = "\n".join(
     + [f"خط شمارهٔ {i} از متن بلند برای رسیدن به شکستن صفحه — Line {i}" for i in range(1, 46)]
 )
 
+#: (حوزه, واحد, text) — a row of the Responsibilities block (redesigned 2026-09-30). Row 3 is a company
+#: without حوزه, row 4 has no text, row 5 is an old fixed-role row converted to free text.
 RESPONSIBILITY_ROWS = [
-    ("مدیر برنامه ریزی", "ناظر کیفی", "تهیه و بازنگری این مستند"),
-    ("کارشناس IT", "ناظر", "نگهداری و ارائه داده‌ها به کارکنان مربوط در زمان مقرر"),
-    ("حسابدار", "", ""),
-    ("", "ناظر مالی", "متن **مهم** برای آزمون شکستن خط: " + "کلمه " * 40),
+    ("IT", "هوش مصنوعی", "تهیه و بازنگری این مستند"),
+    ("فروش", "بستن معاملات", "نگهداری و ارائه داده‌ها به کارکنان مربوط در زمان مقرر"),
+    ("", "مدیریت سیستم‌ها", "متن **مهم** برای آزمون شکستن خط: " + "کلمه " * 40),
+    ("IT", "توسعه نرم افزار", ""),
+    ("", "", "الف:  سمت: مدیر مالی    ناظر: ناظر مالی\nشرح قدیمی"),
 ]
-RESPONSIBILITY_NOTES = ["یادداشت اول", "یادداشت دوم که کمی طولانی‌تر است " + "و ادامه دارد " * 12]
+
+
+def responsibility_lines(rows) -> list:
+    """The lines those rows print (adapter._responsibilities), for the oracle."""
+    lines = []
+    for domain, unit, text in rows:
+        head = "  ".join(([f"حوزه {domain}"] if domain else []) + ([f"واحد {unit}"] if unit else []))
+        text = text.strip()
+        if head and text:
+            lines.append(f"{head}  جهت {text}")
+        elif head or text:
+            lines.append(head or text)
+    return lines
+
 
 CASES = {
     # Mirrors the archived «نمونه-PR-01-01.pdf».
@@ -64,7 +80,7 @@ CASES = {
         sections=[
             ("short", ["1-هدف", "**هدف** این روش، ~~کنترل~~ --مستندات-- است.", "", "بند آخر"]),
             ("long", "2-شرح", BODY),
-            ("responsibilities", RESPONSIBILITY_ROWS, RESPONSIBILITY_NOTES),
+            ("responsibilities", RESPONSIBILITY_ROWS),
             ("changes", [(date(2025, 6, 1), "بازنگری کامل"), (date(2025, 6, 1), "افزودن ضمائم")]),
             ("attachments", [("فرم درخواست", "sample"), ("دستور کار PO", "bare")]),
         ],

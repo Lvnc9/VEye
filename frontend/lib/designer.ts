@@ -3,13 +3,12 @@
  * turning a server response into editable state, turning state back into a save
  * payload, and the local checks that mirror the server's validation.
  */
+import { emptyResponsibilityRow, fromServerRow, legacyRows, toPayloadRow } from "./responsibilities";
 import { emptyRich } from "./rich-doc";
 import {
   SINGLETON_SECTIONS,
   type ContentResponse,
   type DesignerSection,
-  type ResponsibilityRoleKey,
-  type RoleRow,
   type SectionType,
   type ServerSection,
 } from "./types";
@@ -25,16 +24,9 @@ export function newKey(): string {
 /** The longest text of one جدول تغییرات row (mirrors `_ChangeRowInput.text` in content_serializers.py). */
 export const MAX_CHANGE_TEXT = 20000;
 
-/** The four fixed rows, in V_1.0's on-screen order (utils.py:1373-1403). */
-export const ROLE_ORDER: ResponsibilityRoleKey[] = ["responder", "receiver", "cash_account", "supervisor"];
-
-export function emptyRoles(): RoleRow[] {
-  return ROLE_ORDER.map((role) => ({ role, post: "", supervisor: "", text: "" }));
-}
-
 /** A fresh block, with the starting shape V_1.0 gave each type
  *  (poster_01.py:1419-1472). Short Explanation starts with two lines and
- *  Responsibilities with its four rows; V_1.0's two hardcoded demo rows in a new
+ *  Responsibilities with one empty row (2026-09-30: the owner's redesign); V_1.0's two hardcoded demo rows in a new
  *  Changes Table (utils.py:1243-1247) are deliberately not reproduced. */
 export function newSection(type: SectionType): DesignerSection {
   const key = newKey();
@@ -44,7 +36,7 @@ export function newSection(type: SectionType): DesignerSection {
     case "Long Explanation":
       return { key, type, heading: "", body: "", extra_boxes: [], rich: emptyRich(), files: [] };
     case "Responsibilities":
-      return { key, type, roles: emptyRoles(), notes: [] };
+      return { key, type, rows: [emptyResponsibilityRow()] };
     case "Changes Table":
       return { key, type, rows: [] };
     case "Attachment":
@@ -65,6 +57,14 @@ export function withKey(section: ServerSection): DesignerSection {
   return { ...section, key: newKey() } as DesignerSection;
 }
 
+/** A Responsibilities block as the editor holds it: its rows carry the editor-only `standalone` flag, and one
+ *  empty row is offered when there are none (the block starts with a row on screen). */
+function withEditorRows(section: DesignerSection): DesignerSection {
+  if (section.type !== "Responsibilities") return section;
+  const rows = section.rows.length > 0 ? section.rows.map(fromServerRow) : [emptyResponsibilityRow()];
+  return { ...section, rows };
+}
+
 /**
  * Editable state from a server response. After a *save*, pass the sections that
  * were just sent as `previous`: the response lists them in the same order, so
@@ -81,7 +81,7 @@ export function fromResponse(response: ContentResponse, previous?: DesignerSecti
     showCompanyName: response.show_company_name ?? false,
     sections: response.sections.map((section, i) =>
       reuse ? ({ ...section, key: previous[i].key } as DesignerSection) : withKey(section),
-    ),
+    ).map(withEditorRows),
   };
 }
 
@@ -117,7 +117,7 @@ export function toPayload(state: DesignerState): SavePayload {
             file_ids: section.files.map((file) => file.id),
           };
         case "Responsibilities":
-          return { id, type: section.type, roles: section.roles, notes: section.notes };
+          return { id, type: section.type, rows: section.rows.map(toPayloadRow) };
         case "Changes Table":
           // The date is the server's; only the id and text travel.
           return { id, type: section.type, rows: section.rows.map(({ id: rowId, text }) => ({ id: rowId ?? null, text })) };
@@ -146,7 +146,17 @@ export function snapshot(state: DesignerState): string {
 /** The same state with fresh React keys — for work restored from this browser's
  *  storage after a reload, when the key counter has started again. */
 export function rekey(state: DesignerState): DesignerState {
-  return { ...state, sections: state.sections.map((section) => ({ ...section, key: newKey() })) };
+  return {
+    ...state,
+    sections: state.sections.map((section) => {
+      const fresh = { ...section, key: newKey() } as DesignerSection;
+      if (fresh.type !== "Responsibilities" || Array.isArray(fresh.rows)) return fresh;
+      // Saved in this browser before the redesign: four fixed roles and notes become free-text rows.
+      const old = fresh as unknown as { roles?: Parameters<typeof legacyRows>[0]; notes?: string[] };
+      const rows = legacyRows(old.roles, old.notes);
+      return { ...fresh, rows: rows.length > 0 ? rows : [emptyResponsibilityRow()] };
+    }),
+  };
 }
 
 /** Moves a block one place up (-1) or down (+1); a no-op at either end. */
@@ -173,6 +183,12 @@ export function validate(state: DesignerState): string[] {
       section.items.forEach((item, i) => {
         if (!item.caption.trim()) problems.push(`${where}: عنوان ضمیمه ${i + 1} را بنویسید.`);
         if (!item.document) problems.push(`${where}: برای ضمیمه ${i + 1} یک مستند انتخاب کنید.`);
+      });
+    }
+    if (section.type === "Responsibilities") {
+      section.rows.forEach((row, i) => {
+        if (row.domain !== null && row.unit === null && row.unit_name === "")
+          problems.push(`${where}: برای ردیف ${i + 1} یک واحد انتخاب کنید.`);
       });
     }
     if (section.type === "Changes Table") {
