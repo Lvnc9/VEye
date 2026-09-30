@@ -83,7 +83,7 @@ class LoginView(APIView):
         refresh = RefreshToken.for_user(user)
         access = refresh.access_token
 
-        response = Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+        response = Response(session_user_data(user), status=status.HTTP_200_OK)
         set_jwt_cookies(response, str(access), str(refresh))
         # Forces CsrfViewMiddleware to emit a fresh, readable csrftoken cookie
         # on this response (skeleton.md §4).
@@ -157,6 +157,19 @@ class LogoutView(APIView):
         return response
 
 
+def session_user_data(user) -> dict:
+    """The signed-in user as the app shell reads it: the serializer's fields, with `capabilities` including
+    what the org chart grants for documents (a مسئول may write; a مسئول of a واحد or حوزه may also confirm;
+    only the مدیر عامل approves — documents/authority.py). The personnel directory keeps the plain
+    roll-based list: computing a lead query for every row of a directory would be wasteful, and it
+    describes the سمت, not the person's place in the chart."""
+    from apps.documents.authority import effective_capabilities  # not at import time: accounts is imported first
+
+    data = UserSerializer(user).data
+    data["capabilities"] = sorted(effective_capabilities(user))
+    return data
+
+
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -164,7 +177,7 @@ class MeView(APIView):
         # Imported here so accounts never depends on the org app at import time.
         from apps.organization.me import org_context
 
-        return Response({**UserSerializer(request.user).data, **org_context(request.user, request)})
+        return Response({**session_user_data(request.user), **org_context(request.user, request)})
 
 
 class PersonnelViewSet(viewsets.ModelViewSet):

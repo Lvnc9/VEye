@@ -27,7 +27,7 @@ class DocumentSerializer(serializers.ModelSerializer):
 
     action = serializers.CharField(read_only=True)
     can_revise = serializers.SerializerMethodField()
-    can_edit = serializers.BooleanField(source="is_editable", read_only=True)
+    can_edit = serializers.SerializerMethodField()
     responsible_units = serializers.SerializerMethodField()
     owner_node = serializers.SerializerMethodField()
     signoffs = serializers.SerializerMethodField()
@@ -85,20 +85,30 @@ class DocumentSerializer(serializers.ModelSerializer):
 
     def get_workflow(self, obj: Document) -> dict:
         """What the signed-in user can do with this document *now* (Phase 5):
-        `step` is what its status awaits (submit / confirm / approve / null),
-        `can_act` / `can_return` say whether this user may, and `blocked` is a
-        Persian reason when they hold the capability but signed an earlier step
-        of the same document. Computed from the prefetched sign-offs — no query
-        per row."""
+        `step` is what its status awaits (submit / confirm / approve / null) and
+        `can_act` / `can_return` say whether this user may — the org chart's answer
+        for this document (authority.py; Phase 14). One lead query per request, then
+        path arithmetic: no query per row."""
         request = self.context.get("request")
-        return workflow.next_step_for(obj, getattr(request, "user", None))
+        user = getattr(request, "user", None)
+        return workflow.next_step_for(obj, user, authority.for_request(request) if request is not None else None)
+
+    def get_can_edit(self, obj: Document) -> bool:
+        """The body can change (a draft) *and* this person may write it (their owner-node authority)."""
+        request = self.context.get("request")
+        if not obj.is_editable or request is None:
+            return obj.is_editable
+        return authority.for_request(request).can_author(obj)
 
     def get_can_revise(self, obj: Document) -> bool:
         # The list view annotates has_next_revision to avoid a query per row.
         has_next = getattr(obj, "has_next_revision", None)
         if has_next is None:
             has_next = hasattr(obj, "next_revision")
-        return obj.is_finalized and not has_next
+        can = obj.is_finalized and not has_next
+        request = self.context.get("request")
+        # Revising starts a draft of the same document: the same authority as writing it.
+        return can and (request is None or authority.for_request(request).can_author(obj))
 
     def get_responsible_units(self, obj: Document):
         return obj.responsible_units()
@@ -163,9 +173,17 @@ class DocumentCreateSerializer(serializers.Serializer):
         },
     )
 
-    #: The org-chart node the document belongs to (Phase 14). Optional for now: someone who leads
-    #: nothing has no node to pick.
-    owner_node = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    #: The org-chart node the document belongs to (Phase 14): required — it decides who may write,
+    #: confirm and approve it — and one the caller may pick (a node they lead, or below one).
+    owner_node = serializers.IntegerField(
+        min_value=1,
+        error_messages={
+            "required": "گرهٔ مالک را انتخاب کنید.",
+            "null": "گرهٔ مالک را انتخاب کنید.",
+            "invalid": "گرهٔ مالک را انتخاب کنید.",
+            "min_value": "گرهٔ مالک را انتخاب کنید.",
+        },
+    )
 
     def validate_title(self, value: str) -> str:
         value = normalize_title(value)
@@ -174,8 +192,6 @@ class DocumentCreateSerializer(serializers.Serializer):
         return value
 
     def validate_owner_node(self, value):
-        if value is None:
-            return None
         node = authority.eligible_owner_nodes(self.context["request"].user).filter(pk=value).first()
         if node is None:
             raise serializers.ValidationError("گرهٔ انتخاب‌شده معتبر نیست یا شما مسئول آن نیستید.")

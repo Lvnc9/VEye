@@ -12,7 +12,6 @@ const flow = (over: Partial<WorkflowState>): WorkflowState => ({
   step: "confirm",
   can_act: true,
   can_return: true,
-  blocked: null,
   ...over,
 });
 
@@ -37,11 +36,11 @@ describe("workflowControls", () => {
     expect(workflowControls(flow({ can_act: false, can_return: false })).primary).toBeNull();
   });
 
-  it("shows a disabled button carrying the reason to a barred earlier signer, and no مرجوع", () => {
-    const reason = "شما تدوین‌کننده این مستند هستید و نمی‌توانید آن را تایید کنید.";
-    expect(workflowControls(flow({ can_act: false, can_return: false, blocked: reason }))).toEqual({
-      primary: { step: "confirm", label: "تایید", disabled: true, title: reason },
-      canReturn: false,
+  it("shows the same person their own step however many steps they already took (no «blocked» state)", () => {
+    expect(workflowControls(flow({ step: "confirm", can_act: true, can_return: true })).primary).toEqual({
+      step: "confirm",
+      label: "تایید",
+      disabled: false,
     });
   });
 });

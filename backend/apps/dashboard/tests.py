@@ -11,6 +11,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import AccessLevel, AccessRoll, User
 from apps.core.constants import DocumentCategory, DocumentGroup, DocumentStatus, SignOffRole
+from apps.documents import test_support
 from apps.documents.models import Document, SignOff
 
 LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "veye-dashboard-tests"}}
@@ -23,19 +24,26 @@ def user(code, roll, level=AccessLevel.LEVEL_2, **kw):
 
 @override_settings(CACHES=LOCMEM)
 class AwaitingCardTests(TestCase):
+    """Who is waited for is the org chart's answer (documents/authority.py, Phase 14): the مسئول of a document's
+    owner node writes it, the مسئول of a واحد / حوزه above it confirms, the مدیر عامل approves."""
+
     def setUp(self):
         cache.clear()
+        self.org = test_support.ensure_org()
         self.author = user("8400000001", AccessRoll.GUILD)
+        test_support.lead_of(self.author, self.org.rag)
         self.other_author = user("8400000002", AccessRoll.GUILD)
+        test_support.lead_of(self.other_author, self.org.llm)
         self.confirmer = user("8400000003", AccessRoll.HEADQUARTERS)
-        self.approver = user("8400000004", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)  # رئیس هیئت مدیره: approver-only (the مدیر عامل, لول ۱, can do everything)
+        test_support.lead_of(self.confirmer, self.org.ai)
+        self.approver = user("8400000004", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)  # the مدیر عامل
         self.n = 0
 
-    def doc(self, status, by=None, saved=True, signers=()):
+    def doc(self, status, by=None, saved=True, signers=(), node=None):
         self.n += 1
         d = Document.objects.create(
             category=DocumentCategory.INSIDE, title=f"سند {self.n}", group=DocumentGroup.PROCEDURE, number=self.n,
-            revision=1, status=status, created_by=by or self.author,
+            revision=1, status=status, created_by=by or self.author, owner_node=node or self.org.rag,
             content_saved_at=timezone.now() if saved else None)
         for role, person in signers:
             SignOff.objects.create(document=d, role=role, name=person.full_name, position="س", signed_by=person)
@@ -49,35 +57,43 @@ class AwaitingCardTests(TestCase):
     def test_requires_authentication(self):
         self.assertEqual(APIClient().get(reverse("dashboard-awaiting")).status_code, 401)
 
-    def test_an_author_sees_only_their_own_drafts_that_have_a_saved_body(self):
+    def test_an_author_sees_only_their_own_drafts_in_their_scope_that_have_a_saved_body(self):
         mine = self.doc(DocumentStatus.DRAFT)
         self.doc(DocumentStatus.DRAFT, by=self.other_author)      # someone else's draft
         self.doc(DocumentStatus.DRAFT, saved=False)               # nothing to submit yet
-        self.doc(DocumentStatus.AWAITING_CONFIRMATION)            # not their step (no confirm capability)
+        self.doc(DocumentStatus.DRAFT, node=self.org.llm)         # mine, but in a بخش I do not lead
+        self.doc(DocumentStatus.AWAITING_CONFIRMATION)            # not their step (a بخش's lead does not confirm)
         data = self.card(self.author).data
         self.assertEqual([i["id"] for i in data["items"]], [mine.pk])
         self.assertEqual((data["count"], data["by_step"]), (1, {"submit": 1, "confirm": 0, "approve": 0}))
         self.assertEqual((data["items"][0]["step"], data["items"][0]["step_label"]), ("submit", "ارسال برای تایید"))
 
-    def test_a_confirmer_sees_documents_awaiting_confirmation_except_their_own(self):
+    def test_a_confirmer_sees_what_awaits_confirmation_under_their_unit_including_their_own(self):
         theirs = self.doc(DocumentStatus.AWAITING_CONFIRMATION, signers=[(SignOffRole.CREATER, self.author)])
-        own = self.doc(DocumentStatus.AWAITING_CONFIRMATION, by=self.confirmer,
-                       signers=[(SignOffRole.CREATER, self.confirmer)])  # they authored it: barred from confirming
+        own = self.doc(DocumentStatus.AWAITING_CONFIRMATION, by=self.confirmer, node=self.org.ai,
+                       signers=[(SignOffRole.CREATER, self.confirmer)])  # they may write and confirm the same document
+        self.doc(DocumentStatus.AWAITING_CONFIRMATION, node=self.org.deals)  # another واحد's
         self.doc(DocumentStatus.AWAITING_APPROVAL)                       # not their step
-        ids = [i["id"] for i in self.card(self.confirmer).data["items"]]
-        self.assertEqual(ids, [theirs.pk])
-        self.assertNotIn(own.pk, ids)
+        ids = sorted(i["id"] for i in self.card(self.confirmer).data["items"])
+        self.assertEqual(ids, sorted([theirs.pk, own.pk]))
 
-    def test_an_approver_sees_documents_awaiting_approval_but_not_ones_they_signed_earlier(self):
+    def test_the_managing_director_sees_everything_awaiting_approval(self):
         ready = self.doc(DocumentStatus.AWAITING_APPROVAL,
                          signers=[(SignOffRole.CREATER, self.author), (SignOffRole.CONFIRMER, self.confirmer)])
-        root = User.objects.create_superuser(national_code="8400000099", password="pw-for-tests-123", full_name="ریشه")
-        barred = self.doc(DocumentStatus.AWAITING_APPROVAL,
-                          signers=[(SignOffRole.CREATER, root), (SignOffRole.CONFIRMER, self.confirmer)])
-        # The approver took no earlier step on either document, so both are theirs to approve…
-        self.assertEqual(sorted(i["id"] for i in self.card(self.approver).data["items"]), [ready.pk, barred.pk])
-        # …while the superuser (who holds every capability) is barred from the one they authored.
-        self.assertEqual([i["id"] for i in self.card(root).data["items"]], [ready.pk])
+        elsewhere = self.doc(DocumentStatus.AWAITING_APPROVAL, node=self.org.deals)
+        self.doc(DocumentStatus.AWAITING_CONFIRMATION)  # he may confirm too: it is listed as a confirm step
+        data = self.card(self.approver).data
+        self.assertEqual(sorted(i["id"] for i in data["items"] if i["step"] == "approve"), [ready.pk, elsewhere.pk])
+        self.assertEqual(data["by_step"]["approve"], 2)
+
+    def test_the_board_and_people_without_a_place_are_waited_for_by_nothing(self):
+        chair = user("8400000006", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)
+        member = user("8400000007", AccessRoll.GUILD)
+        test_support.member_of(member, self.org.rag)
+        for status in (DocumentStatus.DRAFT, DocumentStatus.AWAITING_CONFIRMATION, DocumentStatus.AWAITING_APPROVAL):
+            self.doc(status)
+        for who in (chair, member):
+            self.assertEqual(self.card(who).data["count"], 0)
 
     def test_finished_and_obsolete_documents_are_never_listed(self):
         for status in (DocumentStatus.UNDER_CONTROL, DocumentStatus.OBSOLETE):
@@ -88,7 +104,7 @@ class AwaitingCardTests(TestCase):
     def test_the_card_agrees_with_the_registers_buttons(self):
         # Same verdict as row.workflow.can_act — one source of truth.
         self.doc(DocumentStatus.AWAITING_CONFIRMATION, signers=[(SignOffRole.CREATER, self.author)])
-        self.doc(DocumentStatus.AWAITING_CONFIRMATION, by=self.confirmer, signers=[(SignOffRole.CREATER, self.confirmer)])
+        self.doc(DocumentStatus.AWAITING_CONFIRMATION, by=self.confirmer, node=self.org.deals)
         client = APIClient()
         client.force_authenticate(self.confirmer)
         register = client.get(reverse("document-list")).data["results"]
@@ -105,15 +121,15 @@ class AwaitingCardTests(TestCase):
         self.assertEqual([i["id"] for i in data["items"]], [d.pk for d in docs[:3]])
         self.assertEqual(data["count"], 5)
 
-    def test_costs_two_queries_however_many_documents(self):
+    def test_costs_three_queries_however_many_documents(self):
         for _ in range(12):
             self.doc(DocumentStatus.AWAITING_CONFIRMATION, signers=[(SignOffRole.CREATER, self.author)])
         client = APIClient()
         client.force_authenticate(self.confirmer)
-        with self.assertNumQueries(2):  # documents + their sign-offs
+        with self.assertNumQueries(3):  # the person's lead nodes + documents (owner node joined) + their sign-offs
             client.get(reverse("dashboard-awaiting"))
 
-    def test_a_user_with_no_capabilities_gets_an_empty_card(self):
+    def test_a_user_with_no_chart_authority_gets_an_empty_card(self):
         nobody = user("8400000005", "NONE")
         self.doc(DocumentStatus.AWAITING_CONFIRMATION)
         self.assertEqual(self.card(nobody).data, {"count": 0, "by_step": {"submit": 0, "confirm": 0, "approve": 0}, "items": []})
@@ -178,11 +194,12 @@ class InboxBadgeTests(TestCase):
         self.assertEqual(self.inbox(self.w.ceo).data["unread_messages"], 0)  # not in the ceo's DMs; S1 not opened
 
     def test_awaiting_documents_is_the_same_number_as_the_card(self):
-        confirmer = user("8400000013", AccessRoll.HEADQUARTERS)
+        confirmer = self.w.u1lead  # leads the واحد above the بخش that owns the document
         author = user("8400000014", AccessRoll.GUILD)
         doc = Document.objects.create(
             category=DocumentCategory.INSIDE, title="سند", group=DocumentGroup.PROCEDURE, number=1, revision=1,
             status=DocumentStatus.AWAITING_CONFIRMATION, created_by=author, content_saved_at=timezone.now(),
+            owner_node=self.w.s1,
         )
         SignOff.objects.create(document=doc, role=SignOffRole.CREATER, name=author.full_name, position="س", signed_by=author)
         client = APIClient()

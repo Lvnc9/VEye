@@ -1633,8 +1633,10 @@ class LeadApiTests(MembershipAssertions, ApiTestCase):
 
 
 class DocumentAxisTests(SampleTree, TestCase):
-    """docs/11 §5.2: the org-position axis may only widen access to the org surfaces. It may
-    never grant, withhold or modify a document capability."""
+    """`User.capabilities` is a pure function of roll × level — it never reads a placement (docs/02). Since
+    Phase 14 the chart grants document steps through `documents/authority.py` (see
+    `DocumentAuthorityFollowsLeadershipTests`), and `/auth/me/` adds the derived flags; the property itself
+    stays independent of memberships."""
 
     SCENARIOS = ("no membership", "member of a بخش", "lead of a بخش", "lead of the company", "lead of everything")
 
@@ -1694,31 +1696,64 @@ class DocumentAxisTests(SampleTree, TestCase):
         self.assertNotIn("membership", inspect.getsource(User.capabilities.fget).lower())
 
 
-class DocumentWorkflowUnaffectedByLeadershipTests(ApiTestCase):
-    """The same rule through the real workflow endpoints."""
+class DocumentAuthorityFollowsLeadershipTests(ApiTestCase):
+    """Phase 14 (owner's decision 2026-09-30), through the real endpoints: who leads a node decides who
+    writes and confirms the documents that belong to it or lie below it; only the مدیر عامل approves."""
 
-    def test_a_lead_of_the_whole_company_still_cannot_confirm_or_approve(self):
+    def create(self, user, node):
+        self.as_(user)
+        return self.client.post(
+            reverse("document-list"),
+            {"category": "INSIDE", "title": f"سند {node.name}", "group": "FORM", "owner_node": node.pk},
+            format="json",
+        )
+
+    def test_a_lead_of_the_whole_company_writes_and_confirms_but_does_not_approve(self):
         from apps.documents import services as document_services
 
         self.build()
-        lead = person("9360000001")  # صفی
-        for node in OrgNode.objects.all():
-            join(lead, node, is_lead=True)
-        doc = document_services.create_document(user=lead, category="INSIDE", title="سند مسئول", group="FORM")
-        self.as_(lead)
-        for verb in ("confirm", "approve"):
-            response = self.client.post(reverse(f"document-{verb}", args=[doc.pk]), {}, format="multipart")
-            self.assertEqual(response.status_code, 403, verb)
-
-    def test_and_a_lead_keeps_exactly_the_document_abilities_their_roll_gives(self):
-        self.build()
-        lead = person("9360000002")  # صفی: may author, may not confirm
+        lead = person("9360000001")  # صفی by roll: the roll no longer matters
         join(lead, self.root, is_lead=True)
-        self.as_(lead)
-        created = self.client.post(
-            reverse("document-list"), {"category": "INSIDE", "title": "سند تازه", "group": "FORM"}, format="json"
+        doc = document_services.create_document(
+            user=lead, category="INSIDE", title="سند مسئول", group="FORM", owner_node=self.s1
         )
+        self.as_(lead)
+        # Authority is checked before the status: a DRAFT is a 409 for someone who may confirm, a 403 for one who may not.
+        confirm = self.client.post(reverse("document-confirm", args=[doc.pk]), {}, format="multipart")
+        self.assertEqual(confirm.status_code, 409, "the lead of the company may confirm (wrong status, not refused)")
+        approve = self.client.post(reverse("document-approve", args=[doc.pk]), {}, format="multipart")
+        self.assertEqual(approve.status_code, 403, "only the مدیر عامل approves")
+
+    def test_a_lead_may_create_a_document_only_at_or_below_their_node(self):
+        self.build()
+        lead = person("9360000002")
+        join(lead, self.s1, is_lead=True)
+        created = self.create(lead, self.s1)
         self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(created.data["owner_node"]["id"], self.s1.pk)
+        self.assertEqual(self.create(lead, self.u1).status_code, 400, "the واحد above their بخش is not theirs")
+        self.assertEqual(self.create(lead, self.u2).status_code, 400, "nor is another واحد")
+
+    def test_a_plain_member_creates_nothing(self):
+        self.build()
+        member = person("9360000003")
+        join(member, self.s1)
+        self.assertEqual(self.create(member, self.s1).status_code, 403)
+
+    def test_me_carries_what_the_chart_grants(self):
+        self.build()
+        section_lead, unit_lead, member = person("9360000004"), person("9360000005"), person("9360000006")
+        join(section_lead, self.s1, is_lead=True)
+        join(unit_lead, self.u1, is_lead=True)
+        join(member, self.s1)
+        expected = {
+            section_lead: {Capability.CREATE_DOCUMENT, Capability.PRINT_DOCUMENT},
+            unit_lead: {Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT, Capability.PRINT_DOCUMENT},
+            member: {Capability.PRINT_DOCUMENT},
+        }
+        for user, capabilities in expected.items():
+            held = self.as_(user).get(reverse("auth-me")).data["capabilities"]
+            self.assertEqual(set(held) & {Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT, Capability.APPROVE_DOCUMENT, Capability.PRINT_DOCUMENT}, capabilities, user.national_code)
 
 
 class MeContextTests(ApiTestCase):
@@ -1759,5 +1794,5 @@ class MeContextTests(ApiTestCase):
         for node in (self.u1, self.u2, self.u3, self.s1):
             join(self.guild, node)
         self.as_(self.guild)
-        with self.assertNumQueries(2):  # the company, the memberships (the user comes from the session)
+        with self.assertNumQueries(3):  # the company, the memberships, the lead nodes (the user comes from the session)
             self.client.get(reverse("auth-me"))

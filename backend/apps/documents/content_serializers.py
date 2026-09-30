@@ -15,7 +15,7 @@ from apps.core.constants import (
 )
 
 from . import form_schema, rich_content
-from . import responsibility_nodes
+from . import authority, responsibility_nodes
 from .serializers import DocumentDetailSerializer
 
 MAX_SECTIONS = 100
@@ -367,6 +367,8 @@ def content_payload(document, request) -> dict:
         "document": DocumentDetailSerializer(document, context={"request": request}).data,
         "version": document.content_version,
         "editable": document.is_editable,
+        # …and this person may write it (their authority over its owner node, authority.py).
+        "can_edit": document.is_editable and authority.for_request(request).can_author(document),
         "logo_url": logo_url,
         "footnote1": document.footnote1,
         "footnote2": document.footnote2,

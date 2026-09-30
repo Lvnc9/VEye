@@ -29,7 +29,7 @@ from apps.core.exceptions import ConflictError
 from apps.dashboard.views import METRICS_CACHE_KEY
 from apps.pdfgen.models import PdfBuild, PdfKind, PdfStatus
 
-from . import services, workflow
+from . import services, test_support, workflow
 from .models import Document, DocumentEvent, SignOff
 
 MEDIA = tempfile.mkdtemp(prefix="veye-workflow-media-")
@@ -62,8 +62,11 @@ def make_user(code, roll, level=AccessLevel.LEVEL_2, **extra):
     )
 
 
-def make_doc(author, title="سند گردش", group=DocumentGroup.PROCEDURE, saved=True, **extra) -> Document:
-    doc = services.create_document(user=author, category=DocumentCategory.INSIDE, title=title, group=group)
+def make_doc(author, title="سند گردش", group=DocumentGroup.PROCEDURE, saved=True, owner_node=None, **extra) -> Document:
+    doc = services.create_document(
+        user=author, category=DocumentCategory.INSIDE, title=title, group=group,
+        owner_node=owner_node or test_support.ensure_org().rag,
+    )
     if saved:
         Document.objects.filter(pk=doc.pk).update(content_saved_at=timezone.now())
         doc.refresh_from_db()
@@ -77,10 +80,16 @@ def make_doc(author, title="سند گردش", group=DocumentGroup.PROCEDURE, sav
 class WorkflowBase(TestCase):
     def setUp(self):
         cache.clear()
+        # The chart decides (Phase 14): the document belongs to the بخش «RAG»; its مسئول writes it, the مسئول of
+        # the واحد above (هوش مصنوعی) confirms it, the مدیر عامل approves.
+        self.org = test_support.ensure_org()
         self.author = make_user("8000000001", AccessRoll.GUILD)
+        test_support.lead_of(self.author, self.org.rag)
         self.confirmer = make_user("8000000002", AccessRoll.HEADQUARTERS)
+        test_support.lead_of(self.confirmer, self.org.ai)
         self.confirmer2 = make_user("8000000003", AccessRoll.HEADQUARTERS, AccessLevel.LEVEL_1)
-        self.approver = make_user("8000000004", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)  # رئیس هیئت مدیره: approver-only (the مدیر عامل, لول ۱, can do everything)
+        test_support.lead_of(self.confirmer2, self.org.ai)
+        self.approver = make_user("8000000004", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)  # the مدیر عامل
         self.doc = make_doc(self.author)
 
     def as_user(self, user):
@@ -183,12 +192,31 @@ class GuardTests(WorkflowBase):
         self.assertEqual(Document.objects.get(pk=empty.pk).status, DocumentStatus.DRAFT)
         self.assertFalse(SignOff.objects.filter(document=empty).exists())
 
-    def test_each_step_needs_its_capability(self):
-        self.assertEqual(self.act(self.confirmer, "submit").status_code, 200)  # ستادی may author
-        self.assertEqual(self.act(self.author, "confirm").status_code, 403)  # صفی may not confirm
-        self.assertEqual(self.act(self.approver, "confirm").status_code, 403)  # کارفرمایی may not confirm
-        self.assertEqual(self.act(self.confirmer2, "approve").status_code, 403)  # ستادی may not approve
-        self.assertEqual(self.act(self.approver, "submit", make_doc(self.author, title="دیگر")).status_code, 403)
+    def test_each_step_follows_the_chart(self):
+        outsider = make_user("8000000020", AccessRoll.GUILD)  # placed nowhere
+        elsewhere = make_user("8000000021", AccessRoll.GUILD)
+        test_support.lead_of(elsewhere, self.org.llm)  # leads another بخش
+        self.assertEqual(self.act(self.author, "submit").status_code, 200)  # the مسئول of RAG writes its document
+        self.assertEqual(self.act(self.author, "confirm").status_code, 403)  # …but a بخش's lead never confirms
+        self.assertEqual(self.act(self.confirmer, "approve").status_code, 403)  # the واحد's lead does not approve
+        self.assertEqual(self.act(elsewhere, "confirm").status_code, 403)
+        for user in (outsider, elsewhere):
+            other = make_doc(self.author, title=f"دیگر {user.pk}")
+            self.assertEqual(self.act(user, "submit", other).status_code, 403, user.national_code)
+
+    def test_a_roll_no_longer_grants_a_step(self):
+        # A ستادی who leads nothing, and a board member: neither writes nor confirms (only the chart decides).
+        staff = make_user("8000000022", AccessRoll.HEADQUARTERS, AccessLevel.LEVEL_1)
+        chair = make_user("8000000023", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)
+        self.assertEqual(self.act(staff, "submit").status_code, 403)
+        self.assertEqual(self.act(chair, "submit").status_code, 403)
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.act(self.author, "submit")
+        self.assertEqual(self.act(staff, "confirm").status_code, 403)
+        self.assertEqual(self.act(chair, "confirm").status_code, 403)
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.act(self.confirmer, "confirm")
+        self.assertEqual(self.act(chair, "approve").status_code, 403, "the board does not approve: only the مدیر عامل")
 
     def test_anonymous_callers_are_refused(self):
         for verb in ("submit", "confirm", "approve", "return-to-draft", "history"):
@@ -196,23 +224,29 @@ class GuardTests(WorkflowBase):
             method = client.get if verb == "history" else client.post
             self.assertEqual(method(reverse(f"document-{verb}", args=[self.doc.pk])).status_code, 401, verb)
 
-    def test_the_same_person_cannot_take_two_steps(self):
-        root = User.objects.create_superuser(national_code="8000000099", password="pw-for-tests-123", full_name="ریشه")
-        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
-            self.assertEqual(self.act(root, "submit").status_code, 200)
-            response = self.act(root, "confirm")
-            self.assertEqual((response.status_code, response.data["code"]), (409, "same_person"))
-            self.assertIn("تدوین‌کننده", response.data["detail"])
-            self.assertEqual(self.act(self.confirmer, "confirm").status_code, 200)
-            self.assertEqual(self.act(root, "approve").data["code"], "same_person")  # authored it
-            self.assertEqual(self.act(self.approver, "approve").status_code, 200)
+    def test_the_same_person_may_write_and_confirm(self):
+        """Owner's decision 2026-09-30: «one person per step» is retired — a مسئول who writes a document
+        of their own واحد may also confirm it."""
+        mine = make_doc(self.confirmer, title="سند واحد", owner_node=self.org.ai)
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"), self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.act(self.confirmer, "submit", mine).status_code, 200)
+            self.assertEqual(self.act(self.confirmer, "confirm", mine).status_code, 200)
+            self.assertEqual(self.act(self.approver, "approve", mine).status_code, 200)
+        self.assertEqual(Document.objects.get(pk=mine.pk).status, DocumentStatus.UNDER_CONTROL)
+        signers = set(SignOff.objects.filter(document=mine).values_list("signed_by_id", flat=True))
+        self.assertEqual(signers, {self.confirmer.pk, self.approver.pk})
 
-    def test_the_confirmer_cannot_also_approve(self):
-        root = User.objects.create_superuser(national_code="8000000098", password="pw-for-tests-123", full_name="ریشه")
+    def test_only_the_managing_director_approves(self):
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
             self.act(self.author, "submit")
-            self.assertEqual(self.act(root, "confirm").status_code, 200)
-            self.assertEqual(self.act(root, "approve").data["code"], "same_person")
+            self.assertEqual(self.act(self.confirmer, "confirm").status_code, 200)
+        self.assertEqual(self.act(self.confirmer, "approve").status_code, 403)
+        self.assertEqual(self.act(self.confirmer2, "approve").status_code, 403)
+        domain_lead = make_user("8000000024", AccessRoll.HEADQUARTERS)
+        test_support.lead_of(domain_lead, self.org.it)
+        self.assertEqual(self.act(domain_lead, "approve").status_code, 403)
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.assertEqual(self.act(self.approver, "approve").status_code, 200)
 
     def test_a_failed_step_leaves_nothing_behind(self):
         self.assertEqual(self.act(self.author, "submit").status_code, 200)
@@ -314,10 +348,12 @@ class ReturnTests(WorkflowBase):
     def test_only_the_reviewer_of_the_current_step_may_return(self):
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
             self.act(self.author, "submit")
-        self.assertEqual(self.act(self.author, "return", reason="x").status_code, 403)     # no confirm capability
-        self.assertEqual(self.act(self.approver, "return", reason="x").status_code, 403)   # approver: wrong step
+        chair = make_user("8000000025", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)  # a board member: no chart authority
+        self.assertEqual(self.act(self.author, "return", reason="x").status_code, 403)     # a بخش's lead does not confirm
+        self.assertEqual(self.act(chair, "return", reason="x").status_code, 403)           # no authority at all
         self.submit_and_confirm_more()
-        self.assertEqual(self.act(self.confirmer2, "return", reason="x").status_code, 403)  # confirmer: wrong step
+        self.assertEqual(self.act(self.confirmer2, "return", reason="x").status_code, 403)  # a confirmer: wrong step
+        self.assertEqual(self.act(chair, "return", reason="x").status_code, 403)
 
     def submit_and_confirm_more(self):
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
@@ -329,12 +365,14 @@ class ReturnTests(WorkflowBase):
         response = self.act(self.approver, "return", doc=done, reason="x")
         self.assertEqual((response.status_code, response.data["code"]), (409, "wrong_status"))
 
-    def test_the_author_cannot_return_their_own_document(self):
-        root = User.objects.create_superuser(national_code="8000000097", password="pw-for-tests-123", full_name="ریشه")
+    def test_a_unit_lead_may_return_what_they_wrote_themselves(self):
+        mine = make_doc(self.confirmer, title="سند واحد", owner_node=self.org.ai)
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
-            self.act(root, "submit")
-        response = self.act(root, "return", reason="x")
-        self.assertEqual((response.status_code, response.data["code"]), (409, "same_person"))
+            self.act(self.confirmer, "submit", mine)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.act(self.confirmer, "return", mine, reason="بازنگری")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["status"], DocumentStatus.DRAFT)
 
     def test_after_a_return_the_body_is_editable_again_and_the_chain_can_restart(self):
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
@@ -443,28 +481,41 @@ class RegisterWorkflowFlagsTests(WorkflowBase):
         rows = self.as_user(user).get(reverse("document-list")).data["results"]
         return {r["id"]: r["workflow"] for r in rows}[(doc or self.doc).pk]
 
-    def test_flags_follow_status_capability_and_person(self):
-        self.assertEqual(self.flags(self.author), {"step": "submit", "can_act": True, "can_return": False, "blocked": None})
-        self.assertFalse(self.flags(self.approver)["can_act"])  # no authoring capability
+    def test_flags_follow_status_and_the_chart(self):
+        chair = make_user("8000000026", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)
+        self.assertEqual(self.flags(self.author), {"step": "submit", "can_act": True, "can_return": False})
+        self.assertFalse(self.flags(chair)["can_act"])  # leads nothing
 
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
             self.act(self.author, "submit")
-        self.assertEqual(self.flags(self.confirmer), {"step": "confirm", "can_act": True, "can_return": True, "blocked": None})
-        self.assertFalse(self.flags(self.author)["can_act"])   # no confirm capability
-        self.assertFalse(self.flags(self.approver)["can_act"])  # not their step
+        self.assertEqual(self.flags(self.confirmer), {"step": "confirm", "can_act": True, "can_return": True})
+        self.assertFalse(self.flags(self.author)["can_act"])   # a بخش's lead does not confirm
+        self.assertFalse(self.flags(chair)["can_act"])
+        self.assertTrue(self.flags(self.approver)["can_act"])  # the مدیر عامل may take any step
 
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
             self.act(self.confirmer, "confirm")
         self.assertTrue(self.flags(self.approver)["can_act"])
-        self.assertFalse(self.flags(self.confirmer)["can_act"])
+        self.assertFalse(self.flags(self.confirmer)["can_act"])  # only the مدیر عامل approves
 
-    def test_a_barred_previous_signer_gets_a_reason_not_a_button(self):
-        root = User.objects.create_superuser(national_code="8000000096", password="pw-for-tests-123", full_name="ریشه")
-        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
-            self.act(root, "submit")
-        flags = self.flags(root)
-        self.assertEqual((flags["step"], flags["can_act"], flags["can_return"]), ("confirm", False, False))
-        self.assertIn("تدوین‌کننده", flags["blocked"])
+    def test_a_lead_elsewhere_gets_no_button_on_this_document(self):
+        elsewhere = make_user("8000000027", AccessRoll.GUILD)
+        test_support.lead_of(elsewhere, self.org.llm)
+        self.assertFalse(self.flags(elsewhere)["can_act"])
+        self.assertFalse(self.flags(elsewhere)["can_return"])
+
+    def test_the_register_says_who_may_edit_and_revise(self):
+        elsewhere = make_user("8000000028", AccessRoll.GUILD)
+        test_support.lead_of(elsewhere, self.org.llm)
+
+        def row(user):
+            rows = self.as_user(user).get(reverse("document-list")).data["results"]
+            return {r["id"]: r for r in rows}[self.doc.pk]
+
+        self.assertTrue(row(self.author)["can_edit"])
+        self.assertTrue(row(self.confirmer)["can_edit"])  # the واحد's lead writes its بخش's documents too
+        self.assertTrue(row(self.approver)["can_edit"])
+        self.assertFalse(row(elsewhere)["can_edit"])
 
     def test_a_draft_without_a_saved_body_has_no_step(self):
         empty = make_doc(self.author, title="خالی", saved=False)
@@ -475,10 +526,11 @@ class RegisterWorkflowFlagsTests(WorkflowBase):
         self.assertIsNone(self.flags(self.approver, done)["step"])
 
     def test_the_list_costs_no_extra_queries(self):
-        # count + page + sign-offs + responsibility sections, exactly as before Phase 5.
+        # count + page + sign-offs + responsibility sections, and the person's lead nodes (one query, whatever the
+        # number of rows — Phase 14).
         self.run_chain()
         make_doc(self.author, title="یکی دیگر")
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(5):
             self.as_user(self.confirmer).get(reverse("document-list"))
 
     def test_next_step_for_handles_anonymous_and_missing_users(self):
@@ -490,9 +542,13 @@ class ConcurrentWorkflowTests(TransactionTestCase):
     """Two reviewers acting on one document at the same instant: one wins."""
 
     def setUp(self):
+        org = test_support.ensure_org()
         self.author = make_user("8100000001", AccessRoll.GUILD)
+        test_support.lead_of(self.author, org.rag)
         self.c1 = make_user("8100000002", AccessRoll.HEADQUARTERS)
         self.c2 = make_user("8100000003", AccessRoll.HEADQUARTERS)
+        test_support.lead_of(self.c1, org.ai)
+        test_support.lead_of(self.c2, org.ai)
         self.doc = make_doc(self.author)
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
             workflow.submit(user=self.author, document_id=self.doc.pk,
@@ -543,7 +599,7 @@ class ConcurrentWorkflowTests(TransactionTestCase):
         signoffs = SignOff.objects.filter(document=document).count()
         # Exactly two coherent worlds. The return won: back to DRAFT with no
         # signatures, and the confirm found a DRAFT. Or the confirm won: awaiting
-        # approval with two signatures, and the return then hit the approver-only rule.
+        # approval with two signatures, and the return then hit the approver-only rule (a unit's lead does not approve).
         if document.status == DocumentStatus.DRAFT:
             self.assertEqual(outcomes, ["ok", "wrong_status"])
             self.assertEqual(signoffs, 0)
@@ -642,38 +698,28 @@ class VerifyTests(TestCase):
 
 
 class ManagingDirectorTests(WorkflowBase):
-    """The مدیر عامل (کارفرمایی لول ۱) can do everything — but is still one person per document step."""
+    """The مدیر عامل (کارفرمایی لول ۱): the only approver, and he may also write and confirm anything —
+    including, since 2026-09-30, what he wrote or confirmed himself."""
 
     def setUp(self):
         super().setUp()
         self.ceo = make_user("8000000010", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
 
-    def test_can_take_every_step_on_documents_where_he_took_no_earlier_step(self):
+    def test_can_take_every_step_anywhere_even_on_his_own_document(self):
         mine = make_doc(self.ceo, title="سند مدیر عامل")
-        approved = make_doc(self.author, title="برای تصویب او")
-        confirmed = make_doc(self.author, title="برای تایید او")
+        elsewhere = make_doc(self.author, title="جای دیگر", owner_node=self.org.deals)
         with mock.patch("apps.pdfgen.services.build_pdf.delay"), self.captureOnCommitCallbacks(execute=True):
-            self.assertEqual(self.act(self.ceo, "submit", mine).status_code, 200)         # author
-            self.assertEqual(self.act(self.author, "submit", approved).status_code, 200)
-            self.assertEqual(self.act(self.confirmer, "confirm", approved).status_code, 200)
-            self.assertEqual(self.act(self.ceo, "approve", approved).status_code, 200)    # approve
-            self.assertEqual(self.act(self.author, "submit", confirmed).status_code, 200)
-            self.assertEqual(self.act(self.ceo, "confirm", confirmed).status_code, 200)   # confirm someone else's
-        self.assertEqual(Document.objects.get(pk=approved.pk).status, DocumentStatus.UNDER_CONTROL)
-        self.assertEqual(Document.objects.get(pk=confirmed.pk).status, DocumentStatus.AWAITING_APPROVAL)
-        # …but not to approve what he authored: one person per step still holds.
-        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
-            self.act(self.confirmer, "confirm", mine)
-            response = self.act(self.ceo, "approve", mine)
-        self.assertEqual((response.status_code, response.data["code"]), (409, "same_person"))
+            for verb in ("submit", "confirm", "approve"):
+                self.assertEqual(self.act(self.ceo, verb, mine).status_code, 200, verb)
+            self.assertEqual(self.act(self.ceo, "submit", elsewhere).status_code, 200)
+        self.assertEqual(Document.objects.get(pk=mine.pk).status, DocumentStatus.UNDER_CONTROL)
+        self.assertEqual({s.signed_by_id for s in SignOff.objects.filter(document=mine)}, {self.ceo.pk})
 
-    def test_a_document_he_authored_cannot_also_be_approved_by_him_if_he_confirmed_it(self):
-        doc = make_doc(self.ceo, title="یک نفر، یک مرحله")
-        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
-            self.assertEqual(self.act(self.ceo, "submit", doc).status_code, 200)
-            response = self.act(self.ceo, "confirm", doc)                    # same person, second step
-        self.assertEqual((response.status_code, response.data["code"]), (409, "same_person"))
-        self.assertEqual(self.act(self.ceo, "return", doc, reason="x").data["code"], "same_person")
+    def test_can_approve_what_others_wrote_and_confirmed(self):
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"), self.captureOnCommitCallbacks(execute=True):
+            self.act(self.author, "submit")
+            self.act(self.confirmer, "confirm")
+            self.assertEqual(self.act(self.ceo, "approve").status_code, 200)
 
     def test_can_return_a_document_at_either_review_step(self):
         doc = make_doc(self.author, title="برای مرجوع")
@@ -690,23 +736,34 @@ class ManagingDirectorTests(WorkflowBase):
     def test_the_register_offers_him_the_right_buttons(self):
         draft = make_doc(self.ceo, title="پیش‌نویس او")
         rows = {r["id"]: r["workflow"] for r in self.as_user(self.ceo).get(reverse("document-list")).data["results"]}
-        self.assertEqual(rows[draft.pk], {"step": "submit", "can_act": True, "can_return": False, "blocked": None})
+        self.assertEqual(rows[draft.pk], {"step": "submit", "can_act": True, "can_return": False})
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
             self.act(self.author, "submit", self.doc)
         rows = {r["id"]: r["workflow"] for r in self.as_user(self.ceo).get(reverse("document-list")).data["results"]}
-        self.assertEqual(rows[self.doc.pk], {"step": "confirm", "can_act": True, "can_return": True, "blocked": None})
+        self.assertEqual(rows[self.doc.pk], {"step": "confirm", "can_act": True, "can_return": True})
 
-    def test_can_manage_personnel_print_and_edit_a_body(self):
+    def test_can_manage_personnel_print_and_create_a_document_anywhere(self):
         client = self.as_user(self.ceo)
         self.assertEqual(client.get(reverse("personnel-list")).status_code, 200)
         self.assertEqual(client.post(reverse("document-list"), {
-            "category": DocumentCategory.INSIDE, "title": "ساختهٔ مدیر عامل", "group": DocumentGroup.FORM}, format="json").status_code, 201)
+            "category": DocumentCategory.INSIDE, "title": "ساختهٔ مدیر عامل", "group": DocumentGroup.FORM,
+            "owner_node": self.org.root.pk}, format="json").status_code, 201)
         self.assertIn("print_document", client.get(reverse("auth-me")).data["capabilities"])
         self.assertEqual(set(client.get(reverse("auth-me")).data["capabilities"]), set(Capability.values))
 
-    def test_a_lower_employer_position_is_unchanged(self):
-        # رئیس هیئت مدیره stays approver-only: no authoring, no confirming.
+    def test_a_document_with_no_owner_node_is_his_alone(self):
+        orphan = make_doc(self.author, title="یتیم")
+        Document.objects.filter(pk=orphan.pk).update(owner_node=None)
+        self.assertEqual(self.act(self.author, "submit", orphan).status_code, 403)
+        self.assertEqual(self.act(self.confirmer, "submit", orphan).status_code, 403)
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.assertEqual(self.act(self.ceo, "submit", orphan).status_code, 200)
+
+    def test_a_board_member_acts_on_nothing(self):
+        # رئیس هیئت مدیره (کارفرمایی لول ۲): the roll no longer approves — only the مدیر عامل does.
         chair = make_user("8000000011", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)
         self.assertEqual(self.act(chair, "submit").status_code, 403)
         self.assertEqual(self.as_user(chair).post(reverse("document-list"), {
-            "category": DocumentCategory.INSIDE, "title": "نباید", "group": DocumentGroup.FORM}, format="json").status_code, 403)
+            "category": DocumentCategory.INSIDE, "title": "نباید", "group": DocumentGroup.FORM,
+            "owner_node": self.org.root.pk}, format="json").status_code, 403)
+        self.assertNotIn("approve_document", self.as_user(chair).get(reverse("auth-me")).data["capabilities"])

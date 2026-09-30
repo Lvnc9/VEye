@@ -60,7 +60,7 @@ function modelReducer<S>(model: Model<S>, action: Action<S>): Model<S> {
 /** The load / save / preview life cycle of `/documents/{id}/content/`. */
 export function useDesignerDocument<S>(initial: ContentResponse, adapter: DesignerAdapter<S>) {
   const router = useRouter();
-  const { can, user } = useCurrentUser();
+  const { user } = useCurrentUser();
   const id = initial.document.id;
 
   const [content, setContent] = useState<ContentResponse>(initial);
@@ -108,7 +108,8 @@ export function useDesignerDocument<S>(initial: ContentResponse, adapter: Design
   }, [id, applyResponse]);
 
   const dirty = adapter.snapshot(state) !== savedSnapshot;
-  const canEdit = content.editable && can("create_document");
+  // The server decides per document: a draft, and the person leads its owner node or one above it (authority.py).
+  const canEdit = content.can_edit;
   /** Every input is disabled while this is true. */
   const locked = !canEdit || saving;
 

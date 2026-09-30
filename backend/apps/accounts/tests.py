@@ -50,52 +50,45 @@ class TitleMatrixTests(TestCase):
 
 
 class CapabilityTests(TestCase):
-    """The access policy confirmed with the product owner:
-    create -> صفی/ستادی, confirm -> ستادی, approve -> کارفرمایی.
+    """What roll × level grants (Phase 14, owner's decision 2026-09-30): **not** تدوین / تایید / تصویب — those
+    follow the org chart (documents/authority.py). The roll keeps printing, personnel, the organisation and
+    projects; only the مدیر عامل (and a superuser) holds every capability.
     """
 
-    def test_guild_can_only_create(self):
+    def test_guild_only_prints(self):
         user = User(access_roll=AccessRoll.GUILD, access_level=AccessLevel.LEVEL_2)
-        self.assertEqual(
-            user.capabilities, frozenset({Capability.CREATE_DOCUMENT, Capability.PRINT_DOCUMENT})
-        )
+        self.assertEqual(user.capabilities, frozenset({Capability.PRINT_DOCUMENT}))
 
-    def test_headquarters_can_create_and_confirm(self):
+    def test_headquarters_prints_and_creates_projects(self):
         user = User(access_roll=AccessRoll.HEADQUARTERS, access_level=AccessLevel.LEVEL_2)
-        self.assertEqual(
-            user.capabilities,
-            frozenset(
-                {
-                    Capability.CREATE_DOCUMENT,
-                    Capability.CONFIRM_DOCUMENT,
-                    Capability.PRINT_DOCUMENT,
-                    Capability.CREATE_PROJECT,
-                }
-            ),
-        )
+        self.assertEqual(user.capabilities, frozenset({Capability.PRINT_DOCUMENT, Capability.CREATE_PROJECT}))
 
-    def test_employer_approves_and_manages_personnel_but_does_not_author(self):
-        # Every کارفرمایی position below the مدیر عامل keeps the original policy.
+    def test_no_roll_below_the_managing_director_grants_a_document_step(self):
+        steps = {Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT, Capability.APPROVE_DOCUMENT}
+        for roll in AccessRoll.values:
+            for level in AccessLevel.values:
+                if (roll, level) == (AccessRoll.EMPLOYER, AccessLevel.LEVEL_1):
+                    continue
+                held = User(access_roll=roll, access_level=level).capabilities
+                self.assertFalse(steps & held, (roll, level))
+
+    def test_the_board_manages_personnel_and_the_organisation_but_no_longer_approves(self):
+        # کارفرمایی below the مدیر عامل: رئیس و عضو هیئت مدیره.
         for level in (AccessLevel.LEVEL_2, AccessLevel.LEVEL_3):
-            self.assert_approver_only(User(access_roll=AccessRoll.EMPLOYER, access_level=level))
-
-    def assert_approver_only(self, user):
-        self.assertEqual(
-            user.capabilities,
-            frozenset(
-                {
-                    Capability.APPROVE_DOCUMENT,
-                    Capability.MANAGE_PERSONNEL,
-                    Capability.PRINT_DOCUMENT,
-                    Capability.MANAGE_ORGANIZATION,
-                    Capability.MANAGE_MEMBERSHIP,
-                    Capability.CREATE_PROJECT,
-                }
-            ),
-        )
-        # Separation of duties: the approver must not be able to author.
-        self.assertFalse(user.has_capability(Capability.CREATE_DOCUMENT))
-        self.assertFalse(user.has_capability(Capability.CONFIRM_DOCUMENT))
+            user = User(access_roll=AccessRoll.EMPLOYER, access_level=level)
+            self.assertEqual(
+                user.capabilities,
+                frozenset(
+                    {
+                        Capability.MANAGE_PERSONNEL,
+                        Capability.PRINT_DOCUMENT,
+                        Capability.MANAGE_ORGANIZATION,
+                        Capability.MANAGE_MEMBERSHIP,
+                        Capability.CREATE_PROJECT,
+                    }
+                ),
+            )
+            self.assertFalse(user.has_capability(Capability.APPROVE_DOCUMENT))
 
     def test_the_managing_director_holds_every_capability(self):
         # Requested by the product owner: مدیر عامل = کارفرمایی لول ۱ can do everything in the app.
@@ -112,15 +105,6 @@ class CapabilityTests(TestCase):
                 user = User(access_roll=roll, access_level=level)
                 is_ceo = (roll, level) == (AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
                 self.assertEqual(user.capabilities == frozenset(Capability.values), is_ceo, (roll, level))
-
-    def test_no_single_roll_can_take_a_document_end_to_end_except_the_managing_director(self):
-        full_chain = {Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT, Capability.APPROVE_DOCUMENT}
-        for roll in AccessRoll.values:
-            for level in AccessLevel.values:
-                if (roll, level) == (AccessRoll.EMPLOYER, AccessLevel.LEVEL_1):
-                    continue
-                user = User(access_roll=roll, access_level=level)
-                self.assertFalse(full_chain.issubset(user.capabilities), (roll, level))
 
     def test_the_organisation_capabilities_by_roll(self):
         # docs/11-phase-7-9-plan.md §5.1. صفی gains nothing: if everyone could create projects the
@@ -197,9 +181,8 @@ class AuthFlowTests(TestCase):
         response = self.client.get(reverse("auth-me"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["title"], "کارشناس")
-        self.assertEqual(
-            response.data["capabilities"], [Capability.CREATE_DOCUMENT, Capability.PRINT_DOCUMENT]
-        )
+        # A صفی who leads nothing: the roll gives printing only; /auth/me/ adds what the chart grants (nothing here).
+        self.assertEqual(response.data["capabilities"], [Capability.PRINT_DOCUMENT])
 
     def test_me_requires_authentication(self):
         self.assertEqual(self.client.get(reverse("auth-me")).status_code, 401)

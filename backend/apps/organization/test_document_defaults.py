@@ -116,7 +116,7 @@ class DocumentDefaultsTests(TestCase):
         form = self.create()
         Document.objects.filter(pk=form.pk).update(footnote1="ویرایش‌شده", status=DocumentStatus.UNDER_CONTROL)
         self.set_defaults(doc_footnote1="پیش‌فرض تازه")
-        revision = documents.create_revision(user=self.author, document_id=form.pk)
+        revision = documents.create_revision(user=self.manager, document_id=form.pk)  # (a document with no owner node is the مدیر عامل's)
         self.assertEqual(revision.footnote1, "ویرایش‌شده")
 
     def test_a_missing_logo_file_does_not_stop_creation(self):

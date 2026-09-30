@@ -651,11 +651,11 @@ export default function DocumentRegisterPage() {
                             href={`/documents/${row.id}/edit`}
                             className={buttonClass({
                               size: "xs",
-                              variant: row.can_edit && canCreate && row.action === "complete" ? "primary" : "secondary",
+                              variant: row.can_edit && row.action === "complete" ? "primary" : "secondary",
                             })}
                           >
-                            {row.can_edit && canCreate ? <Pencil /> : <FileText />}
-                            {row.can_edit && canCreate
+                            {row.can_edit ? <Pencil /> : <FileText />}
+                            {row.can_edit
                               ? row.action === "complete"
                                 ? DOCUMENT_ACTION_LABELS.complete
                                 : "ویرایش"
@@ -678,7 +678,7 @@ export default function DocumentRegisterPage() {
                             onRebuild={() => void runOfficialBuild(row)}
                             onPreview={() => handlePreview(row)}
                           />
-                          {canCreate && row.can_revise && (
+                          {row.can_revise && (
                             <Button
                               size="xs"
                               variant="subtle"

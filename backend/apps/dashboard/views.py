@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import Capability, User
 from apps.core.constants import DocumentGroup, DocumentStatus
+from apps.documents import authority as document_authority
 from apps.documents import workflow
 from apps.documents.models import Document
 
@@ -82,23 +83,28 @@ AWAITING_SCAN_LIMIT = 500
 def awaiting_documents(user) -> tuple[int, dict, list]:
     """Documents waiting for this person's step: (count, count per step, the first
     AWAITING_LIST_SIZE rows). Shared by the card and the کارتابل badge so the two never disagree."""
+    # The org chart decides (documents/authority.py): drafts you wrote that lie in a subtree you lead,
+    # documents awaiting confirmation under a واحد / حوزه you lead, and — for the مدیر عامل — everything
+    # awaiting approval. `next_step_for` below re-checks each candidate with the same rules.
+    authority = document_authority.DocumentAuthority(user)
     wanted = Q(pk__in=[])
-    if user.has_capability(Capability.CREATE_DOCUMENT):
-        wanted |= Q(status=DocumentStatus.DRAFT, content_saved_at__isnull=False, created_by=user)
-    if user.has_capability(Capability.CONFIRM_DOCUMENT):
-        wanted |= Q(status=DocumentStatus.AWAITING_CONFIRMATION)
-    if user.has_capability(Capability.APPROVE_DOCUMENT):
+    if authority.can_author_anywhere:
+        wanted |= Q(status=DocumentStatus.DRAFT, content_saved_at__isnull=False, created_by=user) & authority.authoring_q()
+    if authority.can_confirm_anywhere:
+        wanted |= Q(status=DocumentStatus.AWAITING_CONFIRMATION) & authority.confirming_q()
+    if authority.can_approve():
         wanted |= Q(status=DocumentStatus.AWAITING_APPROVAL)
 
     candidates = (
         Document.objects.filter(wanted)
+        .select_related("owner_node")
         .prefetch_related("signoffs")
         .order_by("updated_at", "id")[:AWAITING_SCAN_LIMIT]
     )
     by_step = {step: 0 for step in workflow.STEP_LABELS}
     items = []
     for document in candidates:
-        flow = workflow.next_step_for(document, user)
+        flow = workflow.next_step_for(document, user, authority)
         if not flow["can_act"]:
             continue
         by_step[flow["step"]] += 1

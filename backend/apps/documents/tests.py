@@ -17,7 +17,7 @@ from apps.core.constants import (
 from apps.core.exceptions import ConflictError as DocumentConflict
 from apps.core.text import normalize_search_term, normalize_title
 
-from . import services
+from . import services, test_support
 from .models import MAX_REVISION, Document, DocumentSequence, SignOff
 
 LOCMEM_CACHE = {
@@ -28,18 +28,24 @@ INSIDE = DocumentCategory.INSIDE
 OUTSIDE = DocumentCategory.OUTSIDE
 
 
-def make_user(national_code="1000000001", roll=AccessRoll.GUILD, level=AccessLevel.LEVEL_3):
-    return User.objects.create_user(
+def make_user(national_code="1000000001", roll=AccessRoll.GUILD, level=AccessLevel.LEVEL_3, place=True):
+    """A user by roll × level. With `place` (the default) they also get the chart authority the old roll
+    semantics implied — see test_support.place_by_roll; pass place=False for a person with none."""
+    user = User.objects.create_user(
         national_code=national_code,
         password="pw-for-tests-123",
         full_name=f"کاربر {national_code}",
         access_roll=roll,
         access_level=level,
     )
+    return test_support.place_by_roll(user) if place else user
 
 
-def new_doc(user, title="عنوان", group=DocumentGroup.POSTER, category=INSIDE):
-    return services.create_document(user=user, category=category, title=title, group=group)
+def new_doc(user, title="عنوان", group=DocumentGroup.POSTER, category=INSIDE, owner_node=None):
+    """A document owned by `owner_node` — by default the sample chart's بخش «RAG»."""
+    return services.create_document(
+        user=user, category=category, title=title, group=group, owner_node=owner_node or test_support.default_node()
+    )
 
 
 def finalize(doc, status=DocumentStatus.UNDER_CONTROL):
@@ -244,7 +250,10 @@ class RegisterApiTests(TestCase):
         self.list_url = reverse("document-list")
 
     def payload(self, **over):
-        return {"category": INSIDE, "title": "روش اجرایی نمونه", "group": DocumentGroup.PROCEDURE, **over}
+        return {
+            "category": INSIDE, "title": "روش اجرایی نمونه", "group": DocumentGroup.PROCEDURE,
+            "owner_node": test_support.default_node().pk, **over,
+        }
 
     # -- permissions -----------------------------------------------------
 
@@ -260,12 +269,23 @@ class RegisterApiTests(TestCase):
         self.assertEqual(response.data["group_label"], "روش اجرایی")
         self.assertEqual(response.data["status"], DocumentStatus.DRAFT)
 
-    def test_employer_cannot_author_but_can_browse(self):
-        """کارفرمایی approves; authoring is صفی/ستادی (the confirmed policy)."""
+    def test_someone_who_leads_nothing_cannot_create_but_can_browse(self):
+        """Phase 14: authoring follows the org chart, not the roll — a رئیس هیئت مدیره (or anyone) who leads
+        no node may read the register and nothing more."""
         self.client.force_authenticate(self.employer)
         self.assertEqual(self.client.get(self.list_url).status_code, 200)
         response = self.client.post(self.list_url, self.payload(), format="json")
         self.assertEqual(response.status_code, 403)
+        self.assertIn("مسئول هیچ گره", response.data["detail"])
+        self.assertFalse(Document.objects.exists())
+
+    def test_a_document_needs_an_owner_node(self):
+        self.client.force_authenticate(self.author)
+        payload = self.payload()
+        del payload["owner_node"]
+        response = self.client.post(self.list_url, payload, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["owner_node"][0], "گرهٔ مالک را انتخاب کنید.")
         self.assertFalse(Document.objects.exists())
 
     def test_created_by_is_the_authenticated_user_not_client_supplied(self):
@@ -283,6 +303,7 @@ class RegisterApiTests(TestCase):
         self.assertEqual(response.data["category"][0], "دسته بندی را انتخاب کنید.")
         self.assertEqual(response.data["title"][0], "عنوان را وارد کنید.")
         self.assertEqual(response.data["group"][0], "گروه را انتخاب کنید.")
+        self.assertEqual(response.data["owner_node"][0], "گرهٔ مالک را انتخاب کنید.")
 
     def test_blank_title_is_rejected(self):
         self.client.force_authenticate(self.author)
@@ -341,7 +362,7 @@ class RegisterApiTests(TestCase):
             doc = new_doc(self.author, f"سند {i}")
             SignOff.objects.create(document=doc, role=SignOffRole.CREATER, name="الف")
         self.client.force_authenticate(self.author)
-        with self.assertNumQueries(4):  # count + page + sign-offs + responsibility sections
+        with self.assertNumQueries(5):  # count + page + sign-offs + responsibility sections + the person's lead nodes
             self.assertEqual(len(self.client.get(self.list_url).data["results"]), 12)
 
     def test_filters(self):

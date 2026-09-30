@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from apps.accounts.models import Capability
 from apps.core.exceptions import ConflictError
 from apps.core.permissions import HasCapability
+from apps.documents import authority
 from apps.documents.models import Document
 
 from apps.documents.content_serializers import ContentInputSerializer
@@ -195,7 +196,7 @@ class LivePreviewView(APIView):
         if body is None:
             pdf = live_preview.render_stored(document.pk)
         else:
-            if not request.user.has_capability(Capability.CREATE_DOCUMENT):
+            if not authority.for_request(request).can_author(document):
                 raise PermissionDenied("دسترسی ویرایش این مستند را ندارید.")
             serializer = ContentInputSerializer(data=body, context={"document": document})
             serializer.is_valid(raise_exception=True)

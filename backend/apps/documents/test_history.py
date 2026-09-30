@@ -190,6 +190,9 @@ class ActivityFeedTests(HistoryBase):
         image = Image.new("RGB", (200, 90), (255, 255, 255))
         ImageDraw.Draw(image).line([(10, 60), (100, 20), (180, 70)], fill=(0, 0, 100), width=4)
         buffer = BytesIO(); image.save(buffer, "PNG")
+        # These documents have no owner node, so only the مدیر عامل / a superuser may act on them (Phase 14).
+        User.objects.filter(pk=self.author.pk).update(is_superuser=True)
+        self.author.refresh_from_db()
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
             workflow.submit(user=self.author, document_id=self.b.pk,
                             signature=SimpleUploadedFile("s.png", buffer.getvalue(), "image/png"))

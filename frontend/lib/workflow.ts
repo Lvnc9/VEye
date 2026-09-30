@@ -31,21 +31,15 @@ export const STEP_DONE: Record<WorkflowStep, (code: string) => string> = {
 };
 
 export interface WorkflowControls {
-  primary: { step: WorkflowStep; label: string; disabled: boolean; title?: string } | null;
+  primary: { step: WorkflowStep; label: string; disabled: boolean } | null;
   canReturn: boolean;
 }
 
-/** Buttons for one row: nothing when there is no step or the user isn't involved;
- *  a disabled button carrying the reason when they are barred as an earlier signer. */
+/** Buttons for one row: nothing when there is no step or the org chart gives this person no part in it
+ *  (the server decides per document — authority.py; «one person per step» was retired on 2026-09-30). */
 export function workflowControls(flow: WorkflowState): WorkflowControls {
-  if (flow.step === null || (!flow.can_act && !flow.blocked)) {
+  if (flow.step === null || !flow.can_act) {
     return { primary: null, canReturn: false };
-  }
-  if (flow.blocked) {
-    return {
-      primary: { step: flow.step, label: STEP_LABELS[flow.step], disabled: true, title: flow.blocked },
-      canReturn: false,
-    };
   }
   return {
     primary: { step: flow.step, label: STEP_LABELS[flow.step], disabled: false },

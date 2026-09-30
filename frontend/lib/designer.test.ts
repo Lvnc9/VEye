@@ -135,7 +135,7 @@ describe("fromResponse", () => {
     const response = {
       document: {} as DocumentRow,
       version: 5,
-      editable: true,
+      editable: true, can_edit: true,
       logo_url: null,
       footnote1: "الف",
       footnote2: "ب",
@@ -163,7 +163,7 @@ describe("fromResponse — keys across a save", () => {
   const response = {
     document: {} as DocumentRow,
     version: 2,
-    editable: true,
+    editable: true, can_edit: true,
     logo_url: null,
     footnote1: "",
     footnote2: "",
@@ -296,7 +296,7 @@ describe("the Responsibilities block", () => {
 
   it("shows one empty row for a saved block with none, and marks a واحد with no حوزه as standalone", () => {
     const response = {
-      document: {} as DocumentRow, version: 1, editable: true, logo_url: null, footnote1: "", footnote2: "",
+      document: {} as DocumentRow, version: 1, editable: true, can_edit: true, logo_url: null, footnote1: "", footnote2: "",
       show_company_name: false, body_kind: "blocks", form_settings: null, previous_changes: [],
       sections: [
         { id: 1, type: "Responsibilities", rows: [] },

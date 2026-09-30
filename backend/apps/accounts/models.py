@@ -44,21 +44,19 @@ class Capability(models.TextChoices):
 
 
 #: Access roll -> capabilities. See User.capabilities for the rationale.
+#:
+#: **The three document capabilities (تدوین / تایید / تصویب) are not here any more** (Phase 14, owner's
+#: decision 2026-09-30): who may write, confirm or approve a document follows from where a person leads
+#: in the org chart — `documents/authority.py` — not from roll × level, which now only names the سمت and
+#: gates personnel, organisation, projects and printing. The مدیر عامل and a superuser still hold every
+#: capability (`FULL_ACCESS_POSITIONS`); `/auth/me/` adds the chart-derived ones for the UI.
 #: MANAGE_PERSONNEL sits with کارفرمایی because V_1.0 surfaced the personnel
 #: buttons on the dashboard of the مدیر عامل (Dashboard.py:241-246).
 ROLL_CAPABILITIES = {
-    AccessRoll.GUILD: frozenset({Capability.CREATE_DOCUMENT, Capability.PRINT_DOCUMENT}),
-    AccessRoll.HEADQUARTERS: frozenset(
-        {
-            Capability.CREATE_DOCUMENT,
-            Capability.CONFIRM_DOCUMENT,
-            Capability.PRINT_DOCUMENT,
-            Capability.CREATE_PROJECT,
-        }
-    ),
+    AccessRoll.GUILD: frozenset({Capability.PRINT_DOCUMENT}),
+    AccessRoll.HEADQUARTERS: frozenset({Capability.PRINT_DOCUMENT, Capability.CREATE_PROJECT}),
     AccessRoll.EMPLOYER: frozenset(
         {
-            Capability.APPROVE_DOCUMENT,
             Capability.MANAGE_PERSONNEL,
             Capability.PRINT_DOCUMENT,
             Capability.MANAGE_ORGANIZATION,
@@ -70,9 +68,9 @@ ROLL_CAPABILITIES = {
 
 
 #: Positions that hold **every** capability, whatever their roll would grant. Today: the
-#: مدیر عامل (کارفرمایی, لول ۱). Built from `Capability.values`, so a capability added later is
-#: theirs automatically. The same-person rule still applies to them — they cannot sign two
-#: steps of one document (docs/09-workflow.md) — and nobody below this position gains anything.
+#: مدیر عامل (کارفرمایی, لول ۱) — the only person who approves a document. Built from
+#: `Capability.values`, so a capability added later is theirs automatically; nobody below this
+#: position gains anything.
 FULL_ACCESS_POSITIONS = frozenset({(AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)})
 
 #: The developer account (Phase 10, ADR-010, decided with the owner 2026-09-25): the technical account
@@ -181,21 +179,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     def capabilities(self) -> frozenset[str]:
         """Domain capabilities granted by this user's access roll.
 
-        V_1.0 had no enforcement at all — the role matrix only printed a
-        label, and any user at the keyboard could fill in any of the four
-        sign-off panels. This is the policy that replaces that, confirmed
-        with the product owner:
-
-            تدوین (create)  -> صفی، ستادی
-            تایید (confirm) -> ستادی
-            تصویب (approve) -> کارفرمایی
-
-        Separation of duties is deliberate: کارفرمایی approves but does not
-        author, so no single roll can take a document end to end — with one
-        exception, requested by the product owner: the **مدیر عامل** (کارفرمایی
-        لول ۱, see FULL_ACCESS_POSITIONS) holds every capability. The workflow's
-        "one person per step" rule still stops him from signing two steps of the
-        same document.
+        V_1.0 had no enforcement at all — the role matrix only printed a label, and any user at the
+        keyboard could fill in any of the four sign-off panels. Phase 5 replaced that with capabilities
+        by roll; **Phase 14 moved the three document steps to the org chart** (owner's decision
+        2026-09-30, `documents/authority.py`): a مسئول writes the documents of their node and those
+        below it, the مسئول of a واحد or حوزه above a document confirms it, and only the **مدیر عامل**
+        (کارفرمایی لول ۱, see FULL_ACCESS_POSITIONS) approves. So this property no longer grants
+        تدوین / تایید / تصویب by roll; it stays a pure function of roll × level (never of a
+        placement) for everything else, and the مدیر عامل and a superuser hold every capability.
         """
         if self.is_developer:
             return DEVELOPER_CAPABILITIES

@@ -128,10 +128,14 @@ class CreateWithOwnerNodeTests(Fixture, TestCase):
     def test_the_managing_director_may_own_a_document_at_the_company(self):
         self.assertEqual(self.create(self.ceo, self.org.root).status_code, 201)
 
-    def test_the_owner_node_is_optional_for_now(self):
-        response = self.create(self.nobody, title="بدون گره")
-        self.assertEqual(response.status_code, 201, response.data)
-        self.assertIsNone(response.data["owner_node"])
+    def test_the_owner_node_is_required(self):
+        response = self.create(self.unit_lead, title="بدون گره")
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(response.data["owner_node"][0], "گرهٔ مالک را انتخاب کنید.")
+
+    def test_someone_who_leads_nothing_cannot_create_at_all(self):
+        self.assertEqual(self.create(self.nobody, self.org.rag).status_code, 403)
+        self.assertEqual(self.create(self.member, self.org.rag).status_code, 403)
 
     def test_a_revision_keeps_the_owner_node(self):
         doc = finalize(services.create_document(user=self.ceo, category="INSIDE", title="ت", group="PROCEDURE", owner_node=self.org.ai))
@@ -162,9 +166,10 @@ class ChangeOwnerNodeTests(Fixture, TestCase):
         self.assertEqual(self.doc.owner_node, self.org.ai)
 
     def test_a_document_with_no_node_can_be_given_one(self):
-        orphan = services.create_document(user=self.domain_lead, category="INSIDE", title="یتیم", group="POSTER")
+        orphan = services.create_document(user=self.ceo, category="INSIDE", title="یتیم", group="POSTER")
         self.assertIsNone(orphan.owner_node)
-        self.assertEqual(self.move(self.domain_lead, self.org.dev, orphan).status_code, 200)
+        self.assertEqual(self.move(self.domain_lead, self.org.dev, orphan).status_code, 403, "only the مدیر عامل acts on it")
+        self.assertEqual(self.move(self.ceo, self.org.dev, orphan).status_code, 200)
 
     def test_only_a_draft_can_move(self):
         finalize(self.doc, DocumentStatus.UNDER_CONTROL)
@@ -187,7 +192,7 @@ class RegisterAndDeletionTests(Fixture, TestCase):
         for i in range(6):
             services.create_document(user=self.ceo, category="INSIDE", title=f"سند {i}", group="POSTER", owner_node=self.org.ai)
         self.as_(self.member)
-        with self.assertNumQueries(4):  # count + page + sign-offs + responsibility sections
+        with self.assertNumQueries(5):  # count + page + sign-offs + responsibility sections + the viewer's lead nodes
             rows = self.client.get(reverse("document-list")).data["results"]
         self.assertEqual({r["owner_node"]["name"] for r in rows}, {"هوش مصنوعی"})
 

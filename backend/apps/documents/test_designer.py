@@ -21,9 +21,9 @@ from apps.core.constants import DocumentGroup, DocumentStatus
 from apps.core.exceptions import ConflictError
 
 from apps.organization import tree
-from apps.organization.models import Company, OrgNode
+from apps.organization.models import OrgNode
 
-from . import content, services
+from . import content, services, test_support
 from .models import (
     AttachmentReference,
     ChangeTableRow,
@@ -66,21 +66,12 @@ def resp(*rows, **extra):
 
 
 def make_org():
-    """A company with a حوزه «IT» (units «هوش مصنوعی», «توسعه»), a حوزه «فروش», and a واحد straight under
-    the company («مدیریت سیستم‌ها»)."""
-    root = tree.create_root(name="شرکت")
-    Company.objects.create(pk=1, root=root)
-    it = tree.create_node(kind="DOMAIN", name="IT", parent=root)
-    sales = tree.create_node(kind="DOMAIN", name="فروش", parent=root)
+    """The shared sample chart (test_support.ensure_org) under the names these tests use: a حوزه «IT» (units
+    «هوش مصنوعی», «توسعه»), a حوزه «فروش», and a واحد straight under the company («مدیریت سیستم‌ها»)."""
+    org = test_support.ensure_org()
     return {
-        "root": root,
-        "it": it,
-        "sales": sales,
-        "ai": tree.create_node(kind="UNIT", name="هوش مصنوعی", parent=it),
-        "dev": tree.create_node(kind="UNIT", name="توسعه", parent=it),
-        "deals": tree.create_node(kind="UNIT", name="بستن معاملات", parent=sales),
-        "free": tree.create_node(kind="UNIT", name="مدیریت سیستم‌ها", parent=root),
-        "section": None,
+        "root": org.root, "it": org.it, "sales": org.sales, "ai": org.ai, "dev": org.dev,
+        "deals": org.deals, "free": org.qms, "section": org.rag, "backend": org.backend, "quality": org.quality,
     }
 
 
@@ -726,8 +717,8 @@ class RegisterColumnTests(DesignerTestCase):
         for i in range(8):
             doc = new_doc(self.author, f"سند {i}", DocumentGroup.INSTRUCTION)
             self.save([resp({"unit_name": f"واحد {i}"})], doc=doc)
-        # count + page + sign-offs + responsibility sections + their rows
-        with self.assertNumQueries(5):
+        # count + page + sign-offs + responsibility sections + their rows + the person's lead nodes (Phase 14)
+        with self.assertNumQueries(6):
             rows = self.client.get(reverse("document-list")).data["results"]
         self.assertEqual(sum(1 for r in rows if r["responsible_units"]), 8)
 
@@ -801,11 +792,13 @@ class ResponsibilitiesBlockTests(DesignerTestCase):
         self.assertRejected(resp(self.row(domain=self.org["it"].pk, text="شرح")), "واحد را انتخاب کنید")
 
     def test_an_archived_unit_cannot_be_picked_afresh(self):
+        tree.archive_node(self.org["backend"])
         tree.archive_node(self.org["dev"])
         self.assertRejected(resp(self.row(unit=self.org["dev"].pk)), "بایگانی شده")
 
     def test_but_a_row_that_already_names_it_keeps_it(self):
         self.save([resp(self.row(unit=self.org["dev"].pk, text="کار"))])
+        tree.archive_node(self.org["backend"])
         tree.archive_node(OrgNode.objects.get(pk=self.org["dev"].pk))
         saved = self.save([resp(self.row(unit=self.org["dev"].pk, text="کار ویرایش‌شده"))])
         [row] = self.rows(saved)
@@ -825,6 +818,7 @@ class ResponsibilitiesBlockTests(DesignerTestCase):
         unit.name = "نام تازه"
         unit.save()
         self.assertEqual(self.rows(self.get_content())[0]["unit_name"], "مدیریت سیستم‌ها", "a rename changes nothing printed")
+        tree.delete_node(self.org["quality"])
         tree.delete_node(unit)  # the row keeps its snapshot; only the link goes
         [row] = self.rows(self.get_content())
         self.assertEqual((row["unit"], row["unit_name"]), (None, "مدیریت سیستم‌ها"))

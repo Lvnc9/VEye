@@ -2,15 +2,13 @@ from django.db.models import Exists, OuterRef, Prefetch
 from django.http import FileResponse, Http404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.models import Capability
 from apps.core.constants import SectionType
 from apps.core.pagination import DefaultPagination
-from apps.core.permissions import HasCapability, capability_required
 
 from . import content as content_service
 from . import authority, queries, services, workflow
@@ -33,12 +31,13 @@ class DocumentViewSet(
     """The document register (ساخت مستند).
 
     Reads are plain Postgres queries — the register never opens or renders a
-    PDF. Anyone signed in can browse it; registering documents and starting new
-    revisions needs the create_document capability (تدوین).
+    PDF. Anyone signed in can browse it; registering documents, starting revisions and
+    editing a draft need authority over the document's owner node (تدوین, authority.py).
     """
 
-    permission_classes = [IsAuthenticated, HasCapability]
-    write_capability = Capability.CREATE_DOCUMENT
+    # Who may write, confirm or approve a document is decided per document by the org chart
+    # (authority.py), not by a capability of the roll; reads are open to any signed-in user.
+    permission_classes = [IsAuthenticated]
     pagination_class = DefaultPagination
 
     def get_queryset(self):
@@ -67,6 +66,8 @@ class DocumentViewSet(
         return DocumentDetailSerializer if self.action == "retrieve" else DocumentSerializer
 
     def create(self, request, *args, **kwargs):
+        if not authority.for_request(request).can_author_anywhere:
+            raise PermissionDenied(authority.LEADS_NOTHING)
         serializer = DocumentCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         document = services.create_document(user=request.user, **serializer.validated_data)
@@ -82,7 +83,6 @@ class DocumentViewSet(
         detail=True,
         methods=["post"],
         url_path="owner-node",
-        permission_classes=[IsAuthenticated, capability_required(Capability.CREATE_DOCUMENT)],
     )
     def owner_node(self, request, pk=None):
         """Give a draft its owner node, or move it to another the caller may pick."""
@@ -100,10 +100,10 @@ class DocumentViewSet(
 
     # -- the sign-off workflow (Phase 5) -------------------------------------
     #
-    # Each step needs its own capability (the viewset's class-level one is the
-    # authoring one), so they carry their own permission classes. Signing is a
-    # multipart POST: `signature` is the PNG exported from the web pad. Name, post
-    # and date come from the session.
+    # Who may take each step is the org chart's answer for this document
+    # (authority.py), checked by the workflow service under the row lock — a 403
+    # with the reason. Signing is a multipart POST: `signature` is the PNG exported
+    # from the web pad. Name, post and date come from the session.
 
     def _workflow_response(self, document, request):
         # Re-read through the register queryset so the response carries the same
@@ -115,7 +115,6 @@ class DocumentViewSet(
         detail=True,
         methods=["post"],
         parser_classes=[MultiPartParser],
-        permission_classes=[IsAuthenticated, capability_required(Capability.CREATE_DOCUMENT)],
     )
     def submit(self, request, pk=None):
         document = workflow.submit(user=request.user, document_id=pk, signature=request.FILES.get("signature"))
@@ -125,7 +124,6 @@ class DocumentViewSet(
         detail=True,
         methods=["post"],
         parser_classes=[MultiPartParser],
-        permission_classes=[IsAuthenticated, capability_required(Capability.CONFIRM_DOCUMENT)],
     )
     def confirm(self, request, pk=None):
         document = workflow.confirm(user=request.user, document_id=pk, signature=request.FILES.get("signature"))
@@ -135,7 +133,6 @@ class DocumentViewSet(
         detail=True,
         methods=["post"],
         parser_classes=[MultiPartParser],
-        permission_classes=[IsAuthenticated, capability_required(Capability.APPROVE_DOCUMENT)],
     )
     def approve(self, request, pk=None):
         document = workflow.approve(user=request.user, document_id=pk, signature=request.FILES.get("signature"))
@@ -164,13 +161,13 @@ class DocumentViewSet(
     def content(self, request, pk=None):
         """GET the whole body for the designer; PUT to save it.
 
-        Writes need the create_document capability (تدوین) — enforced by
-        HasCapability for the non-safe method — and a draft document.
+        Writes need authority over the document's owner node (تدوین) and a draft document.
         """
         document = self.get_object()
         if request.method == "GET":
             return Response(content_payload(document, request))
 
+        authority.for_request(request).require_author(document)
         serializer = ContentInputSerializer(data=request.data, context={"document": document})
         serializer.is_valid(raise_exception=True)
         saved = content_service.save_content(user=request.user, document_id=document.pk, data=serializer.validated_data)
@@ -179,6 +176,7 @@ class DocumentViewSet(
     @action(detail=True, methods=["post"], url_path="files", parser_classes=[MultiPartParser])
     def upload_file(self, request, pk=None):
         document = self.get_object()
+        authority.for_request(request).require_author(document)
         upload = request.FILES.get("file")
         if upload is None:
             raise ValidationError({"file": ["فایلی ارسال نشده است."]})
@@ -216,6 +214,7 @@ class DocumentViewSet(
             response["Cache-Control"] = "private, max-age=3600"
             return response
 
+        authority.for_request(request).require_author(document)
         if request.method == "POST":
             upload = request.FILES.get("logo")
             if upload is None:

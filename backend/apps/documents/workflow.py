@@ -6,9 +6,15 @@
 
 V_1.0 had none of this: one person filled every panel, typing any name and post into
 a dialog; `status` was never written; مرجوع was wired to the ویرایش handler and did
-nothing. Here the signer is the signed-in user, each step needs a different person,
-every transition is one transaction under a row lock (two simultaneous confirms
-cannot both win), and every step lands in the audit trail (`DocumentEvent`).
+nothing. Here the signer is the signed-in user, every transition is one transaction under
+a row lock (two simultaneous confirms cannot both win), and every step lands in the audit
+trail (`DocumentEvent`).
+
+Who may take a step is decided by the org chart (authority.py, owner's rules of 2026-09-30):
+the مسئول of the document's owner node — or of a node above it — writes it, the مسئول of a
+واحد / حوزه above it confirms, and only the مدیر عامل approves. The «one person per step» rule
+of Phase 5 is retired: the same مسئول may write and confirm, and the مدیر عامل approves
+anything.
 
 Approving a revision also supersedes the previous one (→ OBSOLETE) and queues the
 PDF builds, so a printed QR code resolves to a status that is true.
@@ -19,10 +25,10 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
-from apps.accounts.models import Capability
 from apps.core.constants import DocumentEventKind, DocumentStatus, SignOffRole
 from apps.core.exceptions import ConflictError
 
+from . import authority as document_authority
 from .files import normalize_signature
 from .models import Document, DocumentEvent, SignOff
 
@@ -41,55 +47,44 @@ STEP_LABELS = {
     "confirm": "تایید",
     "approve": "تصویب",
 }
-CAPABILITY_FOR_STEP = {
-    "submit": Capability.CREATE_DOCUMENT,
-    "confirm": Capability.CONFIRM_DOCUMENT,
-    "approve": Capability.APPROVE_DOCUMENT,
-}
-
-SAME_PERSON_MESSAGES = {
-    "confirm": "شما تدوین‌کننده این مستند هستید و نمی‌توانید آن را تایید کنید.",
-    "approve": "شما در تدوین یا تایید این مستند نقش داشته‌اید و نمی‌توانید آن را تصویب کنید.",
-    "return": "شما تدوین‌کننده این مستند هستید و نمی‌توانید آن را مرجوع کنید.",
-}
-
-
-def earlier_signers(document: Document, step: str) -> set[int]:
-    """User ids that signed a step *before* `step` in the current round — the
-    people barred from taking `step` too. Works on prefetched sign-offs (the
-    register list computes this for every row without a query)."""
-    by_role = {signoff.role: signoff for signoff in document.signoffs.all()}
-    barred_roles = {
-        "confirm": [SignOffRole.CREATER],
-        "approve": [SignOffRole.CREATER, SignOffRole.CONFIRMER],
-        "return": [SignOffRole.CREATER],
-    }.get(step, [])
+def _may_take(authority, step: str, document: Document) -> bool:
     return {
-        by_role[role].signed_by_id for role in barred_roles if role in by_role and by_role[role].signed_by_id
-    }
+        "submit": authority.can_author,
+        "confirm": authority.can_confirm,
+        "approve": authority.can_approve,
+    }[step](document)
 
 
-def next_step_for(document: Document, user) -> dict:
-    """What `user` can do with `document` right now — the register's buttons.
-
-    `blocked` is a Persian reason when the user holds the capability but is barred
-    as a previous signer; the UI shows the button disabled with it as a tooltip."""
-    result = {"step": STEP_FOR_STATUS.get(document.status), "can_act": False, "can_return": False, "blocked": None}
+def next_step_for(document: Document, user, authority=None) -> dict:
+    """What `user` can do with `document` right now — the register's buttons. `authority` is the
+    request's `DocumentAuthority` (built once per request); it is made here when omitted."""
+    result = {"step": STEP_FOR_STATUS.get(document.status), "can_act": False, "can_return": False}
     step = result["step"]
     if step is None or user is None or not getattr(user, "is_authenticated", False):
         return result
     if step == "submit" and document.content_saved_at is None:
         result["step"] = None  # nothing to submit yet: the row still says تکمیل
         return result
-    if not user.has_capability(CAPABILITY_FOR_STEP[step]):
-        return result
-
-    if user.pk in earlier_signers(document, step):
-        result["blocked"] = SAME_PERSON_MESSAGES[step]
+    authority = authority or document_authority.DocumentAuthority(user)
+    if not _may_take(authority, step, document):
         return result
     result["can_act"] = True
     result["can_return"] = step in ("confirm", "approve")
     return result
+
+
+def _require_may(user, step: str, document: Document) -> None:
+    """403 with the reason, before anything else is looked at."""
+    authority = document_authority.DocumentAuthority(user)
+    if _may_take(authority, step, document):
+        return
+    raise PermissionDenied(
+        {
+            "submit": document_authority.NOT_AN_AUTHOR,
+            "confirm": document_authority.NOT_A_CONFIRMER,
+            "approve": document_authority.NOT_THE_APPROVER,
+        }[step]
+    )
 
 
 # -- helpers ---------------------------------------------------------------
@@ -154,11 +149,6 @@ def _sign(document: Document, role: str, user, upload) -> SignOff:
     return signoff
 
 
-def _no_double_signing(document: Document, step: str, user) -> None:
-    if user.pk in earlier_signers(document, step):
-        raise ConflictError(SAME_PERSON_MESSAGES[step], code="same_person")
-
-
 # -- the transitions -------------------------------------------------------
 
 
@@ -167,6 +157,7 @@ def submit(*, user, document_id: int, signature) -> Document:
     """تدوین: the author signs and sends the document for confirmation. The body
     is locked from here on (it is only editable while DRAFT)."""
     document = _locked(document_id)
+    _require_may(user, "submit", document)
     _require_status(document, DocumentStatus.DRAFT, "برای تایید ارسال کرد")
     if document.content_saved_at is None:
         raise ConflictError("ابتدا محتوای مستند را طراحی و ذخیره کنید.", code="content_missing")
@@ -180,8 +171,8 @@ def submit(*, user, document_id: int, signature) -> Document:
 def confirm(*, user, document_id: int, signature) -> Document:
     """تایید."""
     document = _locked(document_id)
+    _require_may(user, "confirm", document)
     _require_status(document, DocumentStatus.AWAITING_CONFIRMATION, "تایید کرد")
-    _no_double_signing(document, "confirm", user)
 
     _sign(document, SignOffRole.CONFIRMER, user, signature)
     _record(document, kind=DocumentEventKind.CONFIRMED, to_status=DocumentStatus.AWAITING_APPROVAL, user=user)
@@ -194,8 +185,8 @@ def approve(*, user, document_id: int, signature) -> Document:
     منسوخ, and the PDFs are (re)built — the new one so it exists, the old one so
     it stops saying «معتبر»."""
     document = _locked(document_id)
+    _require_may(user, "approve", document)
     _require_status(document, DocumentStatus.AWAITING_APPROVAL, "تصویب کرد")
-    _no_double_signing(document, "approve", user)
 
     _sign(document, SignOffRole.APPROVER, user, signature)
     _record(document, kind=DocumentEventKind.APPROVED, to_status=DocumentStatus.UNDER_CONTROL, user=user)
@@ -261,9 +252,8 @@ def return_document(*, user, document_id: int, reason: str) -> Document:
             code="wrong_status",
             status=document.status,
         )
-    if not user.has_capability(CAPABILITY_FOR_STEP[step]):
+    if not _may_take(document_authority.DocumentAuthority(user), step, document):
         raise PermissionDenied("شما دسترسی لازم برای مرجوع کردن این مستند را ندارید.")
-    _no_double_signing(document, "return", user)
 
     for signoff in document.signoffs.all():
         _delete_storage_on_commit(signoff.signature)

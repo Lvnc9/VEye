@@ -105,6 +105,8 @@ def create_revision(*, user, document_id: int) -> Document:
     except Document.DoesNotExist:
         raise NotFound("مستند یافت نشد.")
 
+    authority.DocumentAuthority(user).require_author(previous)  # a revision is a draft of the same document
+
     if Document.objects.filter(previous_revision=previous).exists():
         raise ConflictError(
             "این بازنگری، آخرین بازنگری مستند نیست.", code="not_latest_revision"
@@ -146,6 +148,7 @@ def set_owner_node(*, user, document_id: int, node_id: int) -> Document:
         document = Document.objects.select_for_update().get(pk=document_id)
     except Document.DoesNotExist:
         raise NotFound("مستند یافت نشد.")
+    authority.DocumentAuthority(user).require_author(document)
     if not document.is_editable:
         raise ConflictError("گرهٔ مالک فقط تا زمانی که مستند پیش‌نویس است قابل تغییر است.", code="content_locked")
     node = authority.eligible_owner_nodes(user).filter(pk=node_id).first()

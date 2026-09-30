@@ -37,7 +37,7 @@ export function WorkflowActions({ row, onDone, hold }: Props) {
         variant="primary"
         icon={<PenLine />}
         disabled={controls.primary.disabled || Boolean(hold)}
-        title={controls.primary.title ?? hold}
+        title={hold}
         onClick={() => setDialog("sign")}
       >
         {controls.primary.label}

@@ -265,8 +265,6 @@ export interface WorkflowState {
   step: WorkflowStep | null;
   can_act: boolean;
   can_return: boolean;
-  /** Persian reason when the user holds the capability but signed an earlier step. */
-  blocked: string | null;
 }
 
 export interface ReturnNote {
@@ -493,6 +491,8 @@ export interface ContentResponse {
   document: DocumentRow;
   version: number;
   editable: boolean;
+  /** The body can change (a draft) *and* this person leads the document's owner node or one above it. */
+  can_edit: boolean;
   logo_url: string | null;
   footnote1: string;
   footnote2: string;
