@@ -11,6 +11,7 @@ import {
   ORG_KIND_TONE,
   ancestorsOf,
   childKindsOf,
+  describeNodeBlockers,
   memberCaption,
   pathLabel,
   type OrgMembership,
@@ -456,7 +457,14 @@ function StructureActions({ node, onChanged }: { node: OrgNode; onChanged: (next
           danger
           onCancel={() => setConfirming(null)}
           onConfirm={async () => {
-            await apiDelete(`/org/nodes/${node.id}/`);
+            try {
+              await apiDelete(`/org/nodes/${node.id}/`);
+            } catch (err) {
+              // 409 node_not_empty carries counts: say what is in the way, not only that something is.
+              const blockers = err instanceof ApiError && err.status === 409 ? describeNodeBlockers(err.data) : null;
+              if (err instanceof ApiError && blockers) throw new ApiError(`${err.message} (${blockers})`, err.status, err.data);
+              throw err;
+            }
             setConfirming(null);
             onChanged({ selectId: node.parent });
           }}

@@ -5,6 +5,8 @@
  * that. Pure functions, no fetching — relative imports only (vitest has no `@/` alias).
  */
 
+import { toPersianDigits } from "./jalali";
+
 export type OrgNodeKind = "COMPANY" | "DOMAIN" | "UNIT" | "SECTION";
 
 export interface OrgNode {
@@ -289,6 +291,28 @@ export interface Person {
     is_lead: boolean;
     position_label: string;
   }[];
+}
+
+const BLOCKER_LABELS: [key: string, label: string][] = [
+  ["children", "زیرمجموعه"],
+  ["members", "عضو"],
+  ["projects", "پروژه"],
+  ["messages", "پیام گفتگو"],
+  ["documents", "مستند"],
+];
+
+/**
+ * Why a node can't be deleted, from the counts the API sends with 409 `node_not_empty`
+ * («۲ زیرمجموعه، ۱ عضو»). Null when the payload carries none, so the caller keeps the generic message.
+ */
+export function describeNodeBlockers(data: unknown): string | null {
+  if (typeof data !== "object" || data === null) return null;
+  const record = data as Record<string, unknown>;
+  const parts = BLOCKER_LABELS.flatMap(([key, label]) => {
+    const count = record[key];
+    return typeof count === "number" && count > 0 ? [`${toPersianDigits(count)} ${label}`] : [];
+  });
+  return parts.length > 0 ? parts.join("، ") : null;
 }
 
 /** «مسئول واحد فروش» when they lead, else their own position label, else nothing. */

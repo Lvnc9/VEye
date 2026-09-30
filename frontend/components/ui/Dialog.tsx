@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { IconButton } from "./IconButton";
 import { cx } from "./cx";
@@ -10,11 +11,17 @@ const SIZES = { sm: "sm:max-w-md", md: "sm:max-w-lg", lg: "sm:max-w-xl", xl: "sm
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+const subscribeNothing = () => () => {};
+
 /**
  * A modal window: the page dims and softens behind it, and the panel rises in — from the bottom edge on a
  * phone, near the top on a larger screen. Escape and a click on the backdrop close it unless `busy`.
  * Focus goes inside (to whatever the content focused itself, else the panel), Tab stays inside, and focus
  * returns to the opener when it closes.
+ *
+ * It is drawn into `document.body`, not where it is written: an ancestor with a `transform` (the page's
+ * entrance animation keeps one) becomes the containing block of every `position: fixed` descendant, so a
+ * dialog left in place was laid out against the scrolled page and could sit above the visible area.
  */
 export function Dialog({
   label,
@@ -40,16 +47,19 @@ export function Dialog({
   children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // False while the server (and the hydrating client) render; there is no `document` to portal into yet.
+  const inBrowser = useSyncExternalStore(subscribeNothing, () => true, () => false);
   // Who had focus before the dialog opened — read during the first render, before any child focuses.
   const [opener] = useState<Element | null>(() => (typeof document === "undefined" ? null : document.activeElement));
 
   useEffect(() => {
+    if (!inBrowser) return;
     const panel = panelRef.current;
     if (panel && !panel.contains(document.activeElement)) panel.focus();
     return () => {
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
-  }, [opener]);
+  }, [opener, inBrowser]);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
@@ -73,7 +83,9 @@ export function Dialog({
     }
   }
 
-  return (
+  if (!inBrowser) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50" onKeyDown={onKeyDown}>
       <div aria-hidden className="absolute inset-0 bg-slate-950/45 backdrop-blur-[3px] animate-fade-in" />
       <div
@@ -114,7 +126,8 @@ export function Dialog({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

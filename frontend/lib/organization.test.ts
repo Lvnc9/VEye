@@ -8,6 +8,7 @@ import {
   childKindsOf,
   clampZoom,
   countByKind,
+  describeNodeBlockers,
   descendantsOf,
   fitView,
   initials,
@@ -234,5 +235,23 @@ describe("fitView", () => {
     expect(fitView({ width: 300, height: 300 }, { width: 100000, height: 10 }).zoom).toBe(ZOOM_MIN);
     expect(fitView({ width: 0, height: 0 }, { width: 400, height: 300 })).toEqual({ x: 0, y: 0, zoom: 1 });
     expect(fitView({ width: 500, height: 500 }, { width: 0, height: 0 })).toEqual({ x: 0, y: 0, zoom: 1 });
+  });
+});
+
+describe("describeNodeBlockers", () => {
+  it("names what is in the way, with Persian digits, skipping zeros", () => {
+    expect(describeNodeBlockers({ code: "node_not_empty", children: 2, members: 1, projects: 0, messages: 0 })).toBe(
+      "۲ زیرمجموعه، ۱ عضو",
+    );
+    expect(describeNodeBlockers({ children: 0, members: 0, projects: 1, messages: 12, documents: 3 })).toBe(
+      "۱ پروژه، ۱۲ پیام گفتگو، ۳ مستند",
+    );
+  });
+
+  it("is null when the payload has no counts", () => {
+    expect(describeNodeBlockers(undefined)).toBeNull();
+    expect(describeNodeBlockers("x")).toBeNull();
+    expect(describeNodeBlockers({ detail: "no" })).toBeNull();
+    expect(describeNodeBlockers({ children: 0, members: 0 })).toBeNull();
   });
 });

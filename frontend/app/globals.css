@@ -168,12 +168,14 @@
 
 /* Page entry: every screen of the app rises in once (app/(app)/template.tsx). */
 .veye-page {
-  animation: veye-fade-up 280ms var(--ease-out-quint) both;
+  /* `backwards`, not `both`: after the entrance no transform may stay behind, or the page would become the
+     containing block of every `position: fixed` element inside it. */
+  animation: veye-fade-up 280ms var(--ease-out-quint) backwards;
 }
 
 /* A staggered entrance for cards and list items: set --i on each (40ms apart). */
 .veye-stagger {
-  animation: veye-fade-up 320ms var(--ease-out-quint) both;
+  animation: veye-fade-up 320ms var(--ease-out-quint) backwards;
   animation-delay: calc(var(--i, 0) * 40ms);
 }
 
