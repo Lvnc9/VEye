@@ -209,6 +209,14 @@ export interface SignOffSummary {
   signed_date: string | null;
 }
 
+/** The node a document belongs to, as a register row carries it. */
+export interface OwnerNode {
+  id: number;
+  name: string;
+  kind: "COMPANY" | "DOMAIN" | "UNIT" | "SECTION";
+  kind_label: string;
+}
+
 export interface DocumentRow {
   id: number;
   category: DocumentCategory;
@@ -230,6 +238,8 @@ export interface DocumentRow {
   can_revise: boolean;
   /** True while the document is a draft — the only time its body can change. */
   can_edit: boolean;
+  /** The org-chart node the document belongs to (Phase 14); null for one that predates the chart. */
+  owner_node: OwnerNode | null;
   /** The register's «واحدهای مسئول»: the واحد named in the document's Responsibilities block, each once. */
   responsible_units: string[];
   signoffs: Record<SignOffRole, SignOffSummary | null>;
@@ -327,6 +337,8 @@ export interface DocumentCreatePayload {
   category: DocumentCategory;
   title: string;
   group: DocumentGroup;
+  /** The org-chart node the document belongs to (chosen from `GET /documents/owner-nodes/`). */
+  owner_node?: number | null;
 }
 
 export interface DocumentFilters {

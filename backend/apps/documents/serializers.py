@@ -9,7 +9,7 @@ from apps.core.constants import (
 )
 from apps.core.text import normalize_title
 
-from . import workflow
+from . import authority, workflow
 from .models import Document, DocumentEvent
 
 
@@ -29,6 +29,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     can_revise = serializers.SerializerMethodField()
     can_edit = serializers.BooleanField(source="is_editable", read_only=True)
     responsible_units = serializers.SerializerMethodField()
+    owner_node = serializers.SerializerMethodField()
     signoffs = serializers.SerializerMethodField()
     pdf_status = serializers.SerializerMethodField()
     pdf_built_at = serializers.SerializerMethodField()
@@ -54,6 +55,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "can_revise",
             "can_edit",
             "responsible_units",
+            "owner_node",
             "signoffs",
             "pdf_status",
             "pdf_built_at",
@@ -100,6 +102,14 @@ class DocumentSerializer(serializers.ModelSerializer):
 
     def get_responsible_units(self, obj: Document):
         return obj.responsible_units()
+
+    def get_owner_node(self, obj: Document):
+        """The org-chart node the document belongs to (the register lists it; null for one that
+        predates the chart). The list view selects it with the row, so this costs no query."""
+        node = obj.owner_node
+        if node is None:
+            return None
+        return {"id": node.pk, "name": node.name, "kind": node.kind, "kind_label": node.get_kind_display()}
 
     def get_signoffs(self, obj: Document):
         by_role = {s.role: s for s in obj.signoffs.all()}
@@ -153,11 +163,23 @@ class DocumentCreateSerializer(serializers.Serializer):
         },
     )
 
+    #: The org-chart node the document belongs to (Phase 14). Optional for now: someone who leads
+    #: nothing has no node to pick.
+    owner_node = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+
     def validate_title(self, value: str) -> str:
         value = normalize_title(value)
         if not value:
             raise serializers.ValidationError("عنوان را وارد کنید.")
         return value
+
+    def validate_owner_node(self, value):
+        if value is None:
+            return None
+        node = authority.eligible_owner_nodes(self.context["request"].user).filter(pk=value).first()
+        if node is None:
+            raise serializers.ValidationError("گرهٔ انتخاب‌شده معتبر نیست یا شما مسئول آن نیستید.")
+        return node
 
 
 class DocumentDetailSerializer(DocumentSerializer):

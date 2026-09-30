@@ -8,13 +8,13 @@ the typed title happens to exist.
 from collections.abc import Callable
 
 from django.db import transaction
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.core.constants import BodyKind, DocumentGroup
 from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_title
 
-from . import content, form_schema
+from . import authority, content, form_schema
 from .models import MAX_REVISION, Document, DocumentSequence
 
 #: Called with every brand-new document (revision 1) inside its creating transaction,
@@ -36,8 +36,10 @@ def _allocate_number(group: str) -> int:
 
 
 @transaction.atomic
-def create_document(*, user, category: str, title: str, group: str) -> Document:
-    """Register a brand-new document: revision 1 with the next number in its group.
+def create_document(*, user, category: str, title: str, group: str, owner_node=None) -> Document:
+    """Register a brand-new document: revision 1 with the next number in its group. `owner_node` is
+    the org-chart node it belongs to (Phase 14); the caller has already checked it is one the user
+    may pick (`authority.eligible_owner_nodes`).
 
     Everything runs in one transaction, so a rejected request rolls the number
     allocation back too — numbers stay gapless.
@@ -76,6 +78,7 @@ def create_document(*, user, category: str, title: str, group: str) -> Document:
         revision=1,
         body_kind=BodyKind.FORM if is_form else BodyKind.BLOCKS,
         form_settings=form_schema.default_settings() if is_form else {},
+        owner_node=owner_node,
         created_by=user,
     )
     for hook in NEW_DOCUMENT_HOOKS:
@@ -126,9 +129,28 @@ def create_revision(*, user, document_id: int) -> Document:
         revision=previous.revision + 1,
         previous_revision=previous,
         body_kind=previous.body_kind,
+        owner_node=previous.owner_node,
         created_by=user,
     )
     # V_1.0 opened a blank designer for every revision, so authors retyped the
     # whole document. A new revision now starts as a copy of the one it replaces.
     content.copy_content(previous, revision)
     return revision
+
+
+@transaction.atomic
+def set_owner_node(*, user, document_id: int, node_id: int) -> Document:
+    """Give a draft its owner node (or move it): only while it is a DRAFT, and only to a node the user
+    may pick — one they lead or that lies below one they lead (the مدیر عامل: any active node)."""
+    try:
+        document = Document.objects.select_for_update().get(pk=document_id)
+    except Document.DoesNotExist:
+        raise NotFound("مستند یافت نشد.")
+    if not document.is_editable:
+        raise ConflictError("گرهٔ مالک فقط تا زمانی که مستند پیش‌نویس است قابل تغییر است.", code="content_locked")
+    node = authority.eligible_owner_nodes(user).filter(pk=node_id).first()
+    if node is None:
+        raise ValidationError({"owner_node": ["گرهٔ انتخاب‌شده معتبر نیست یا شما مسئول آن نیستید."]})
+    document.owner_node = node
+    document.save(update_fields=["owner_node", "updated_at"])
+    return document

@@ -1676,9 +1676,10 @@ class DocumentAxisTests(SampleTree, TestCase):
         for capability in (Capability.MANAGE_ORGANIZATION, Capability.MANAGE_MEMBERSHIP, Capability.CREATE_PROJECT):
             self.assertFalse(lead.has_capability(capability))  # widening is access.py's job, not a capability's
 
-    #: The one module under apps/documents that may read the org *tree* (Phase 14: the Responsibilities
-    #: block names a حوزه / واحد). Nothing there may touch memberships.
-    ORG_TREE_READERS = {"responsibility_nodes.py"}
+    #: The modules under apps/documents that may read the org app (Phase 14): the Responsibilities block
+    #: names a حوزه / واحد, and authority.py decides who may act on a document from the chart — through
+    #: organization.access.OrgAccess, never through the membership table itself, which nothing there may name.
+    ORG_TREE_READERS = {"responsibility_nodes.py", "authority.py"}
 
     def test_no_document_module_reads_the_org_tables(self):
         """A structural guard: the workflow cannot depend on memberships if nothing in

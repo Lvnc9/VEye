@@ -2,13 +2,16 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useState } from "react";
 import { useCurrentUser } from "@/lib/current-user";
 import { formatJalali, formatJalaliDateTime } from "@/lib/jalali";
 import { Code } from "@/components/Code";
 import { StatusBadge } from "@/components/StatusBadge";
 import { WorkflowActions } from "@/components/WorkflowActions";
 import { WorkflowTimeline } from "@/components/WorkflowTimeline";
+import { OwnerNodeSelect, useOwnerNodeChoices } from "@/components/OwnerNodeSelect";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
+import { apiPost, ApiError } from "@/lib/api-client";
 import type { DesignerDocument } from "./useDesignerDocument";
 import { ArrowRight, Eye, Redo2, RotateCcw, Save, Undo2 } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
@@ -33,6 +36,24 @@ export function DesignerShell<S>({
 }) {
   const { can } = useCurrentUser();
   const { content, canEdit, dirty, saving, pendingUploads, previewing, notice, saveErrors } = doc;
+  const { choices: ownerChoices } = useOwnerNodeChoices();
+  const [ownerError, setOwnerError] = useState<string | null>(null);
+  const [ownerSaving, setOwnerSaving] = useState(false);
+
+  /** «گرهٔ مالک»: the node the document belongs to; a draft's owner can be changed to another the person may pick. */
+  async function changeOwner(id: number | null) {
+    if (id === null) return;
+    setOwnerError(null);
+    setOwnerSaving(true);
+    try {
+      await apiPost(`/documents/${content.document.id}/owner-node/`, { owner_node: id });
+      void doc.reload();
+    } catch (err) {
+      setOwnerError(err instanceof ApiError ? err.message : "تغییر گرهٔ مالک ممکن نشد.");
+    } finally {
+      setOwnerSaving(false);
+    }
+  }
 
   if (doc.reloading) return <LoadingBanner />;
   if (doc.loadError) return <ErrorBanner message={doc.loadError} />;
@@ -62,6 +83,28 @@ export function DesignerShell<S>({
             <p className="mt-0.5 text-sm text-slate-500">
               {document.group_label} · {document.category_label}
             </p>
+            {(document.owner_node || (canEdit && ownerChoices.length > 0)) && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                <span>گرهٔ مالک:</span>
+                {canEdit && ownerChoices.length > 0 ? (
+                  <OwnerNodeSelect
+                    value={document.owner_node?.id ?? null}
+                    choices={ownerChoices}
+                    disabled={ownerSaving || dirty}
+                    onChange={changeOwner}
+                    className="w-64 max-w-full"
+                  />
+                ) : (
+                  <span className="font-medium text-slate-800">
+                    {document.owner_node?.kind_label} · {document.owner_node?.name}
+                  </span>
+                )}
+                {dirty && canEdit && ownerChoices.length > 0 && (
+                  <span className="text-xs text-slate-500">ابتدا تغییرات را ذخیره کنید.</span>
+                )}
+              </div>
+            )}
+            {ownerError && <p className="mt-1 text-sm text-rose-700">{ownerError}</p>}
           </div>
           <div className="flex items-center gap-2">
             <Code>{document.full_code}</Code>

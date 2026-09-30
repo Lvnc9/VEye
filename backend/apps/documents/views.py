@@ -13,7 +13,7 @@ from apps.core.pagination import DefaultPagination
 from apps.core.permissions import HasCapability, capability_required
 
 from . import content as content_service
-from . import queries, services, workflow
+from . import authority, queries, services, workflow
 from .content_serializers import ContentInputSerializer, content_payload, file_payload
 from .models import Document, DocumentFile, Section
 from .serializers import (
@@ -43,7 +43,7 @@ class DocumentViewSet(
 
     def get_queryset(self):
         params = self.request.query_params
-        qs = Document.objects.prefetch_related(
+        qs = Document.objects.select_related("owner_node").prefetch_related(
             "signoffs",
             # The register's «واحدهای مسئول» column is read from the Responsibilities
             # section; fetching it here keeps that to two queries for the whole page
@@ -67,10 +67,30 @@ class DocumentViewSet(
         return DocumentDetailSerializer if self.action == "retrieve" else DocumentSerializer
 
     def create(self, request, *args, **kwargs):
-        serializer = DocumentCreateSerializer(data=request.data)
+        serializer = DocumentCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         document = services.create_document(user=request.user, **serializer.validated_data)
         return Response(DocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["get"], url_path="owner-nodes", permission_classes=[IsAuthenticated])
+    def owner_nodes(self, request):
+        """The nodes the caller may make a document's owner: those they lead and everything below them
+        (the مدیر عامل: the whole chart), in chart order, each with a «حوزه › واحد» label."""
+        return Response(authority.owner_node_choices(request.user))
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="owner-node",
+        permission_classes=[IsAuthenticated, capability_required(Capability.CREATE_DOCUMENT)],
+    )
+    def owner_node(self, request, pk=None):
+        """Give a draft its owner node, or move it to another the caller may pick."""
+        node_id = request.data.get("owner_node")
+        if not isinstance(node_id, int) or isinstance(node_id, bool):
+            raise ValidationError({"owner_node": ["گرهٔ مالک را انتخاب کنید."]})
+        document = services.set_owner_node(user=request.user, document_id=pk, node_id=node_id)
+        return self._workflow_response(document, request)
 
     @action(detail=True, methods=["post"])
     def revise(self, request, pk=None):

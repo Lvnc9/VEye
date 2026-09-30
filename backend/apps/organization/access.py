@@ -36,7 +36,7 @@ from .models import Membership, OrgNode, OrgNodeKind
 class OrgAccess:
     def __init__(self, user):
         self.user = user
-        self._lead_paths: tuple[str, ...] | None = None
+        self._leads: tuple[tuple[str, str], ...] | None = None
 
     # -- the two axes ---------------------------------------------------------
 
@@ -44,20 +44,30 @@ class OrgAccess:
         return self.user.has_capability(capability)
 
     @property
-    def lead_paths(self) -> tuple[str, ...]:
-        """`path` of every active node this person leads. The one query."""
-        if self._lead_paths is None:
-            self._lead_paths = tuple(
+    def lead_nodes(self) -> tuple[tuple[str, str], ...]:
+        """(`path`, `kind`) of every active node this person leads. The one query."""
+        if self._leads is None:
+            self._leads = tuple(
                 Membership.objects.filter(user=self.user, is_lead=True, node__is_active=True)
                 .order_by("id")
-                .values_list("node__path", flat=True)
+                .values_list("node__path", "node__kind")
             )
-        return self._lead_paths
+        return self._leads
+
+    @property
+    def lead_paths(self) -> tuple[str, ...]:
+        """`path` of every active node this person leads."""
+        return tuple(path for path, _ in self.lead_nodes)
 
     def leads(self, node: OrgNode) -> bool:
         """Do they lead this node or any ancestor of it? (A node's own path is a prefix of
         every path beneath it, and of nothing else.)"""
         return any(node.path.startswith(path) for path in self.lead_paths)
+
+    def leads_of_kind(self, node: OrgNode, kinds) -> bool:
+        """Do they lead this node or an ancestor of it that is one of `kinds`? (Phase 14: a
+        document is confirmed by the lead of a واحد / حوزه / شرکت above it, never of a بخش.)"""
+        return any(node.path.startswith(path) for path, kind in self.lead_nodes if kind in kinds)
 
     def led_subtree_q(self, path_field: str = "path") -> Q:
         """A filter for "rows whose node lies inside a subtree they lead" — one LIKE per lead

@@ -137,6 +137,15 @@ class Document(TimeStampedModel):
     # option existed print exactly as they did.
     show_company_name = models.BooleanField(default=False)
 
+    # The org-chart node this document belongs to (Phase 14, owner's decision 2026-09-30): the people
+    # who lead it — or a node above it — write and confirm it (see authority.py). Chosen when the
+    # document is created and inherited by its revisions. PROTECT: a node that owns documents cannot
+    # be deleted (archive it). NULL only for documents that predate the chart (or were imported):
+    # nobody but the مدیر عامل acts on one until it is given a node.
+    owner_node = models.ForeignKey(
+        "organization.OrgNode", null=True, blank=True, on_delete=models.PROTECT, related_name="documents"
+    )
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_documents"
     )

@@ -23,6 +23,8 @@ import {
 import { useCurrentUser } from "@/lib/current-user";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { Code } from "@/components/Code";
+import { OwnerNodeSelect, useOwnerNodeChoices } from "@/components/OwnerNodeSelect";
+import { defaultOwnerNode } from "@/lib/owner-node";
 import { PdfActions } from "@/components/PdfActions";
 import { WorkflowActions } from "@/components/WorkflowActions";
 import { BulkPrintDialog } from "@/components/BulkPrintDialog";
@@ -50,6 +52,7 @@ const COLUMNS = [
   "گروه",
   "بازنگری",
   "کد",
+  "گرهٔ مالک",
   "واحدهای مسئول",
   "تدوین",
   "تائید",
@@ -96,7 +99,7 @@ function ResponsibleUnitsCell({ units }: { units: string[] }) {
 }
 
 export default function DocumentRegisterPage() {
-  const { can } = useCurrentUser();
+  const { can, user } = useCurrentUser();
   const canCreate = can("create_document");
   const canPrint = can("print_document");
 
@@ -126,6 +129,10 @@ export default function DocumentRegisterPage() {
     title: "",
     group: "",
   });
+  // The node a new document belongs to (Phase 14): what the person picked, else one they lead.
+  const { choices: ownerChoices } = useOwnerNodeChoices();
+  const [pickedOwner, setPickedOwner] = useState<number | null | undefined>(undefined);
+  const ownerNode = pickedOwner === undefined ? defaultOwnerNode(ownerChoices, user?.memberships) : pickedOwner;
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [existingTitle, setExistingTitle] = useState<string | null>(null);
@@ -228,7 +235,7 @@ export default function DocumentRegisterPage() {
     setNotice(null);
     setCreating(true);
     try {
-      const created = await apiPost<DocumentRow>("/documents/", form as DocumentCreatePayload);
+      const created = await apiPost<DocumentRow>("/documents/", { ...form, owner_node: ownerNode } as DocumentCreatePayload);
       setNotice(`مستند ${created.full_code} ثبت شد.`);
       setForm((current) => ({ ...current, title: "" }));
       showNewest();
@@ -374,7 +381,7 @@ export default function DocumentRegisterPage() {
                 )}
               </div>
             )}
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className={`grid gap-4 ${ownerChoices.length > 0 ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"}`}>
               <label className="block text-sm">
                 <span className="mb-1.5 block text-slate-700">دسته بندی</span>
                 <select
@@ -415,6 +422,12 @@ export default function DocumentRegisterPage() {
                   ))}
                 </select>
               </label>
+              {ownerChoices.length > 0 && (
+                <label className="block text-sm">
+                  <span className="mb-1.5 block text-slate-700">گرهٔ مالک (واحد / بخش)</span>
+                  <OwnerNodeSelect value={ownerNode} choices={ownerChoices} onChange={setPickedOwner} />
+                </label>
+              )}
             </div>
             <div className="flex justify-end">
               <Button type="submit" variant="primary" loading={creating} icon={<FilePlus2 />}>
@@ -604,6 +617,15 @@ export default function DocumentRegisterPage() {
                       </td>
                       <td className="px-3 py-3.5">
                         <Code>{row.code}</Code>
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-600">
+                        {row.owner_node ? (
+                          <span title={row.owner_node.kind_label}>{row.owner_node.name}</span>
+                        ) : (
+                          <span className="text-slate-300" title="این مستند گرهٔ مالک ندارد">
+                            —
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-3.5 text-slate-600">
                         <ResponsibleUnitsCell units={row.responsible_units} />
