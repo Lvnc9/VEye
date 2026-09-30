@@ -95,6 +95,7 @@ class Break:
 class Table:
     columns: list[float]  # widths, right to left in reading order
     rows: list[list["Cell"]]
+    repeat_header: bool = False  # the first row is drawn again at the top of every later page
 
 
 @dataclass
@@ -353,12 +354,15 @@ class _Flow:
         self.left = maker.margin
         self.right = maker.page_width - maker.margin
         self.cursor = maker.current_y
+        self.page_hook = None  # called after every new page (a table repeats its header there)
 
     # -- pages --------------------------------------------------------------
 
     def new_page(self):
         self.maker._new_page()
         self.cursor = self.maker.current_y
+        if self.page_hook:
+            self.page_hook()
 
     def room(self) -> float:
         return self.cursor - BOTTOM
@@ -471,9 +475,25 @@ class _Flow:
     def _table(self, table: Table):
         self.cursor -= 2
         total = sum(table.columns)
-        for row in table.rows:
+        header = table.rows[0] if table.repeat_header and len(table.rows) > 1 else None
+        if header is not None:
+            # Never leave the header alone at the foot of a page: it needs room for one more line.
+            self.ensure(self._natural_height(header) + MIN_CELL_HEIGHT + 30)
+        for index, row in enumerate(table.rows):
+            if header is not None and index == 1:
+                self.page_hook = lambda: self._repeat_header(table, header)
             self._row(table, row, total)
+        self.page_hook = None
         self.cursor -= PARAGRAPH_GAP + 4
+
+    @staticmethod
+    def _natural_height(row: list[Cell]) -> float:
+        return max(max((cell.height for cell in row), default=0.0) + 2 * CELL_PAD, MIN_CELL_HEIGHT)
+
+    def _repeat_header(self, table: Table, header: list[Cell]):
+        height = self._natural_height(header)
+        self._draw_row(table, header, [list(cell.lines) for cell in header], height)
+        self.cursor -= height
 
     def _row(self, table: Table, row: list[Cell], total: float):
         pending = [list(cell.lines) for cell in row]
@@ -530,6 +550,66 @@ class _Flow:
                 self.line(line, y, x_right=x_right - CELL_PAD, x_left=x_left + CELL_PAD)
                 y -= line.height
             x_right = x_left
+
+
+#: جدول تغییرات (owner's request, 2026-09-30): the table uses the whole text width; the
+#: number and date columns are narrow, the description takes the rest and wraps.
+CHANGES_SIZE = 10.0
+CHANGES_NUMBER_WIDTH = 64.0
+CHANGES_DATE_WIDTH = 90.0
+
+
+def _changes_cell(text, *, header: bool, align: str, width: float) -> dict:
+    """A table cell of the changes table as the editor's JSON: 10 pt, hard newlines kept."""
+    marks = [{"type": "textStyle", "attrs": {"fontSize": CHANGES_SIZE}}]
+    content: list = []
+    for index, part in enumerate(str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")):
+        if index:
+            content.append({"type": "hardBreak"})
+        if part:
+            content.append({"type": "text", "text": part, "marks": marks})
+    return {
+        "type": "tableHeader" if header else "tableCell",
+        "attrs": {"colwidth": [width]},
+        "content": [{"type": "paragraph", "attrs": {"textAlign": align}, "content": content}],
+    }
+
+
+def render_changes(maker, header: list, rows: list[list]) -> None:
+    """Print the جدول تغییرات: its heading, then a header row and one row per change —
+    [شماره ردیف, تاریخ, عنوان] on the page from the right margin to the left, the description
+    at the right (as V_1.0 laid it out). Long text wraps inside its cell and the row grows, a
+    row that does not fit moves to the next page, and the header row is repeated there."""
+    maker._check_page_break(100)
+    maker.initialize_first_page()
+    width = maker.page_width - 2 * maker.margin
+    columns = [max(width - CHANGES_NUMBER_WIDTH - CHANGES_DATE_WIDTH, 120.0), CHANGES_DATE_WIDTH, CHANGES_NUMBER_WIDTH]
+    aligns = ["right", "center", "center"]
+
+    def line(values, *, is_header: bool) -> dict:
+        # Rows arrive as [ردیف, تاریخ, عنوان]; on the page the description is the rightmost cell.
+        ordered = list(reversed(list(values)))
+        return {
+            "type": "tableRow",
+            "content": [
+                _changes_cell(value, header=is_header, align=align, width=w)
+                for value, align, w in zip(ordered, aligns, columns)
+            ],
+        }
+
+    node = {"type": "table", "content": [line(header, is_header=True)] + [line(row, is_header=False) for row in rows]}
+    table = _table(node, width=width)
+    table.repeat_header = True
+    title = {"type": "heading", "attrs": {"level": 3}, "content": [{"type": "text", "text": "جدول تغییرات:"}]}
+    heading = _heading(title, width=width, right_offset=0.0)
+    heading.before = 0.0
+    heading.after = 6.0
+    flow = _Flow(maker)
+    flow.draw([heading, table])
+    maker.current_y = flow.cursor - 40
+    maker.c.setFillColorRGB(0, 0, 0)
+    maker.c.setStrokeColorRGB(0, 0, 0)
+    maker.idx_texts += 1
 
 
 def render(maker, heading: str, doc: dict) -> None:

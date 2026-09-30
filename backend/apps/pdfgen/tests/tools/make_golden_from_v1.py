@@ -41,6 +41,11 @@ The fifth is the owner's change to the ضمائم rows (2026-09-29): the QR sits
 left edge of the page on the caption's line. `patch_attachments` binds the port's
 `attachments` onto V_1.0's PDFMaker (handing it the QR files' bytes, which is what the
 port receives instead of paths).
+
+The sixth is the owner's change to the جدول تغییرات (2026-09-30): the table uses the whole
+text width and wraps long text inside its cell, and a table that runs past a page repeats
+its header. `patch_changes_table` binds the port's `add_table` onto V_1.0's PDFMaker (V_1.0
+drew three fixed-width columns with no wrapping).
 """
 import argparse
 import importlib
@@ -214,6 +219,13 @@ def patch_attachments(to_make_pdf):
     maker.attachments = attachments
 
 
+def patch_changes_table(to_make_pdf):
+    """The sixth normalisation (see the module docstring)."""
+    from apps.pdfgen import renderer
+
+    to_make_pdf.PDFMaker.add_table = renderer.PDFMaker.add_table
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--v1", required=True, help="dir holding other_folder/, Vazir.ttf, Vazir-Bold.ttf")
@@ -249,6 +261,7 @@ def main():
     patch_text_fixes(to_make_pdf)
     patch_header(to_make_pdf)
     patch_attachments(to_make_pdf)
+    patch_changes_table(to_make_pdf)
     convert.subprocess.run = lambda *a, **k: None  # the viewer launch
     convert.sys.exit = lambda *a: None
 

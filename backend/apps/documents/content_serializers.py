@@ -109,8 +109,10 @@ class ResponsibilitiesInput(_SectionInput):
 
 class _ChangeRowInput(serializers.Serializer):
     id = serializers.IntegerField(required=False, allow_null=True)
+    # 2026-09-30: the printed table wraps long text, so the cap is a safety net, not a layout limit
+    # (was 5000). Mirrored by MAX_CHANGE_TEXT in frontend/lib/designer.ts.
     text = serializers.CharField(
-        max_length=5000, error_messages={"blank": "عنوان تغییر را وارد کنید.", "required": "عنوان تغییر را وارد کنید."}
+        max_length=20000, error_messages={"blank": "عنوان تغییر را وارد کنید.", "required": "عنوان تغییر را وارد کنید."}
     )
 
 

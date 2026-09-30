@@ -23,7 +23,7 @@ ATTACHMENTS = "attachments"
 RICH = "rich"
 
 TABLE_HEADER = ["شماره ردیف", "تاریخ", "عنوان"]
-TABLE_COLUMN_WIDTHS = [50, 100, 200]
+# (V_1.0's fixed column widths [50, 100, 200] are gone: the جدول تغییرات fills the text width — richtext.render_changes.)
 
 
 @dataclass(frozen=True)
@@ -94,7 +94,7 @@ def deliver_to_pdf(data: PdfInput, *, preview: bool = False, invariant: bool = F
         elif tag == TABLE:
             # Earlier revisions' rows first (V_1.0 fetched them over HTTP).
             table = [TABLE_HEADER] + [list(row) for row in data.previous_changes] + [list(row) for row in payload]
-            pdf_maker.add_table(table, TABLE_COLUMN_WIDTHS, row_height=30)
+            pdf_maker.add_table(table)
         else:
             pdf_maker.add_body_text(payload, not_body=True)
 

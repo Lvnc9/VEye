@@ -656,56 +656,21 @@ class PDFMaker:
         old marker text still go through `add_body_text`."""
         richtext.render(self, heading, doc)
 
-    def add_table(self, data, col_widths, row_height=30, font_size=10):
+    def add_table(self, data, col_widths=None, row_height=30, font_size=10):
         """
-        Render a table-like structure in black text, with potential page breaks.
+        The جدول تغییرات: `data` is the header row followed by the rows, each
+        [شماره ردیف, تاریخ, عنوان]. Changed 2026-09-30 (the owner's request): the table
+        uses the whole text width and wraps long text inside its cell (richtext.py);
+        V_1.0 drew three fixed-width columns (50/100/200 pt), 30 pt rows and no wrapping,
+        so a long description ran across the neighbouring cells. `col_widths`,
+        `row_height` and `font_size` are V_1.0's arguments and no longer used.
         """
-        self._check_page_break(100)
-        self.initialize_first_page()
         if not data:
+            self._check_page_break(100)
+            self.initialize_first_page()
             return self.current_y
-
-        line_rtl = self.prepare_rtl("جدول تغییرات:")
-        x_right = self.page_width - self.margin
-        bold_font = (self.font_name + "-Bold" if (self.font_name + "-Bold")
-                     in pdfmetrics.getRegisteredFontNames()
-                     else self.font_name)
-        self.c.setFont(bold_font, 14)
-        self.c.drawRightString(x_right, self.current_y, line_rtl)
-        self.current_y -= 10
-
-        self.c.setFont(self.font_name, font_size)
-        total_width = sum(col_widths)
-        start_x = self.page_width - self.margin - total_width
-
-        for row_index, row in enumerate(data):
-            self._check_page_break(row_height)
-            # Light gray for first row
-            if row_index == 0:
-                self.c.setFillColorRGB(0.9, 0.9, 0.9)
-                self.c.rect(start_x, self.current_y - row_height, total_width, row_height, fill=1, stroke=0)
-            self.c.setFillColorRGB(0, 0, 0)
-
-            self.c.line(start_x, self.current_y, start_x + total_width, self.current_y)
-            x = start_x
-            for width, value in zip(col_widths, row):
-                self.c.line(x, self.current_y, x, self.current_y - row_height)
-                text = self.prepare_rtl(value)
-                text_width = self.c.stringWidth(text, self.font_name, font_size)
-                text_x = x + (width - text_width) / 2
-                text_y = self.current_y - (row_height / 2) - (font_size / 2)
-                self.c.drawString(text_x, text_y, text)
-                x += width
-
-            self.c.line(x, self.current_y, x, self.current_y - row_height)
-            self.current_y -= row_height
-
-        self.c.line(start_x, self.current_y, start_x + total_width, self.current_y)
-        self.current_y -= 50
-        self.idx_texts += 1
-
+        richtext.render_changes(self, data[0], data[1:])
         return self.current_y
-
 
     @staticmethod
     def text_merge(text, limit=180):

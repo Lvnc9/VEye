@@ -1,10 +1,25 @@
 "use client";
 
+import { useLayoutEffect, useRef, type TextareaHTMLAttributes } from "react";
+import { X } from "lucide-react";
+import { MAX_CHANGE_TEXT } from "@/lib/designer";
 import { formatJalali, todayJalali } from "@/lib/jalali";
 import type { ChangesSection, PreviousChange } from "@/lib/types";
+import { textareaClass } from "../ui/Field";
 import { Code } from "../Code";
-import { AddButton, IconButton, inputClass, type BlockProps } from "./ui";
-import { X } from "lucide-react";
+import { AddButton, IconButton, type BlockProps } from "./ui";
+
+/** A textarea that grows with its text, so a long description is never hidden behind a scrollbar. */
+function GrowingTextarea({ value, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { value: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+  }, [value]);
+  return <textarea ref={ref} rows={1} value={value} {...props} className={`${textareaClass} resize-none overflow-hidden`} />;
+}
 
 /**
  * جدول تغییرات — the change log.
@@ -56,7 +71,7 @@ export function ChangesBlock({
                   <Code>{row.revision_display}</Code>
                 </td>
                 <td className="px-2 py-2">{formatJalali(row.date)}</td>
-                <td className="px-2 py-2">{row.text}</td>
+                <td className="whitespace-pre-line px-2 py-2">{row.text}</td>
                 <td />
               </tr>
             ))}
@@ -70,11 +85,10 @@ export function ChangesBlock({
                   {row.date ? formatJalali(row.date) : <span title="پس از ذخیره‌سازی ثبت می‌شود">{today}</span>}
                 </td>
                 <td className="px-2 py-1">
-                  <input
-                    type="text"
+                  <GrowingTextarea
                     value={row.text}
                     disabled={disabled}
-                    maxLength={5000}
+                    maxLength={MAX_CHANGE_TEXT}
                     placeholder={`${index}-${offset + position + 1}`}
                     onChange={(event) =>
                       update((s) => ({
@@ -82,7 +96,6 @@ export function ChangesBlock({
                         rows: s.rows.map((r, i) => (i === position ? { ...r, text: event.target.value } : r)),
                       }))
                     }
-                    className={inputClass}
                   />
                 </td>
                 <td className="px-1 py-1">

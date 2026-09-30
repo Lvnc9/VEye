@@ -22,6 +22,9 @@ export function newKey(): string {
   return `s${keyCounter}`;
 }
 
+/** The longest text of one جدول تغییرات row (mirrors `_ChangeRowInput.text` in content_serializers.py). */
+export const MAX_CHANGE_TEXT = 20000;
+
 /** The four fixed rows, in V_1.0's on-screen order (utils.py:1373-1403). */
 export const ROLE_ORDER: ResponsibilityRoleKey[] = ["responder", "receiver", "cash_account", "supervisor"];
 
