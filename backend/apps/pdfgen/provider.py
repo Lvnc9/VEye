@@ -22,6 +22,11 @@ ATTACHMENTS = "attachments"
 #: A تشریحی بلند block written in the rich editor: (heading, ProseMirror doc) — richtext.py.
 RICH = "rich"
 
+#: Who signs, and where (owner's request, 2026-09-30): روش اجرایی and دستورالعمل keep the control
+#: table on page 1; پوستر and فرم close the last page with the sign-off strip.
+CONTROL_TABLE = "control_table"
+STRIP = "strip"
+
 TABLE_HEADER = ["شماره ردیف", "تاریخ", "عنوان"]
 # (V_1.0's fixed column widths [50, 100, 200] are gone: the جدول تغییرات fills the text width — richtext.render_changes.)
 
@@ -44,7 +49,11 @@ class PdfInput:
     whole_code: str
     review: str
     date: str
-    validation: str
+    #: Print «منسوخ» behind every page: this revision has been superseded (2026-09-30; it replaced
+    #: the «معتبر» / «منسوخ» cell of the control table).
+    obsolete: bool = False
+    #: CONTROL_TABLE (a cover page, then the body) or STRIP (the body from page 1, then the strip).
+    signoff_layout: str = CONTROL_TABLE
     upper_footnote: str = ""
     lower_footnote: str = ""
     extra_header: str = ""
@@ -76,17 +85,20 @@ def deliver_to_pdf(data: PdfInput, *, preview: bool = False, invariant: bool = F
         lower_foot=data.lower_footnote,
         preview_mode=preview,
         invariant=invariant,
+        obsolete=data.obsolete,
+        cover_page=data.signoff_layout == CONTROL_TABLE,
     )
 
     pdf_maker.draw_header(title_text=data.title, details=details)
 
-    pdf_maker.draw_control_table(
-        data.creater.as_list(),
-        data.confirmer.as_list(),
-        data.approver.as_list(),
-        data.validation,
-        data.extra_header,
-    )
+    if data.signoff_layout == CONTROL_TABLE:
+        pdf_maker.draw_control_table(
+            data.creater.as_list(),
+            data.confirmer.as_list(),
+            data.approver.as_list(),
+            "",
+            data.extra_header,
+        )
     for tag, payload in data.blocks:
         if tag == ATTACHMENTS:
             pdf_maker.attachments(payload)
@@ -100,5 +112,8 @@ def deliver_to_pdf(data: PdfInput, *, preview: bool = False, invariant: bool = F
             pdf_maker.add_table(table)
         else:
             pdf_maker.add_body_text(payload, not_body=True)
+
+    if data.signoff_layout == STRIP:
+        pdf_maker.draw_signoff_strip(data.creater.as_list(), data.confirmer.as_list(), data.approver.as_list())
 
     return pdf_maker.generate_pdf()

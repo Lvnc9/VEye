@@ -46,6 +46,13 @@ The sixth is the owner's change to the جدول تغییرات (2026-09-30): the
 text width and wraps long text inside its cell, and a table that runs past a page repeats
 its header. `patch_changes_table` binds the port's `add_table` onto V_1.0's PDFMaker (V_1.0
 drew three fixed-width columns with no wrapping).
+
+The seventh is the owner's change to who signs where (2026-09-30): the control table loses its
+«وضعیت کنترل» column and is drawn only for PROCEDURE / INSTRUCTION; پوستر and فرم have no cover
+page and close the last page with the sign-off strip; a superseded revision carries «منسوخ» on
+every page (the canvas's watermark methods are the port's). `patch_signoff` binds all of that
+onto V_1.0's classes; `LAYOUT` says which case is being drawn (V_1.0 knows neither group nor
+status at draw time).
 """
 import argparse
 import importlib
@@ -219,6 +226,70 @@ def patch_attachments(to_make_pdf):
     maker.attachments = attachments
 
 
+#: What the case being drawn needs: the sign-off strip instead of the control table (پوستر / فرم)
+#: and «منسوخ» on every page. Set per case by `main`.
+LAYOUT = {"strip": False, "obsolete": False}
+
+
+def patch_signoff(to_make_pdf):
+    """The seventh normalisation (see the module docstring)."""
+    from apps.pdfgen import renderer
+
+    maker = to_make_pdf.PDFMaker
+    canvas_class = to_make_pdf.HeaderFooterCanvas
+    port_canvas = renderer.HeaderFooterCanvas
+    # The watermark: «منسوخ» from page 1, once per page, under the content; a preview as before.
+    for name in ("_watermark_text", "_mark_first_page", "showPage", "save", "_draw_preview_on_current_page"):
+        setattr(canvas_class, name, getattr(port_canvas, name))
+
+    original_canvas_init = canvas_class.__init__
+
+    def canvas_init(self, *args, **kwargs):
+        original_canvas_init(self, *args, **kwargs)
+        self.obsolete = LAYOUT["obsolete"]
+        self._mark_first_page()  # the port's canvas does this at the end of its own __init__
+
+    canvas_class.__init__ = canvas_init
+    original_init = maker.__init__
+
+    def init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        self.company_name = ""
+        self.cover_page = not LAYOUT["strip"]
+
+    maker.__init__ = init
+    maker.initialize_first_page = renderer.PDFMaker.initialize_first_page
+
+    def signer(block):
+        """[name, post, signature URL] -> [name, post, PNG bytes] — what the port receives. V_1.0's
+        `image_checker` maps the URL to ./img/<file name> (its download cache)."""
+        block = block or ["", "", ""]
+        url = block[2]
+        path = Path("img") / url.split("/")[-1].replace("%20", " ") if url else None
+        return [block[0], block[1], path.read_bytes() if path and path.exists() else None]
+
+    port_table = renderer.PDFMaker.draw_control_table
+
+    def draw_control_table(self, creater=None, confirmer=None, approver=None, validation="", extra_header=""):
+        signers = [signer(creater), signer(confirmer), signer(approver)]
+        if LAYOUT["strip"]:
+            self._signers = signers  # the strip closes the last page (see generate_pdf below)
+            return None
+        return port_table(self, *signers, validation, extra_header)
+
+    maker.draw_control_table = draw_control_table
+    maker.draw_data_cell = renderer.PDFMaker.draw_data_cell  # outlined, not filled white
+    maker.draw_signoff_strip = renderer.PDFMaker.draw_signoff_strip
+    original_generate = maker.generate_pdf
+
+    def generate_pdf(self):
+        if LAYOUT["strip"]:  # what the port's provider does after the last block
+            self.draw_signoff_strip(*self._signers)
+        return original_generate(self)
+
+    maker.generate_pdf = generate_pdf
+
+
 def patch_changes_table(to_make_pdf):
     """The sixth normalisation (see the module docstring)."""
     from apps.pdfgen import renderer
@@ -262,6 +333,7 @@ def main():
     patch_header(to_make_pdf)
     patch_attachments(to_make_pdf)
     patch_changes_table(to_make_pdf)
+    patch_signoff(to_make_pdf)
     convert.subprocess.run = lambda *a, **k: None  # the viewer launch
     convert.sys.exit = lambda *a: None
 
@@ -286,6 +358,8 @@ def main():
         path = workdir / "saves" / f"{name}.json"
         path.write_text(json.dumps(v1_json(name, case, responses, workdir), ensure_ascii=False), encoding="utf-8")
 
+        LAYOUT["strip"] = case["group"] in ("POSTER", "FORM")
+        LAYOUT["obsolete"] = case["status"] == "OBSOLETE"
         convert.SHORT = ""
         provider = convert.Provider(str(path))
         provider.extract_from_json()

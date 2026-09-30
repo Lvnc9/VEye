@@ -8,6 +8,7 @@ drawn last-page furniture, footers over content on later pages, text_merge...),
 the rich-text markers, Persian shaping/bidi, the change-table history, and the
 mapping from database rows to what V_1.0's JSON carried.
 """
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -37,6 +38,10 @@ class GoldenPdfTests(TestCase):
     def check(self, key):
         expected = (GOLDEN / f"{key}.pdf").read_bytes()
         actual = self.render(key)
+        dump = os.environ.get("VEYE_GOLDEN_DUMP")  # debugging aid: write what the port drew, to compare by eye
+        if dump:
+            Path(dump).mkdir(parents=True, exist_ok=True)
+            (Path(dump) / f"{key}.pdf").write_bytes(actual)
         self.assertEqual(len(actual), len(expected), f"{key}: size differs")
         self.assertTrue(actual == expected, f"{key}: bytes differ from V_1.0's output")
 

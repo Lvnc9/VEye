@@ -24,7 +24,7 @@ def make_input(n: int) -> PdfInput:
         whole_code=f"PR-{n:02d}-01",
         review="01",
         date=f"1404/0{n % 9 + 1}/1{n % 9}",
-        validation="معتبر" if n % 2 else "منسوخ",
+        obsolete=n % 2 == 0,
         upper_footnote=f"پاورقی بالا {n}",
         lower_footnote=f"پاورقی پایین {n}",
         logo=fixture_bytes("logo.png") if n % 2 else None,
@@ -133,7 +133,7 @@ class CrashBugRegressionTests(SimpleTestCase):
 
     def test_missing_logo_and_qr_draw_placeholders_not_crash(self):
         pdf = provider.deliver_to_pdf(
-            PdfInput(title="ت", whole_code="PR-01-01", review="01", date="1404/01/01", validation="")
+            PdfInput(title="ت", whole_code="PR-01-01", review="01", date="1404/01/01")
         )
         self.assertTrue(pdf.startswith(b"%PDF-"))
 

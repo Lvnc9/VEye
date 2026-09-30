@@ -94,17 +94,31 @@ class AdapterTests(TestCase):
         doc = make_doc(self.author, content_saved_at=None)
         self.assertEqual(adapter.load(doc.pk).date, adapter.jalali(timezone.localdate()))
 
-    def test_validation_mark_follows_status(self):
+    def test_only_a_superseded_revision_is_marked_obsolete(self):
+        # 2026-09-30: no «معتبر» / «منسوخ» cell any more — a superseded revision gets the watermark.
         expected = {
-            DocumentStatus.UNDER_CONTROL: "معتبر",
-            DocumentStatus.OBSOLETE: "منسوخ",
-            DocumentStatus.DRAFT: "",
-            DocumentStatus.AWAITING_CONFIRMATION: "",
-            DocumentStatus.AWAITING_APPROVAL: "",
+            DocumentStatus.UNDER_CONTROL: False,
+            DocumentStatus.OBSOLETE: True,
+            DocumentStatus.DRAFT: False,
+            DocumentStatus.AWAITING_CONFIRMATION: False,
+            DocumentStatus.AWAITING_APPROVAL: False,
         }
-        for number, (status, mark) in enumerate(expected.items(), start=1):
+        for number, (status, obsolete) in enumerate(expected.items(), start=1):
             doc = make_doc(self.author, number=number, title=f"t{number}", status=status)
-            self.assertEqual(adapter.load(doc.pk).validation, mark, status)
+            self.assertIs(adapter.load(doc.pk).obsolete, obsolete, status)
+
+    def test_the_sign_off_layout_follows_the_group(self):
+        for number, (group, layout) in enumerate(
+            {
+                "PROCEDURE": provider.CONTROL_TABLE,
+                "INSTRUCTION": provider.CONTROL_TABLE,
+                "POSTER": provider.STRIP,
+                "FORM": provider.STRIP,
+            }.items(),
+            start=1,
+        ):
+            doc = make_doc(self.author, number=number, title=f"g{number}", group=group)
+            self.assertEqual(adapter.load(doc.pk).signoff_layout, layout, group)
 
     def test_qr_encodes_the_verify_url_of_the_printed_code(self):
         doc = make_doc(self.author)

@@ -115,7 +115,7 @@ class BoxedHeaderTests(SimpleTestCase):
 
 def long_document() -> PdfInput:
     return PdfInput(
-        title="عنوان آزمون", whole_code="PR-01-02", review="02", date="1405/07/07", validation="معتبر",
+        title="عنوان آزمون", whole_code="PR-01-02", review="02", date="1405/07/07",
         logo=fixture_bytes("logo.png"), qr=fixture_bytes("logo.png"),
         blocks=tuple((provider.TEXT, f"{i}-بند\n" + "متن آزمایشی " * 40) for i in range(1, 25)),
     )
@@ -223,7 +223,7 @@ class CompanyNameOnEveryPageTests(SimpleTestCase):
         self.assertFalse([c for c in string.call_args_list if c.args[2] == rtl.shape("شرکت نمونه")])
 
     def test_deliver_to_pdf_passes_the_name_on(self):
-        data = PdfInput(title="ت", whole_code="PR-01-02", review="01", date="1405/07/07", validation="", company_name="شرکت نمونه")
+        data = PdfInput(title="ت", whole_code="PR-01-02", review="01", date="1405/07/07", company_name="شرکت نمونه")
         with mock.patch.object(renderer.PDFMaker, "__init__", autospec=True, side_effect=renderer.PDFMaker.__init__) as init:
             provider.deliver_to_pdf(data, invariant=True)
         self.assertEqual(init.call_args.kwargs["company_name"], "شرکت نمونه")

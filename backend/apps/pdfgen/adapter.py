@@ -18,10 +18,10 @@ from PIL import Image
 
 from apps.core.constants import (
     RESPONSIBILITY_ROW_LABELS,
+    DocumentGroup,
     DocumentStatus,
     SectionType,
     SignOffRole,
-    ValidationMark,
 )
 from apps.documents.models import Document, Section
 from apps.organization.models import Company
@@ -76,16 +76,21 @@ def _read_png(field, *, flatten: bool = False) -> bytes | None:
     return data
 
 
-def _validation_mark(status: str) -> str:
-    """Printed in the control table's merged «وضعیت کنترل» cell. V_1.0 wrote the
-    literal 'معتبر' when a document was signed off and replaced it when a newer
-    revision superseded it. A document that has not reached control has no
-    validity yet, so the cell stays empty rather than claiming one."""
-    if status == DocumentStatus.UNDER_CONTROL:
-        return ValidationMark.VALID.label
-    if status == DocumentStatus.OBSOLETE:
-        return ValidationMark.OBSOLETE.label
-    return ""
+def is_obsolete(status: str) -> bool:
+    """A superseded revision is marked by a «منسوخ» watermark on every page (owner's request,
+    2026-09-30). This replaced the control table's «وضعیت کنترل» cell, which printed «معتبر» /
+    «منسوخ»; an up-to-date revision, and one not yet under control, print no validity at all."""
+    return status == DocumentStatus.OBSOLETE
+
+
+#: Where each group's sign-off goes: a control table on a cover page (V_1.0), or a strip that
+#: closes the last page (owner's request, 2026-09-30).
+SIGNOFF_LAYOUT = {
+    DocumentGroup.PROCEDURE: provider.CONTROL_TABLE,
+    DocumentGroup.INSTRUCTION: provider.CONTROL_TABLE,
+    DocumentGroup.POSTER: provider.STRIP,
+    DocumentGroup.FORM: provider.STRIP,
+}
 
 
 def _signature(signoff) -> provider.SignatureBlock:
@@ -206,7 +211,8 @@ def load(document_id: int) -> provider.PdfInput:
         whole_code=document.full_code,
         review=document.revision_display,
         date=jalali(day),
-        validation=_validation_mark(document.status),
+        obsolete=is_obsolete(document.status),
+        signoff_layout=SIGNOFF_LAYOUT.get(document.group, provider.CONTROL_TABLE),
         upper_footnote=document.footnote1,
         lower_footnote=document.footnote2,
         logo=logo,

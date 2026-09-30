@@ -6,10 +6,10 @@ control table), the form starts on page 1, and every page carries the form's
 identity so a loose sheet is still identifiable:
 
 * a header band — logo, title, company name / subtitle, and a column with the
-  code, revision, date, validity and «صفحه X از Y»;
+  code, revision, date and «صفحه X از Y»;
 * a footer — the two footnotes and the QR code of the verify page;
-* on a preview, the «پیش نمایش» watermark;
-* after the last element, once, the approval strip (تدوین / تایید / تصویب).
+* on a preview, the «پیش نمایش» watermark; on a superseded revision, «منسوخ» on every page;
+* at the foot of the last page, once, the approval strip (تهیه / تایید / تصویب کننده).
 
 It is built with ReportLab platypus: each element becomes a flowable, and the
 page furniture is drawn by a canvas that waits for the last page so it knows
@@ -29,7 +29,18 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
-from reportlab.platypus import BaseDocTemplate, Flowable, Frame, KeepTogether, PageBreak, PageTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    BaseDocTemplate,
+    CondPageBreak,
+    Flowable,
+    Frame,
+    KeepTogether,
+    PageBreak,
+    PageTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from . import rtl
 
@@ -56,6 +67,7 @@ ANSWER_LINE = 8
 SIGNATURE_GAP = 3
 
 PREVIEW_TEXT = "پیش نمایش"
+OBSOLETE_TEXT = "منسوخ"
 
 
 @dataclass(frozen=True)
@@ -63,6 +75,7 @@ class Signer:
     role_label: str
     name: str = ""
     position: str = ""
+    #: Kept for whoever reads the data; the strip no longer prints it (2026-09-30).
     date: str = ""
     image: bytes | None = None
 
@@ -73,7 +86,9 @@ class FormPdfInput:
     full_code: str
     revision: str
     date: str
-    validation: str = ""
+    #: A superseded revision: «منسوخ» is drawn behind every page (2026-09-30; it replaced the
+    #: header's «وضعیت: معتبر» row).
+    obsolete: bool = False
     company_name: str = ""
     subtitle: str = ""
     show_letter_box: bool = False
@@ -1000,23 +1015,74 @@ class _Image(Flowable):
         self.canv.drawImage(self.reader, (self.width - w) / 2, (self.height - h) / 2, w, h, mask="auto")
 
 
+class _SignatureCell(Flowable):
+    """«امضا:» at the top right, and the drawn signature (if any) filling the rest of the cell."""
+
+    def __init__(self, image: bytes | None, size: float, height: float):
+        super().__init__()
+        self.reader = ImageReader(BytesIO(image)) if image else None
+        self.size = size
+        self.box_height = height
+
+    def wrap(self, avail_width, avail_height):
+        self.width, self.height = avail_width, self.box_height
+        return self.width, self.height
+
+    def draw(self):
+        font = _fonts(self.size)
+        rtl.draw_line(self.canv, [("امضا:", rtl.BOLD)], font, x_right=self.width - 1.5, y=self.height - self.size * 1.05)
+        if self.reader is None:
+            return
+        top = self.height - self.size * 1.6
+        iw, ih = self.reader.getSize()
+        scale = min((self.width - 6 * mm) / iw, top / ih)
+        w, h = iw * scale, ih * scale
+        self.canv.drawImage(self.reader, (self.width - w) / 2, (top - h) / 2, w, h, mask="auto")
+
+
+class _BottomAnchored(Flowable):
+    """Fills what is left of the frame and draws `content` flush with the frame's bottom edge,
+    so the strip closes the last page instead of trailing the last element."""
+
+    def __init__(self, content: Flowable):
+        super().__init__()
+        self.content = content
+
+    def wrap(self, avail_width, avail_height):
+        self.content.wrap(avail_width, avail_height)
+        self.width, self.height = avail_width, avail_height
+        return self.width, self.height
+
+    def draw(self):
+        self.content.drawOn(self.canv, 0, 0)
+
+
+def _plain(value: str) -> str:
+    """User text without the designer's inline markers, so a name is never restyled."""
+    text = value or ""
+    for marker in ("**", "~~", "--"):
+        text = text.replace(marker, "")
+    return text.strip()
+
+
 def _approval_strip(data: FormPdfInput, width: float) -> list:
-    """Three columns, تدوین on the right: role, name, سمت, date, signature."""
+    """Three columns, the first signer on the right — تهیه کننده | تایید کننده | تصویب کننده.
+    Each is a stack: the role, «سمت: …», «نام و نام خانوادگی: …», then «امضا:» with the signature
+    (owner's request, 2026-09-30; no date, no validity). Pinned to the foot of the last page."""
     size = data.base_font_size - 1
     signers = list(data.signers)
     columns = []
     for signer in signers:
         columns.append(
             [
-                _cell(signer.role_label, size, bold=True),
-                _cell(signer.name, size),
-                _cell(signer.position, size, color=MUTED),
-                _cell(signer.date, size),
-                _Image(signer.image, 30 * mm, 12 * mm) if signer.image else Spacer(1, 12 * mm),
+                _cell(signer.role_label + ":", size + 1, bold=True),
+                _cell(f"**سمت:** {_plain(signer.position)}".rstrip(), size, align="right"),
+                _cell(f"**نام و نام خانوادگی:** {_plain(signer.name)}".rstrip(), size, align="right"),
+                _SignatureCell(signer.image, size - 1, 16 * mm),
             ]
         )
     # Rows of the table; the columns reversed so the first signer sits on the right.
-    rows = [[column[i] for column in reversed(columns)] for i in range(5)]
+    rows = [[column[i] for column in reversed(columns)] for i in range(4)]
     table = Table(rows, colWidths=[width / len(columns)] * len(columns))
     table.setStyle(
         TableStyle(
@@ -1024,15 +1090,20 @@ def _approval_strip(data: FormPdfInput, width: float) -> list:
                 ("GRID", (0, 0), (-1, -1), 0.5, LINE_COLOR),
                 ("BACKGROUND", (0, 0), (-1, 0), BAND_FILL),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                # Flowables narrower than their cell (the signature images) sit
-                # at the cell's left unless told otherwise.
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("TOPPADDING", (0, 0), (-1, -1), 1.5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+                ("VALIGN", (0, 3), (-1, 3), "TOP"),
+                ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+                ("LEFTPADDING", (0, 1), (-1, 2), 3),
+                ("RIGHTPADDING", (0, 1), (-1, 2), 3),
+                ("LEFTPADDING", (0, 3), (-1, 3), 0),
+                ("RIGHTPADDING", (0, 3), (-1, 3), 0),
+                ("TOPPADDING", (0, 3), (-1, 3), 0),
+                ("BOTTOMPADDING", (0, 3), (-1, 3), 0),
             ]
         )
     )
-    return [Spacer(1, 6 * mm), KeepTogether([table])]
+    _, height = table.wrap(width, 10**6)
+    return [CondPageBreak(height + 4 * mm), _BottomAnchored(table)]
 
 
 def story(data: FormPdfInput, width: float, height: float = 230 * mm) -> list:
@@ -1116,8 +1187,6 @@ def _draw_header(c, data: FormPdfInput, page: int, total: int):
 
     # Left column: identity of this sheet.
     meta = [f"کد: {data.full_code}", f"بازنگری: {data.revision}", f"تاریخ: {data.date}"]
-    if data.validation:
-        meta.append(f"وضعیت: {data.validation}")
     meta.append(f"صفحه {page} از {total}")
     font = _fonts(8.5)
     row = (HEADER_HEIGHT * mm) / len(meta)
@@ -1155,14 +1224,14 @@ def _draw_footer(c, data: FormPdfInput):
     c.restoreState()
 
 
-def _draw_watermark(c):
+def _draw_watermark(c, text: str = PREVIEW_TEXT):
     width, height = c._pagesize
     c.saveState()
     c.setFillColorRGB(0.85, 0.85, 0.85)
     c.translate(width / 2, height / 2)
     c.rotate(45)
     c.setFont(f"{settings.PDF_FONT_NAME}-Bold", 60)
-    c.drawCentredString(0, 0, rtl.shape(PREVIEW_TEXT))
+    c.drawCentredString(0, 0, rtl.shape(text))
     c.restoreState()
 
 
@@ -1218,8 +1287,10 @@ def render(data: FormPdfInput, *, preview: bool = False, invariant: bool = False
         creator="VEye",
         invariant=1 if invariant else 0,
     )
-    # The watermark goes on first, under the page's content.
-    on_page = (lambda canvas, _doc: _draw_watermark(canvas)) if preview else (lambda canvas, _doc: None)
+    # The watermark goes on first, under the page's content. «منسوخ» (a superseded revision) wins
+    # over «پیش نمایش»: what matters most about the sheet is that it is no longer in force.
+    mark = OBSOLETE_TEXT if data.obsolete else (PREVIEW_TEXT if preview else None)
+    on_page = (lambda canvas, _doc: _draw_watermark(canvas, mark)) if mark else (lambda canvas, _doc: None)
     doc.addPageTemplates([PageTemplate(id="form", frames=[frame], onPage=on_page)])
 
     content = story(data, frame_width, frame_top - frame_bottom)

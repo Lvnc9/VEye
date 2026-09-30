@@ -315,7 +315,7 @@ export function PageSettingsPanel({
         onChange={(show_letter_box) => header({ show_letter_box })}
       />
       <Check
-        label="جدول امضای تدوین، تایید و تصویب در پایان فرم"
+        label="جدول امضای تهیه، تایید و تصویب در پایان فرم"
         checked={settings.approval_strip}
         disabled={disabled}
         onChange={(approval_strip) => onChange({ ...settings, approval_strip })}

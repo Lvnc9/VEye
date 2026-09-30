@@ -232,24 +232,38 @@ function LetterBox() {
   );
 }
 
+/** What the printed strip shows (backend `signoff.ROLES`, `form_renderer._approval_strip`): the columns
+ *  right to left — تهیه کننده | تایید کننده | تصویب کننده — each a stack of the role, سمت, name and signature. */
+const STRIP_ROLES = ["تهیه کننده", "تایید کننده", "تصویب کننده"];
+
 function ApprovalStrip({ size }: { size: number }) {
+  const cell = "border-[0.5pt] border-slate-700 px-1 text-start";
   return (
-    <table className="w-full table-fixed border-collapse text-center" style={{ marginTop: mm(6), fontSize: pt(size) }}>
+    <table className="w-full table-fixed border-collapse" style={{ marginTop: mm(6), fontSize: pt(size) }}>
       <tbody>
         <tr className="bg-[#e6e8ed] font-bold">
-          {["تدوین کننده", "تایید کننده", "تصویب کننده"].map((role) => (
-            <td key={role} className="border-[0.5pt] border-slate-700 py-0.5">
-              {role}
+          {STRIP_ROLES.map((role) => (
+            <td key={role} className="border-[0.5pt] border-slate-700 py-0.5 text-center">
+              {role}:
             </td>
           ))}
         </tr>
-        {[0, 1, 2].map((row) => (
-          <tr key={row}>
-            {[0, 1, 2].map((cell) => (
-              <td key={cell} className="border-[0.5pt] border-slate-700" style={{ height: row === 2 ? mm(14) : mm(5) }} />
+        {["سمت:", "نام و نام خانوادگی:"].map((label) => (
+          <tr key={label}>
+            {STRIP_ROLES.map((role) => (
+              <td key={role} className={`${cell} font-bold`} style={{ height: mm(6) }}>
+                {label}
+              </td>
             ))}
           </tr>
         ))}
+        <tr>
+          {STRIP_ROLES.map((role) => (
+            <td key={role} className={`${cell} align-top font-bold`} style={{ height: mm(16), fontSize: pt(size - 1) }}>
+              امضا:
+            </td>
+          ))}
+        </tr>
       </tbody>
     </table>
   );

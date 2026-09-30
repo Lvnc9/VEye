@@ -409,7 +409,7 @@ class TableTests(SimpleTestCase):
 class ThroughTheProviderTests(SimpleTestCase):
     def pdf(self, blocks):
         data = PdfInput(
-            title="عنوان", whole_code="PR-01-02", review="02", date="1405/07/07", validation="معتبر",
+            title="عنوان", whole_code="PR-01-02", review="02", date="1405/07/07",
             logo=fixture_bytes("logo.png"), qr=fixture_bytes("logo.png"), blocks=tuple(blocks),
         )
         return provider.deliver_to_pdf(data, invariant=True)

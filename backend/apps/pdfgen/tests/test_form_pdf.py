@@ -9,6 +9,7 @@ from unittest import mock
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.units import mm
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import KeepTogether
 from rest_framework.test import APIClient
@@ -146,7 +147,7 @@ class NumberingTests(SimpleTestCase):
 class FurnitureTests(SimpleTestCase):
     def test_the_header_names_the_sheet(self):
         canvas = RecordingCanvas(pagesize=A4)
-        data = form_input(validation="معتبر", company_name="شرکت نمونه", subtitle="منابع انسانی")
+        data = form_input(obsolete=True, company_name="شرکت نمونه", subtitle="منابع انسانی")
         form_renderer._draw_header(canvas, data, 2, 3)
         texts = canvas.texts()
         for expected in (
@@ -154,17 +155,18 @@ class FurnitureTests(SimpleTestCase):
             "کد: FR-01-01",
             "بازنگری: 01",
             "تاریخ: 1405/07/04",
-            "وضعیت: معتبر",
             "فرم درخواست",
             "شرکت نمونه",
             "منابع انسانی",
         ):
             self.assertIn(rtl.shape(expected), texts, expected)
 
-    def test_no_validity_line_before_control(self):
-        canvas = RecordingCanvas(pagesize=A4)
-        form_renderer._draw_header(canvas, form_input(), 1, 1)
-        self.assertFalse(any("وضعیت" in text or rtl.shape("وضعیت") in text for text in canvas.texts()))
+    def test_the_header_never_prints_a_validity_line(self):
+        # 2026-09-30: a superseded revision is marked by the «منسوخ» watermark, not by a «وضعیت» row.
+        for data in (form_input(), form_input(obsolete=True)):
+            canvas = RecordingCanvas(pagesize=A4)
+            form_renderer._draw_header(canvas, data, 1, 1)
+            self.assertFalse(any("وضعیت" in text or rtl.shape("وضعیت") in text for text in canvas.texts()))
 
     def test_the_footer_prints_both_footnotes(self):
         canvas = RecordingCanvas(pagesize=A4)
@@ -217,10 +219,10 @@ class RenderTests(SimpleTestCase):
     def test_the_approval_strip_puts_the_author_on_the_right(self):
         signers = (form_renderer.Signer("تدوین کننده", "الف"), form_renderer.Signer("تایید کننده", "ب"),
                    form_renderer.Signer("تصویب کننده", "ج"))
-        [_, keep] = form_renderer._approval_strip(form_input(signers=signers), 500)
-        table = keep._content[0]
-        first_row = [cell.text for cell in table._cellvalues[0]]
-        self.assertEqual(first_row, ["تصویب کننده", "تایید کننده", "تدوین کننده"])
+        [_, anchored] = form_renderer._approval_strip(form_input(signers=signers), 500)
+        table = anchored.content
+        first_row = [unwrap(cell).text for cell in table._cellvalues[0]]
+        self.assertEqual(first_row, ["تصویب کننده:", "تایید کننده:", "تدوین کننده:"])
 
     def test_empty_headings_and_text_print_nothing(self):
         flowables = form_renderer.story(
@@ -253,10 +255,10 @@ class FormBuildTests(TestCase):
         data = form_adapter.load(self.form.pk)
         self.assertEqual(data.full_code, "FR-01-01")
         self.assertEqual([e["kind"] for e in data.elements], ["heading", "divider"])
-        self.assertEqual([s.role_label for s in data.signers], ["تدوین کننده", "تایید کننده", "تصویب کننده"])
+        self.assertEqual([s.role_label for s in data.signers], ["تهیه کننده", "تایید کننده", "تصویب کننده"])
         self.assertEqual(data.signers[0].name, "نویسنده")
         self.assertEqual(data.signers[0].date, "1405/07/04")
-        self.assertEqual(data.validation, "")  # a draft claims no validity
+        self.assertFalse(data.obsolete)  # a draft is not superseded
         self.assertIsNotNone(data.qr)
         self.assertEqual(data.orientation, "portrait")
 
@@ -558,9 +560,126 @@ class QuestionElementTests(SimpleTestCase):
                 self.assertTrue(form_renderer.render(form_input(orientation=orientation, elements=items)).startswith(b"%PDF-"))
 
 
+def unwrap(cell):
+    """The flowable of a table cell (ReportLab wraps it in a tuple once the table has been measured)."""
+    while isinstance(cell, (tuple, list)):
+        cell = cell[0]
+    return cell
+
+
 class ApprovalStripTests(SimpleTestCase):
-    def test_signatures_are_centred_in_their_cells(self):
-        signers = tuple(form_renderer.Signer(label, image=fixture_bytes("sign_creater.png")) for label in ("الف", "ب", "ج"))
-        [_, keep] = form_renderer._approval_strip(form_input(signers=signers), 500)
-        table = keep._content[0]
-        self.assertTrue(all(style.alignment == "CENTER" for row in table._cellStyles for style in row))
+    """The strip that closes a فرم (owner's request, 2026-09-30): role, سمت, name, signature."""
+
+    SIGNERS = (
+        form_renderer.Signer("تهیه کننده", "علی رضایی", "مدیر واحد", "1405/07/04", fixture_bytes("sign_creater.png")),
+        form_renderer.Signer("تایید کننده", "سارا احمدی", "معاون", "", None),
+        form_renderer.Signer("تصویب کننده", "", "", "", fixture_bytes("sign_creater.png")),
+    )
+
+    def table(self, signers=None):
+        [_, anchored] = form_renderer._approval_strip(form_input(signers=signers or self.SIGNERS), 500)
+        return anchored.content
+
+    def test_each_column_stacks_role_then_post_then_name_then_signature(self):
+        table = self.table()
+        rightmost = [unwrap(row[-1]) for row in table._cellvalues]  # a table lays out left to right: the author is last
+        self.assertEqual(rightmost[0].text, "تهیه کننده:")
+        self.assertIn("سمت", rightmost[1].text)
+        self.assertIn("مدیر واحد", rightmost[1].text)
+        self.assertIn("نام و نام خانوادگی", rightmost[2].text)
+        self.assertIn("علی رضایی", rightmost[2].text)
+        self.assertIsInstance(rightmost[3], form_renderer._SignatureCell)
+        self.assertIsNotNone(rightmost[3].reader)
+        self.assertIsNone(unwrap(self.table()._cellvalues[3][1]).reader, "an unsigned column keeps its «امضا:» cell, empty")
+
+    def test_no_date_is_printed(self):
+        table = self.table()
+        texts = [getattr(unwrap(cell), "text", "") for row in table._cellvalues for cell in row]
+        self.assertFalse(any("1405/07/04" in text or "تاریخ" in text for text in texts))
+        self.assertEqual(len(table._cellvalues), 4)
+
+    def test_an_unnamed_role_still_shows_its_labels(self):
+        left = [unwrap(row[0]) for row in self.table()._cellvalues]  # the approver, leftmost
+        self.assertIn("سمت", left[1].text)
+        self.assertIn("نام و نام خانوادگی", left[2].text)
+
+    def test_markers_in_a_name_are_not_styling(self):
+        signers = (form_renderer.Signer("تهیه کننده", "**علی**--رضایی"),)
+        [row] = [self.table(signers)._cellvalues[2]]
+        self.assertEqual(unwrap(row[0]).text, "**نام و نام خانوادگی:** علیرضایی")
+
+    def test_it_is_a_conditional_break_then_a_bottom_anchored_table(self):
+        [before, anchored] = form_renderer._approval_strip(form_input(signers=self.SIGNERS), 500)
+        self.assertIsInstance(before, form_renderer.CondPageBreak)
+        self.assertIsInstance(anchored, form_renderer._BottomAnchored)
+
+
+def _build(flowables, *, width=500, height=200 * mm):
+    """Lay flowables out in a frame of `height`; returns (pages, y of each anchored strip)."""
+    from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
+
+    seen = []
+    real = form_renderer._BottomAnchored.draw
+
+    def record(self):
+        seen.append(self.canv._currentMatrix[5])
+        return real(self)
+
+    doc = BaseDocTemplate(BytesIO(), pagesize=A4)
+    doc.addPageTemplates([PageTemplate(id="p", frames=[Frame(20 * mm, 30 * mm, width, height, id="f", leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)])])
+    with mock.patch.object(form_renderer._BottomAnchored, "draw", record):
+        doc.build(flowables)
+    return doc.page, seen
+
+
+class StripPositionTests(SimpleTestCase):
+    def strip(self):
+        return form_renderer._approval_strip(form_input(signers=ApprovalStripTests.SIGNERS), 500)
+
+    def test_the_strip_is_pinned_to_the_bottom_of_the_frame(self):
+        pages, seen = _build([form_renderer.Spacer(1, 10 * mm)] + self.strip())
+        self.assertEqual(pages, 1)
+        self.assertAlmostEqual(seen[0], 30 * mm, places=2)  # the frame's bottom edge, not under the spacer
+
+    def test_content_that_leaves_no_room_pushes_the_strip_to_a_new_page(self):
+        pages, seen = _build([form_renderer.Spacer(1, 199 * mm)] + self.strip())
+        self.assertEqual(pages, 2)
+        self.assertEqual(len(seen), 1)
+        self.assertAlmostEqual(seen[0], 30 * mm, places=2)
+
+    def test_with_no_content_the_strip_still_prints_alone(self):
+        pages, seen = _build(self.strip())
+        self.assertEqual((pages, len(seen)), (1, 1))
+
+    def test_render_puts_the_strip_on_the_last_page_only(self):
+        with mock.patch.object(form_renderer._BottomAnchored, "draw", autospec=True, side_effect=form_renderer._BottomAnchored.draw) as draw:
+            form_renderer.render(form_input(
+                signers=ApprovalStripTests.SIGNERS,
+                elements=elements({"kind": "spacer"}, {"kind": "page_break"}, {"kind": "spacer"}),
+            ))
+        self.assertEqual(draw.call_count, 1)
+
+
+class ObsoleteWatermarkTests(SimpleTestCase):
+    PAGES = elements({"kind": "spacer"}, {"kind": "page_break"}, {"kind": "spacer"})
+
+    def marks(self, **kwargs):
+        with mock.patch.object(form_renderer, "_draw_watermark") as watermark:
+            form_renderer.render(form_input(elements=self.PAGES, **kwargs))
+        return [call.args[1] for call in watermark.call_args_list]
+
+    def test_an_obsolete_revision_is_marked_on_every_page(self):
+        self.assertEqual(self.marks(obsolete=True), ["منسوخ", "منسوخ"])
+
+    def test_a_current_revision_carries_no_mark(self):
+        self.assertEqual(self.marks(), [])
+
+    def test_obsolete_wins_over_preview(self):
+        with mock.patch.object(form_renderer, "_draw_watermark") as watermark:
+            form_renderer.render(form_input(elements=self.PAGES, obsolete=True), preview=True)
+        self.assertEqual([call.args[1] for call in watermark.call_args_list], ["منسوخ", "منسوخ"])
+
+    def test_a_preview_keeps_its_own_mark(self):
+        with mock.patch.object(form_renderer, "_draw_watermark") as watermark:
+            form_renderer.render(form_input(elements=self.PAGES), preview=True)
+        self.assertEqual([call.args[1] for call in watermark.call_args_list], ["پیش نمایش", "پیش نمایش"])

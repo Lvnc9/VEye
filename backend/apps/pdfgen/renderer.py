@@ -32,7 +32,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
-from . import header, richtext
+from . import header, richtext, signoff
 
 #: Boxed page header (owner's request, 2026-09-29; see header.py). The box hangs
 #: from `HEADER_MARGIN` below the top edge; text on pages >= 2 starts `HEADER_GAP`
@@ -184,6 +184,7 @@ class HeaderFooterCanvas(canvas.Canvas):
         low_foot="با احترام نظیر کارکنان مورد نظر",
         preview_mode=False,
         company_name="",
+        obsolete=False,
         **kwargs
     ):
         """
@@ -197,6 +198,9 @@ class HeaderFooterCanvas(canvas.Canvas):
             low_foot (str): Lower footnote text.
             preview_mode (bool): If True, draws “پیش نمایش” watermark behind every page.
             company_name (str): Written at the centre of the page header when not empty.
+            obsolete (bool): If True, draws “منسوخ” behind every page, the first included
+                (2026-09-30: a superseded revision is marked by watermark, no longer by a
+                «معتبر» / «منسوخ» cell).
         """
         super().__init__(*args, **kwargs)
         # Decoded once: the footnote and small header repeat on every page.
@@ -211,21 +215,36 @@ class HeaderFooterCanvas(canvas.Canvas):
 
         # New attribute for watermark previews
         self.preview_mode = preview_mode
+        self.obsolete = obsolete
+        self._mark_first_page()
+
+    def _watermark_text(self):
+        """“منسوخ” for a superseded revision (it wins over a preview: the fact that matters
+        most), “پیش نمایش” for a preview, else nothing."""
+        if self.obsolete:
+            return "منسوخ"
+        return "پیش نمایش" if self.preview_mode else None
+
+    def _mark_first_page(self):
+        """A superseded revision is marked from page 1 (a preview never marks page 1 — V_1.0)."""
+        if self.obsolete:
+            self._draw_preview_on_current_page()
 
     def showPage(self):
         """
         On each page “showPage” event:
           1) Draw the footnote on the current page (always).
           2) Advance to the next page.
-          3) If preview_mode=True, draw the watermark on every page.
+          3) If preview_mode=True (or obsolete), draw the watermark on every page.
           4) If the new page is >=2, draw the small header in #6c7482.
         """
         # Draw footnote on the current page
         self._draw_footnote_current_page()
-        super().showPage()
+        # (Named, not super(): the golden oracle binds this method onto V_1.0's own canvas class.)
+        canvas.Canvas.showPage(self)
 
         # After page number increments:
-        if self.preview_mode:
+        if self._watermark_text():
             # Draw watermark behind everything on this new page
             self._draw_preview_on_current_page()
 
@@ -241,17 +260,20 @@ class HeaderFooterCanvas(canvas.Canvas):
          2) Draw footnote on the final page.
          3) Save.
         """
-        if self.preview_mode:
+        if self.preview_mode and not self.obsolete:
+            # (V_1.0's quirk, kept for a preview: the last page's watermark is drawn twice, on top.
+            # An obsolete revision's was drawn under the content when the page began.)
             self._draw_preview_on_current_page()
         self._draw_footnote_current_page()
-        super().save()
+        canvas.Canvas.save(self)
 
     def _draw_preview_on_current_page(self):
         """
-        Draws “پیش نمایش” watermark on every page (if preview_mode=True),
+        Draws the watermark — “پیش نمایش” on a preview, “منسوخ” on an obsolete revision —
         using a more visible gray color so it is easier to see.
         """
-        if not self.preview_mode:
+        text = self._watermark_text()
+        if not text:
             return
 
         self.saveState()
@@ -263,8 +285,7 @@ class HeaderFooterCanvas(canvas.Canvas):
         self.rotate(45)
 
         # Prepare RTL text
-        preview_str = "پیش نمایش"
-        reshaped_preview = arabic_reshaper.reshape(preview_str)
+        reshaped_preview = arabic_reshaper.reshape(text)
         bidi_preview = get_display(reshaped_preview)
 
         # Attempt bold if available
@@ -395,10 +416,16 @@ class PDFMaker:
         preview_mode=False,
         invariant=False,
         company_name="",
+        obsolete=False,
+        cover_page=True,
     ):
         """
         Args:
             company_name (str): Written at the centre of the page header when not empty.
+            obsolete (bool): Print “منسوخ” behind every page (a superseded revision).
+            cover_page (bool): True (V_1.0): page 1 holds only the header and the control table and
+                the body starts on page 2. False (پوستر / فرم, 2026-09-30): no control table, the
+                body starts under the header on page 1 and the sign-off strip closes the last page.
             font_name (str): Base name for the registered Persian font ("Vazir";
                 "Vazir-Bold" is derived from it). Registered at startup.
             logo (bytes | None): PNG bytes of the primary logo, used in footnotes/headers.
@@ -418,6 +445,8 @@ class PDFMaker:
         self.lower_foot = lower_foot
         self.preview_mode = preview_mode
         self.company_name = company_name
+        self.obsolete = obsolete
+        self.cover_page = cover_page
 
         self.page_width, self.page_height = A4
         self.margin = 40
@@ -434,6 +463,7 @@ class PDFMaker:
             font_name=self.font_name,
             title_text=self.title,
             company_name=self.company_name,
+            obsolete=self.obsolete,
             code_text=self.whole_code,
             qr=self.qr,
             up_foot=self.upper_foot,
@@ -459,11 +489,14 @@ class PDFMaker:
         self.c.preview_mode = enable_preview
 
     def initialize_first_page(self):
-        """Set up the first page with the large header & control table, once."""
+        """Set up the first page with the large header & control table, once. With a cover page
+        (V_1.0) that page is then finished and the body starts on the next; without one
+        (پوستر / فرم) the body starts right under the header."""
         if not self.first_page_initialized:
             self.draw_header()
             #self.draw_control_table()
-            self.c.showPage()
+            if getattr(self, "cover_page", True):
+                self.c.showPage()
             self.current_y = self.page_height - self.margin - self.header_gap
             self.first_page_initialized = True
 
@@ -915,10 +948,12 @@ class PDFMaker:
         c.drawCentredString(x + width/2, y + (height - 10)/2, rtl_text)
 
     def draw_data_cell(self, c, x, y, width, height, text, wrap=False, radius=8):
-        c.setFillColor(white)
+        # Changed 2026-09-30: V_1.0 filled the cell white; on paper that is the same as no fill, but
+        # a white cell hid the «منسوخ» watermark behind the table on an obsolete revision's first
+        # page — the very page a reader sees first — so the cell is now only outlined.
         c.setStrokeColor(HexColor("#0D47A1"))
         c.setLineWidth(1)
-        c.roundRect(x, y, width, height, radius, fill=1, stroke=1)
+        c.roundRect(x, y, width, height, radius, fill=0, stroke=1)
         c.setFillColor(black)
         c.setFont(self.font_name, 10)
         if wrap:
@@ -932,7 +967,12 @@ class PDFMaker:
     def draw_control_table(self, creater=None, confirmer=None, approver=None, validation="", extra_header=""):
         """`creater` / `confirmer` / `approver` are [name, post, signature PNG bytes]
         — V_1.0's [name, post, signature URL]. V_1.0 defaulted them to shared
-        mutable `[]` and then indexed `[0]` (IndexError when omitted)."""
+        mutable `[]` and then indexed `[0]` (IndexError when omitted).
+
+        Changed 2026-09-30 (the owner's request): the «وضعیت کنترل» column, which showed
+        «معتبر» / «منسوخ», is gone — a superseded revision is now marked by the «منسوخ»
+        watermark on every page. `validation` is still accepted (V_1.0's Provider passes it)
+        and ignored. The four columns share the 500 pt the table always had."""
         empty = ["", "", ""]
         creater = creater or empty
         confirmer = confirmer or empty
@@ -976,53 +1016,39 @@ class PDFMaker:
                 12,
             )
         self.c.setFont(self.font_name, 12)
-        col_widths = [80, 80, 190, 80, 70]
-    
-        headers = ["وضعیت کنترل", "امضا", "سمت", "نام و نام خانوادگی", "مسئولیت"]
+        col_widths = [90, 170, 140, 100]
+
+        headers = ["امضا", "سمت", "نام و نام خانوادگی", "مسئولیت"]
         current_x = table_left
         for i, text in enumerate(headers):
             self.draw_header_cell(self.c, current_x, table_top, col_widths[i], header_height, text, radius=8)
             current_x += col_widths[i]
-    
-        # Merge cell for “وضعیت کنترل”
-        self.draw_data_cell(
-            self.c,
-            table_left,
-            table_top - total_data_height,
-            col_widths[0],
-            total_data_height,
-            validation,
-            wrap=False,
-            radius=8
-        )
-    
-        # Fill data for each column
-        # col0 is merged (above), so we start from col1 onward.
-        col1_data = ["", "", ""]
-        col2_data = [
+
+        # Fill data for each column, left to right: امضا, سمت, نام و نام خانوادگی, مسئولیت.
+        col0_data = ["", "", ""]
+        col1_data = [
             creater[1],
             confirmer[1],
             approver[1],
-            
         ]
-        col3_data = [creater[0], confirmer[0], approver[0],]
-        col4_data = ["تهیه کننده", "تایید کننده", "کننده تصویب"]
-    
+        col2_data = [creater[0], confirmer[0], approver[0],]
+        col3_data = ["تهیه کننده", "تایید کننده", "تصویب کننده"]
+
         for row in range(3):
             cell_y = table_top - header_height - row * data_height + 80
-            # Column 1: امضا (where sign will be displayed)
-            x1 = table_left + col_widths[0]
-            self.draw_data_cell(self.c, x1, cell_y - data_height, col_widths[1], data_height, col1_data[row],
+            # Column 0: امضا (where sign will be displayed)
+            x0 = table_left
+            self.draw_data_cell(self.c, x0, cell_y - data_height, col_widths[0], data_height, col0_data[row],
                                 wrap=False, radius=8)
-    
-            # Place the sign if we have an image (the cells in col1_data are empty on purpose)
+
+            # Place the sign if we have an image (the cells in col0_data are empty on purpose)
             signature = _image((creater[2], confirmer[2], approver[2])[row])
             if signature is not None:
                 # Calculate a smaller width/height for the image
-                sign_width = col_widths[1] - 15
+                sign_width = col_widths[0] - 15
                 sign_height = data_height - 15
                 # Center the image in the cell
-                sign_x = x1 + (col_widths[1] - sign_width) / 2
+                sign_x = x0 + (col_widths[0] - sign_width) / 2
                 sign_y = (cell_y - data_height) + (data_height - sign_height) / 2
 
                 self.c.drawImage(
@@ -1034,22 +1060,22 @@ class PDFMaker:
                     preserveAspectRatio=True,
                     anchor='c'
                 )
-    
-            # Column 2: سمت
+
+            # Column 1: سمت
+            x1 = x0 + col_widths[0]
+            self.draw_data_cell(self.c, x1, cell_y - data_height, col_widths[1], data_height, col1_data[row],
+                                wrap=False, radius=8)
+
+            # Column 2: نام و نام خانوادگی
             x2 = x1 + col_widths[1]
             self.draw_data_cell(self.c, x2, cell_y - data_height, col_widths[2], data_height, col2_data[row],
-                                wrap=False, radius=8)
-    
-            # Column 3: نام و نام خانوادگی
+                                wrap=True, radius=8)
+
+            # Column 3: مسئولیت
             x3 = x2 + col_widths[2]
             self.draw_data_cell(self.c, x3, cell_y - data_height, col_widths[3], data_height, col3_data[row],
                                 wrap=True, radius=8)
-    
-            # Column 4: مسئولیت
-            x4 = x3 + col_widths[3]
-            self.draw_data_cell(self.c, x4, cell_y - data_height, col_widths[4], data_height, col4_data[row],
-                                wrap=True, radius=8)
-    
+
         table_width = sum(col_widths)
         self.c.roundRect(
             table_left,
@@ -1060,6 +1086,14 @@ class PDFMaker:
             fill=0,
             stroke=1
         )
+
+    def draw_signoff_strip(self, creater=None, confirmer=None, approver=None):
+        """The closing strip of a پوستر / فرم (owner's request, 2026-09-30): تهیه کننده |
+        تایید کننده | تصویب کننده, right to left, each a stack of role, سمت, name and signature,
+        pinned to the foot of the last page — see signoff.py."""
+        empty = ["", "", ""]
+        signers = [creater or empty, confirmer or empty, approver or empty]
+        signoff.draw(self, signers, [_image(signer[2]) for signer in signers])
 
     def generate_pdf(self):
         """

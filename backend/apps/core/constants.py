@@ -93,13 +93,6 @@ class DocumentEventKind(models.TextChoices):
     IMPORTED = "imported", "وارد شده از نسخهٔ ۱"
 
 
-class ValidationMark(models.TextChoices):
-    """Printed onto the PDF's control table (V_1.0 other_folder/to_make_pdf.py:997)."""
-
-    VALID = "VALID", "معتبر"
-    OBSOLETE = "OBSOLETE", "منسوخ"
-
-
 class SectionType(models.TextChoices):
     """The five block types of `dynamic_items`, in the order they render.
 
