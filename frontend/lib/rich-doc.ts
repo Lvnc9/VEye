@@ -6,6 +6,8 @@
  * Pure functions, no React and no Tiptap — relative imports only (vitest has no `@/` alias).
  * The constants below mirror the server's; change them together.
  */
+import { toPersianDigits } from "./jalali";
+import { normalizeDigits } from "./login";
 import { parseMarkers } from "./rich-text";
 
 export interface RichNode {
@@ -40,6 +42,27 @@ export const MAX_LIST_DEPTH = 3;
 export const MAX_TABLE_COLUMNS = 20;
 export const MAX_TABLE_ROWS = 200;
 export const LINK_PATTERN = /^(https?:\/\/|mailto:)[^\s\x00-\x1f\x7f<>"']{1,2000}$/i;
+
+export type TableSize = { ok: true; rows: number; columns: number } | { ok: false; rows: string | null; columns: string | null };
+
+function tableCount(text: string, max: number, noun: string): { value: number } | { error: string } {
+  const digits = normalizeDigits(text).trim();
+  if (!/^\d{1,4}$/.test(digits)) return { error: `${noun} را با عدد بنویسید.` };
+  const value = Number(digits);
+  if (value < 1 || value > max) return { error: `${noun} باید بین ۱ تا ${toPersianDigits(max)} باشد.` };
+  return { value };
+}
+
+/**
+ * The rows × columns typed into «درج جدول دلخواه»: whole numbers (Persian digits accepted) within what
+ * the server accepts (`MAX_TABLE_ROWS` × `MAX_TABLE_COLUMNS`), each with its own Persian message.
+ */
+export function parseTableSize(rows: string, columns: string): TableSize {
+  const r = tableCount(rows, MAX_TABLE_ROWS, "تعداد سطر");
+  const c = tableCount(columns, MAX_TABLE_COLUMNS, "تعداد ستون");
+  if ("value" in r && "value" in c) return { ok: true, rows: r.value, columns: c.value };
+  return { ok: false, rows: "error" in r ? r.error : null, columns: "error" in c ? c.error : null };
+}
 
 export function emptyRich(): RichDoc {
   return { v: 1, doc: { type: "doc", content: [{ type: "paragraph" }] } };

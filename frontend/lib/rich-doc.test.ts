@@ -5,6 +5,7 @@ import {
   isAllowedLink,
   legacyToRich,
   paletteColor,
+  parseTableSize,
   richText,
   snapFontSize,
 } from "./rich-doc";
@@ -76,6 +77,27 @@ describe("what the editor may offer", () => {
     }
     for (const bad of ["javascript:alert(1)", "ftp://x", "//x", "http://a b", "", "data:text/html,x"]) {
       expect(isAllowedLink(bad)).toBe(false);
+    }
+  });
+});
+
+describe("parseTableSize (the custom table dialog)", () => {
+  it("accepts whole numbers in range, Persian digits included", () => {
+    expect(parseTableSize("3", "4")).toEqual({ ok: true, rows: 3, columns: 4 });
+    expect(parseTableSize("۱۲", " ۵ ")).toEqual({ ok: true, rows: 12, columns: 5 });
+    expect(parseTableSize("200", "20")).toEqual({ ok: true, rows: 200, columns: 20 });
+    expect(parseTableSize("1", "1")).toEqual({ ok: true, rows: 1, columns: 1 });
+  });
+
+  it("names the field that is out of range, in Persian", () => {
+    expect(parseTableSize("201", "3")).toEqual({ ok: false, rows: "تعداد سطر باید بین ۱ تا ۲۰۰ باشد.", columns: null });
+    expect(parseTableSize("3", "21")).toEqual({ ok: false, rows: null, columns: "تعداد ستون باید بین ۱ تا ۲۰ باشد." });
+    expect(parseTableSize("0", "0")).toMatchObject({ ok: false, rows: expect.any(String), columns: expect.any(String) });
+  });
+
+  it("refuses anything that is not a whole number", () => {
+    for (const text of ["", "  ", "2.5", "-1", "abc", "1e2", "٣.٥"]) {
+      expect(parseTableSize(text, "3")).toMatchObject({ ok: false, rows: "تعداد سطر را با عدد بنویسید." });
     }
   });
 });

@@ -37,6 +37,7 @@ import {
   MAX_TABLE_ROWS,
   PALETTE,
   isAllowedLink,
+  parseTableSize,
 } from "@/lib/rich-doc";
 
 type Align = "right" | "center" | "left" | "justify";
@@ -178,6 +179,7 @@ function changeIndent(editor: Editor, state: ToolbarState, delta: 1 | -1) {
 export function RichToolbar({ editor }: { editor: Editor }) {
   const state = useEditorState({ editor, selector: ({ editor: current }) => readState(current) });
   const [linkOpen, setLinkOpen] = useState(false);
+  const [tableOpen, setTableOpen] = useState(false);
   const blocked = state.inList || state.inTable; // where a table, rule or page break cannot go
 
   const align: { value: Align; label: string; icon: ReactNode }[] = [
@@ -354,6 +356,15 @@ export function RichToolbar({ editor }: { editor: Editor }) {
               >
                 درج جدول ۳×۳
               </MenuItem>
+              <MenuItem
+                disabled={blocked}
+                onClick={() => {
+                  close();
+                  setTableOpen(true);
+                }}
+              >
+                درج جدول دلخواه…
+              </MenuItem>
               <MenuItem disabled={!state.inTable || state.columns >= MAX_TABLE_COLUMNS} onClick={run(() => chain().addColumnAfter().run())}>
                 افزودن ستون بعد از این
               </MenuItem>
@@ -397,6 +408,19 @@ export function RichToolbar({ editor }: { editor: Editor }) {
         <RemoveFormatting />
       </ToolButton>
 
+      {tableOpen && (
+        <TableDialog
+          onClose={() => {
+            setTableOpen(false);
+            editor.commands.focus();
+          }}
+          onInsert={(rows, columns, withHeaderRow) => {
+            editor.chain().focus().insertTable({ rows, cols: columns, withHeaderRow }).run();
+            setTableOpen(false);
+          }}
+        />
+      )}
+
       {linkOpen && (
         <LinkDialog
           initial={state.link ?? ""}
@@ -421,6 +445,72 @@ export function RichToolbar({ editor }: { editor: Editor }) {
         />
       )}
     </div>
+  );
+}
+
+/** «درج جدول دلخواه»: the owner picks the rows and columns instead of the fixed 3×3. */
+function TableDialog({
+  onClose,
+  onInsert,
+}: {
+  onClose: () => void;
+  onInsert: (rows: number, columns: number, withHeaderRow: boolean) => void;
+}) {
+  const [rows, setRows] = useState("3");
+  const [columns, setColumns] = useState("3");
+  const [withHeaderRow, setWithHeaderRow] = useState(true);
+  const [submitted, setSubmitted] = useState(false);
+  const size = parseTableSize(rows, columns);
+
+  return (
+    <Dialog label="جدول دلخواه" title="درج جدول" description="تعداد سطرها و ستون‌های جدول را خودتان تعیین کنید." onClose={onClose} size="sm">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSubmitted(true);
+          if (size.ok) onInsert(size.rows, size.columns, withHeaderRow);
+        }}
+        className="space-y-4"
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={`تعداد سطر (۱ تا ${MAX_TABLE_ROWS})`} htmlFor="rich-table-rows" error={submitted && !size.ok ? size.rows : null}>
+            <input
+              id="rich-table-rows"
+              inputMode="numeric"
+              dir="ltr"
+              autoFocus
+              value={rows}
+              onChange={(event) => setRows(event.target.value)}
+              onFocus={(event) => event.target.select()}
+              className={cx(inputClass, "text-left")}
+            />
+          </Field>
+          <Field label={`تعداد ستون (۱ تا ${MAX_TABLE_COLUMNS})`} htmlFor="rich-table-columns" error={submitted && !size.ok ? size.columns : null}>
+            <input
+              id="rich-table-columns"
+              inputMode="numeric"
+              dir="ltr"
+              value={columns}
+              onChange={(event) => setColumns(event.target.value)}
+              onFocus={(event) => event.target.select()}
+              className={cx(inputClass, "text-left")}
+            />
+          </Field>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={withHeaderRow} onChange={(event) => setWithHeaderRow(event.target.checked)} />
+          سطر اول عنوان باشد
+        </label>
+        <div className="flex gap-2">
+          <button type="submit" className={buttonClass({ variant: "primary" })}>
+            درج جدول
+          </button>
+          <button type="button" onClick={onClose} className={buttonClass()}>
+            انصراف
+          </button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 
