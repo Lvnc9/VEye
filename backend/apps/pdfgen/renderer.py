@@ -744,9 +744,11 @@ class PDFMaker:
     def attachments(self, element, x_offset=30, font_size=12):
         """
         Draw a “ضمائم:” label, then one line per attachment: the caption (with
-        optional inline styling) right-aligned at the right margin, «کد …» just
-        left of it, and the document's QR at the far left of the page. (Changed
-        2026-09-29 at the owner's request: V_1.0 put the QR at the right.)
+        optional inline styling) right-aligned at the right margin and the
+        document's QR at the far left of the page. (Changed 2026-09-29 at the
+        owner's request: V_1.0 put the QR at the right. Changed 2026-09-30: the
+        «کد …» that used to sit left of the caption is no longer printed — the
+        QR identifies the document.)
         """
         self.initialize_first_page()
         self._check_page_break(200)
@@ -766,17 +768,17 @@ class PDFMaker:
         self.c.setFillColorRGB(0, 0, 0)
     
         # Changed 2026-09-29 (the owner's request): one line per attachment — the
-        # caption at the right margin, its «کد …» just left of it, and the QR code
-        # at the far left edge of the page on the same line. V_1.0 put the QR at
-        # the right, the text to its left and a caption longer than the row ran
-        # off the page.
+        # caption at the right margin and the QR code at the far left edge of the
+        # page on the same line. V_1.0 put the QR at the right, the text to its
+        # left and a caption longer than the row ran off the page. The caption
+        # takes every point of width left of the QR (2026-09-30: no «کد …»).
         qr_size = 50
         qr_gap = 14
         text_right = self.page_width - self.margin
         lead = 13
 
         for el in element:
-            text, thin, qr = el
+            text, _code, qr = el
             qr_img = _image(qr)
             # The PNG has a white quiet zone (qr.py: 4 boxes of 10 px) that would
             # look like a gap; hang it off the margin so the black modules touch it.
@@ -786,9 +788,7 @@ class PDFMaker:
             qr_x = self.margin - quiet
             text_left = self.margin + qr_size - 2 * quiet + qr_gap
 
-            code_text = "کد " + thin
-            code_width = self.c.stringWidth(self.prepare_rtl(code_text), self.font_name, 8)
-            width = text_right - text_left - code_width - 8
+            width = text_right - text_left
             lines = wrap_body_line(text, width, lambda t, style: self._body_width(t, style, 10, False)) or [""]
             pitch = max(60, len(lines) * lead + 20)
             self._check_page_break(pitch - 10)
@@ -801,13 +801,8 @@ class PDFMaker:
                 self.c.rect(self.margin, centre - qr_size / 2, qr_size, qr_size, fill=1)
 
             y = centre + (len(lines) - 1) * lead / 2 - 3.5
-            for index, line in enumerate(lines):
+            for line in lines:
                 self.draw_rtl_styled_line(text_right, y, line, 10)
-                if index == 0:
-                    first_width = sum(
-                        self._body_width(t, style, 10, False) for t, style in marker_runs(line)
-                    )
-                    self.draw_rtl_styled_line(text_right - first_width - 5, y, code_text, 8)
                 y -= lead
 
             self.c.setFont(self.font_name, 12)

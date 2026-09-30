@@ -1,5 +1,6 @@
 """The ضمائم rows (owner's change, 2026-09-29): the QR sits at the far left edge of the
-page on the caption's line; the caption stays at the right margin."""
+page on the caption's line; the caption stays at the right margin. (2026-09-30: no «کد …»
+beside the caption any more.)"""
 from io import BytesIO
 from unittest import mock
 
@@ -45,13 +46,18 @@ class AttachmentRowTests(SimpleTestCase):
         caption_y = strings[0][1]
         self.assertAlmostEqual(caption_y + 3.5, centre, delta=1.0)
 
-    def test_the_caption_is_flush_right_and_the_code_sits_left_of_it(self):
+    def test_the_caption_is_flush_right_and_nothing_else_is_written_on_the_row(self):
         maker, _, strings = draw(ROW)
-        xs = [args[0] for args in strings]
         right = maker.page_width - maker.margin
         caption = renderer.PDFMaker.prepare_rtl(maker, ROW[0])
-        self.assertAlmostEqual(xs[0] + maker.c.stringWidth(caption, "Vazir", 10), right, places=2)
-        self.assertLess(xs[-1], xs[0])  # «کد …» is to the caption's left
+        self.assertEqual(len(strings), 1)  # the caption only — no «کد …» beside it
+        self.assertAlmostEqual(strings[0][0] + maker.c.stringWidth(caption, "Vazir", 10), right, places=2)
+        self.assertNotIn("PR-01-01", [args[2] for args in strings])
+
+    def test_the_caption_may_use_every_point_left_of_the_qr(self):
+        # ~435 pt of text: it wrapped while «کد …» took ~55 pt of the ~455 pt free, and fits now.
+        maker, images, strings = draw(["سلام " * 19, "PR-01-01", ROW[2]])
+        self.assertEqual(len({args[1] for args in strings}), 1)  # one line
 
     def test_a_long_caption_wraps_and_never_reaches_the_qr(self):
         maker, images, strings = draw(LONG)
