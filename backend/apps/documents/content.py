@@ -209,6 +209,9 @@ def save_content(*, user, document_id: int, data: dict) -> Document:
     if document.body_kind == BodyKind.FORM:
         document.form_settings = data["form_settings"]
         fields.append("form_settings")
+    elif "show_company_name" in data:
+        document.show_company_name = data["show_company_name"]
+        fields.append("show_company_name")
     document.content_version += 1
     document.content_saved_at = timezone.now()
     document.save(update_fields=fields)
@@ -292,7 +295,7 @@ def _copy_stored_file(source_field, target_field, name: str) -> None:
 def copy_content(source: Document, target: Document) -> None:
     """Start `target` (a fresh draft revision) as a copy of `source`'s body.
 
-    Copied: footnotes, form settings, logo, uploaded files (physically — a shared file would be
+    Copied: footnotes, form settings, the company-name option, logo, uploaded files (physically — a shared file would be
     deleted out from under one revision by an edit to the other), every section,
     responsibilities, and attachment references.
 
@@ -304,9 +307,10 @@ def copy_content(source: Document, target: Document) -> None:
     """
     target.footnote1, target.footnote2 = source.footnote1, source.footnote2
     target.form_settings = source.form_settings
+    target.show_company_name = source.show_company_name
     if source.logo:
         _copy_stored_file(source.logo, target.logo, "logo.png")
-    target.save(update_fields=["footnote1", "footnote2", "form_settings", "logo", "updated_at"])
+    target.save(update_fields=["footnote1", "footnote2", "form_settings", "show_company_name", "logo", "updated_at"])
 
     file_map = {}
     for old in source.files.all():

@@ -25,6 +25,8 @@ from apps.documents.models import (
     Section,
     SignOff,
 )
+from apps.organization import tree
+from apps.organization.models import Company
 from apps.pdfgen import adapter, provider
 from apps.pdfgen.qr import qr_png, verify_url
 
@@ -66,6 +68,22 @@ class AdapterTests(TestCase):
         self.assertEqual(data.title, "سند")
         self.assertEqual((data.upper_footnote, data.lower_footnote), ("بالا", "پایین"))
         self.assertEqual(data.date, "1404/01/19")  # 2025-04-08, like the archived sample
+
+    def test_the_company_name_is_loaded_only_when_the_document_asks_for_it(self):
+        root = tree.create_root(name="شرکت نمونه")
+        Company.objects.create(pk=1, root=root)
+        doc = make_doc(self.author)
+        self.assertEqual(adapter.load(doc.pk).company_name, "", "off by default")
+        doc.show_company_name = True
+        doc.save()
+        self.assertEqual(adapter.load(doc.pk).company_name, "شرکت نمونه")
+        root.name = "نام تازه"
+        root.save()
+        self.assertEqual(adapter.load(doc.pk).company_name, "نام تازه", "the chart and the paper never disagree")
+
+    def test_a_document_that_asks_for_the_name_before_a_company_exists_prints_none(self):
+        doc = make_doc(self.author, show_company_name=True)
+        self.assertEqual(adapter.load(doc.pk).company_name, "")
 
     def test_date_is_the_local_date_of_the_last_save(self):
         # 22:00 UTC on 1 Farvardin 1404's eve is already the next day in Tehran (+03:30).

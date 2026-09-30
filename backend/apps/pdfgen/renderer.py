@@ -183,6 +183,7 @@ class HeaderFooterCanvas(canvas.Canvas):
         up_foot="معاونت برنامه ریزی و توسعه اقتصادی",
         low_foot="با احترام نظیر کارکنان مورد نظر",
         preview_mode=False,
+        company_name="",
         **kwargs
     ):
         """
@@ -195,12 +196,14 @@ class HeaderFooterCanvas(canvas.Canvas):
             up_foot (str): Upper footnote text.
             low_foot (str): Lower footnote text.
             preview_mode (bool): If True, draws “پیش نمایش” watermark behind every page.
+            company_name (str): Written at the centre of the page header when not empty.
         """
         super().__init__(*args, **kwargs)
         # Decoded once: the footnote and small header repeat on every page.
         self.logo = _image(logo)
         self.font_name = font_name
         self.title_text = title_text
+        self.company_name = company_name
         self.code_text = code_text
         self.qr = _image(qr)
         self.up_foot = up_foot
@@ -359,6 +362,7 @@ class HeaderFooterCanvas(canvas.Canvas):
         header.draw_boxed_header(
             self,
             title=self.title_text,
+            company_name=getattr(self, "company_name", ""),
             rows=rows,
             logo=self.logo,
             font_name=self.font_name,
@@ -390,9 +394,11 @@ class PDFMaker:
         lower_foot="",
         preview_mode=False,
         invariant=False,
+        company_name="",
     ):
         """
         Args:
+            company_name (str): Written at the centre of the page header when not empty.
             font_name (str): Base name for the registered Persian font ("Vazir";
                 "Vazir-Bold" is derived from it). Registered at startup.
             logo (bytes | None): PNG bytes of the primary logo, used in footnotes/headers.
@@ -411,6 +417,7 @@ class PDFMaker:
         self.upper_foot = upper_foot
         self.lower_foot = lower_foot
         self.preview_mode = preview_mode
+        self.company_name = company_name
 
         self.page_width, self.page_height = A4
         self.margin = 40
@@ -426,6 +433,7 @@ class PDFMaker:
             logo=self.logo,
             font_name=self.font_name,
             title_text=self.title,
+            company_name=self.company_name,
             code_text=self.whole_code,
             qr=self.qr,
             up_foot=self.upper_foot,
@@ -501,6 +509,7 @@ class PDFMaker:
             header.draw_boxed_header(
                 self.c,
                 title=self.title,
+                company_name=getattr(self, "company_name", ""),
                 rows=details,
                 logo=self.c.logo,
                 font_name=self.font_name,

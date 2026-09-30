@@ -15,7 +15,7 @@ import {
 import type { ContentResponse, DesignerSection, DocumentRow } from "./types";
 
 function state(sections: DesignerSection[], version = 3): DesignerState {
-  return { version, footnote1: "پاورقی ۱", footnote2: "پاورقی ۲", sections };
+  return { version, footnote1: "پاورقی ۱", footnote2: "پاورقی ۲", showCompanyName: false, sections };
 }
 
 describe("newSection", () => {
@@ -42,7 +42,24 @@ describe("newSection", () => {
 describe("toPayload", () => {
   it("sends the version the editor loaded, plus footnotes", () => {
     const payload = toPayload(state([]));
-    expect(payload).toEqual({ base_version: 3, footnote1: "پاورقی ۱", footnote2: "پاورقی ۲", sections: [] });
+    expect(payload).toEqual({
+      base_version: 3,
+      footnote1: "پاورقی ۱",
+      footnote2: "پاورقی ۲",
+      show_company_name: false,
+      sections: [],
+    });
+  });
+
+  it("sends the company-name option, and reads a draft from before the option as off", () => {
+    expect(toPayload({ ...state([]), showCompanyName: true }).show_company_name).toBe(true);
+    const old = { ...state([]) } as Partial<DesignerState>;
+    delete old.showCompanyName;
+    expect(toPayload(old as DesignerState).show_company_name).toBe(false);
+  });
+
+  it("a change of the option is a change of the document", () => {
+    expect(snapshot({ ...state([]), showCompanyName: true })).not.toBe(snapshot(state([])));
   });
 
   it("maps a Long block's files to ids", () => {
@@ -121,6 +138,7 @@ describe("fromResponse", () => {
       logo_url: null,
       footnote1: "الف",
       footnote2: "ب",
+      show_company_name: true,
       body_kind: "blocks",
       form_settings: null,
       previous_changes: [],
@@ -132,7 +150,9 @@ describe("fromResponse", () => {
 
     const restored = fromResponse(response);
     expect(restored.version).toBe(5);
+    expect(restored.showCompanyName).toBe(true);
     const payload = toPayload(restored);
+    expect(payload.show_company_name).toBe(true);
     expect(payload.sections[0]).toEqual({ id: 1, type: "Short Explanation", lines: ["۱-هدف", ""] });
     expect(payload.sections[1]).toEqual({ id: 2, type: "Changes Table", rows: [{ id: 3, text: "تغییر" }] });
   });
@@ -146,6 +166,7 @@ describe("fromResponse — keys across a save", () => {
     logo_url: null,
     footnote1: "",
     footnote2: "",
+    show_company_name: false,
     body_kind: "blocks",
     form_settings: null,
     previous_changes: [],
@@ -249,7 +270,13 @@ describe("validate", () => {
 
 describe("rekey", () => {
   it("gives every block a fresh key and changes nothing else", () => {
-    const state = { version: 2, footnote1: "", footnote2: "", sections: [newSection("Short Explanation"), newSection("Attachment")] };
+    const state = {
+      version: 2,
+      footnote1: "",
+      footnote2: "",
+      showCompanyName: true,
+      sections: [newSection("Short Explanation"), newSection("Attachment")],
+    };
     const again = rekey(state);
     expect(again.sections.map((s) => s.key)).not.toEqual(state.sections.map((s) => s.key));
     expect(new Set(again.sections.map((s) => s.key)).size).toBe(2);

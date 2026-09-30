@@ -49,6 +49,8 @@ class PdfInput:
     lower_footnote: str = ""
     extra_header: str = ""
     logo: bytes | None = None
+    #: Shown at the centre of the page header when the document asks for it (2026-09-30).
+    company_name: str = ""
     qr: bytes | None = None
     creater: SignatureBlock = field(default_factory=SignatureBlock)
     confirmer: SignatureBlock = field(default_factory=SignatureBlock)
@@ -69,6 +71,7 @@ def deliver_to_pdf(data: PdfInput, *, preview: bool = False, invariant: bool = F
         title=data.title,
         whole_code=data.whole_code,
         logo=data.logo,
+        company_name=data.company_name,
         upper_foot=data.upper_footnote,
         lower_foot=data.lower_footnote,
         preview_mode=preview,

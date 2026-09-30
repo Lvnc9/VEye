@@ -498,6 +498,8 @@ export interface ContentResponse {
   logo_url: string | null;
   footnote1: string;
   footnote2: string;
+  /** A block body's «نام شرکت در سربرگ» option; null for a form body (its own setting lives in `form_settings`). */
+  show_company_name: boolean | null;
   /** "form": a فرم authored in the form designer (Phase 11); its `sections`
    *  are form elements (lib/form-designer.ts), not the five block types. */
   body_kind: "blocks" | "form";

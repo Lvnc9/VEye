@@ -133,6 +133,11 @@ class Document(TimeStampedModel):
     # apps/documents/form_schema.py. `form_settings` is empty for a BLOCKS body.
     body_kind = models.CharField(max_length=8, choices=BodyKind.choices, default=BodyKind.BLOCKS)
     form_settings = models.JSONField(default=dict, blank=True)
+    # Whether the page header of a BLOCKS body (پوستر / روش اجرایی / دستورالعمل) shows the company's
+    # name at its centre (owner's request 2026-09-30) — the counterpart of a form's
+    # `form_settings["header"]["show_company_name"]`. Off by default: documents made before the
+    # option existed print exactly as they did.
+    show_company_name = models.BooleanField(default=False)
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_documents"

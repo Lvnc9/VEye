@@ -56,6 +56,8 @@ export interface DesignerState {
   version: number;
   footnote1: string;
   footnote2: string;
+  /** Print the company's name at the centre of the page header (پوستر / روش اجرایی / دستورالعمل). */
+  showCompanyName: boolean;
   sections: DesignerSection[];
 }
 
@@ -76,6 +78,7 @@ export function fromResponse(response: ContentResponse, previous?: DesignerSecti
     version: response.version,
     footnote1: response.footnote1,
     footnote2: response.footnote2,
+    showCompanyName: response.show_company_name ?? false,
     sections: response.sections.map((section, i) =>
       reuse ? ({ ...section, key: previous[i].key } as DesignerSection) : withKey(section),
     ),
@@ -86,6 +89,7 @@ export interface SavePayload {
   base_version: number;
   footnote1: string;
   footnote2: string;
+  show_company_name: boolean;
   sections: Record<string, unknown>[];
 }
 
@@ -95,6 +99,8 @@ export function toPayload(state: DesignerState): SavePayload {
     base_version: state.version,
     footnote1: state.footnote1,
     footnote2: state.footnote2,
+    // Work restored from before the option existed has no value: that reads as off.
+    show_company_name: state.showCompanyName === true,
     sections: state.sections.map((section) => {
       const id = section.id ?? null;
       switch (section.type) {

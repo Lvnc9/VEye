@@ -196,6 +196,30 @@ class ContentRoundTripTests(DesignerTestCase):
         # And a fresh GET returns exactly what the save returned.
         self.assertEqual(self.get_content()["sections"], saved["sections"])
 
+    def test_the_company_name_option_round_trips_and_defaults_off(self):
+        self.assertFalse(self.get_content()["show_company_name"])
+        saved = self.save([short("1-هدف")], show_company_name=True)
+        self.assertTrue(saved["show_company_name"])
+        self.doc.refresh_from_db()
+        self.assertTrue(self.doc.show_company_name)
+        # A client that does not send the option leaves it alone.
+        saved = self.save([short("1-هدف")])
+        self.assertTrue(saved["show_company_name"])
+        saved = self.save([short("1-هدف")], show_company_name=False)
+        self.assertFalse(saved["show_company_name"])
+
+    def test_a_revision_starts_with_the_option_of_the_revision_it_copies(self):
+        self.save([short("1-هدف")], show_company_name=True)
+        self.doc.refresh_from_db()
+        target = new_doc(self.author, "دیگر", DocumentGroup.PROCEDURE)
+        content.copy_content(self.doc, target)
+        target.refresh_from_db()
+        self.assertTrue(target.show_company_name)
+
+    def test_a_form_body_has_no_block_option(self):
+        form = new_doc(self.author, "فرمی", DocumentGroup.FORM)
+        self.assertIsNone(self.get_content(form)["show_company_name"])
+
     def test_rich_text_and_whitespace_are_stored_verbatim(self):
         """The PDF renderer parses **bold**, ~~italic~~ and --underline-- itself
         (to_make_pdf.py:458-541), so the markers must reach it untouched, along

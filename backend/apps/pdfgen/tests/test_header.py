@@ -18,9 +18,11 @@ X0, X1, TOP = 40.0, A4[0] - 40.0, A4[1] - 40.0
 ROWS = header.meta_rows("PR-01-02", "02", "1405/07/07")
 
 
-def draw(canvas=None, *, title="روش اجرایی", rows=ROWS, logo=None):
+def draw(canvas=None, *, title="روش اجرایی", rows=ROWS, logo=None, company_name=""):
     canvas = canvas or RecordingCanvas(pagesize=A4)
-    header.draw_boxed_header(canvas, title=title, rows=rows, logo=logo, font_name="Vazir", x0=X0, x1=X1, top=TOP)
+    header.draw_boxed_header(
+        canvas, title=title, rows=rows, logo=logo, font_name="Vazir", x0=X0, x1=X1, top=TOP, company_name=company_name
+    )
     return canvas
 
 
@@ -148,3 +150,80 @@ class EveryPageTests(SimpleTestCase):
             self.assertEqual(draw_box.call_count, 1)
             maker.initialize_first_page()  # ends page 1; the next page's box is the canvas's
             self.assertEqual(draw_box.call_count, 2)
+
+
+class CompanyNameTests(SimpleTestCase):
+    """The company's name at the centre of the header (owner's request, 2026-09-30)."""
+
+    LEFT, RIGHT = X0 + header.META_CELL, X1 - header.LOGO_CELL
+
+    def test_without_a_name_the_header_is_what_it_was(self):
+        self.assertEqual(draw(company_name="").drawn, draw().drawn)
+        self.assertEqual(draw(company_name="   ").drawn, draw().drawn)
+
+    def test_the_name_is_a_small_line_centred_above_the_title(self):
+        canvas = draw(title="عنوان", company_name="شرکت نمونه")
+        [(nx, ny, name)] = [d for d in canvas.drawn if d[2] == rtl.shape("شرکت نمونه")]
+        [(tx, ty, title)] = [d for d in canvas.drawn if d[2] == rtl.shape("عنوان")]
+        width = canvas.stringWidth(name, "Vazir", header._COMPANY_SIZES[0])
+        self.assertAlmostEqual(nx + width / 2, (self.LEFT + self.RIGHT) / 2, delta=0.5)
+        self.assertGreater(ny, ty + 8, "the name is above the title")
+        self.assertTrue(TOP - 18 < ny < TOP)
+        self.assertLess(ty, TOP - header.HEIGHT / 2 + 4, "and the title moved down to make room")
+        self.assertGreater(ty, TOP - header.HEIGHT, "but stays inside the box")
+
+    def test_the_name_is_muted_and_the_callers_ink_is_untouched(self):
+        canvas = RecordingCanvas(pagesize=A4)
+        canvas.setFillColorRGB(0.1, 0.2, 0.3)
+        with mock.patch.object(canvas, "setFillColorRGB", wraps=canvas.setFillColorRGB) as fill:
+            draw(canvas, company_name="شرکت")
+        colours = [call.args for call in fill.call_args_list]
+        self.assertIn(header._COMPANY_COLOUR, colours)
+        self.assertEqual(tuple(canvas._fillColorObj), (0.1, 0.2, 0.3), "saveState/restoreState around the header")
+
+    def test_a_long_name_shrinks_and_never_leaves_the_cell(self):
+        name = "شرکت توسعه و مدیریت سرمایه‌گذاری صنعتی و معدنی شمال شرق کشور"
+        canvas = draw(company_name=name)
+        [(x, _, text)] = [d for d in canvas.drawn if rtl.shape(name[:5]) in d[2] or d[2] == rtl.shape(name)]
+        self.assertGreaterEqual(x, self.LEFT - 0.5)
+        self.assertLessEqual(x + canvas.stringWidth(text, "Vazir", header._COMPANY_SIZES[-1]), self.RIGHT + 0.5)
+
+    def test_an_absurd_name_is_cut_with_an_ellipsis(self):
+        canvas = draw(company_name="واژه " * 80)
+        [(x, _, text)] = [d for d in canvas.drawn if "…" in d[2]]
+        self.assertLessEqual(x + canvas.stringWidth(text, "Vazir", header._COMPANY_SIZES[-1]), self.RIGHT + 0.5)
+
+    def test_two_title_lines_still_fit_below_the_name(self):
+        title = "روش اجرایی کنترل مستندات و سوابق سازمان و یک عنوان بسیار طولانی برای آزمون"
+        canvas = draw(title=title, company_name="شرکت نمونه")
+        lines = [d for d in canvas.drawn if self.LEFT < d[0] < self.RIGHT and d[2] != rtl.shape("شرکت نمونه")]
+        self.assertEqual(len(lines), 2)
+        for _, y, _ in lines:
+            self.assertGreater(y, TOP - header.HEIGHT)
+            self.assertLess(y, TOP - header._COMPANY_BAND + 4)
+
+
+class CompanyNameOnEveryPageTests(SimpleTestCase):
+    def test_pages_one_and_two_both_carry_the_name(self):
+        maker = renderer.PDFMaker(
+            whole_code="PR-01-02", title="ت", date="1405/07/07", company_name="شرکت نمونه"
+        )
+        with mock.patch.object(maker.c, "drawString", wraps=maker.c.drawString) as string:
+            maker.draw_header()
+            maker.c.showPage()  # page 2 gets the small header
+            maker.c.showPage()  # page 3 too
+        names = [call for call in string.call_args_list if call.args[2] == rtl.shape("شرکت نمونه")]
+        self.assertEqual(len(names), 3)
+
+    def test_a_document_without_the_option_prints_no_name(self):
+        maker = renderer.PDFMaker(whole_code="PR-01-02", title="ت", date="1405/07/07")
+        with mock.patch.object(maker.c, "drawString", wraps=maker.c.drawString) as string:
+            maker.draw_header()
+            maker.c.showPage()
+        self.assertFalse([c for c in string.call_args_list if c.args[2] == rtl.shape("شرکت نمونه")])
+
+    def test_deliver_to_pdf_passes_the_name_on(self):
+        data = PdfInput(title="ت", whole_code="PR-01-02", review="01", date="1405/07/07", validation="", company_name="شرکت نمونه")
+        with mock.patch.object(renderer.PDFMaker, "__init__", autospec=True, side_effect=renderer.PDFMaker.__init__) as init:
+            provider.deliver_to_pdf(data, invariant=True)
+        self.assertEqual(init.call_args.kwargs["company_name"], "شرکت نمونه")

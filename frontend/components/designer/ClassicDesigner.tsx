@@ -79,6 +79,18 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
                 canEdit={canEdit}
                 onChange={(logoUrl) => doc.setContent((current) => ({ ...current, logo_url: logoUrl }))}
               />
+              <label className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={state.showCompanyName}
+                  disabled={locked}
+                  onChange={(event) => {
+                    setState((current) => ({ ...current, showCompanyName: event.target.checked }));
+                    doc.setNotice(null);
+                  }}
+                />
+                نام شرکت در وسط سربرگ چاپ شود
+              </label>
             </Card>
 
             {canEdit && (

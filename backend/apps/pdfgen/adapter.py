@@ -24,6 +24,7 @@ from apps.core.constants import (
     ValidationMark,
 )
 from apps.documents.models import Document, Section
+from apps.organization.models import Company
 
 from . import provider
 from .qr import qr_png, verify_url
@@ -129,6 +130,13 @@ def _responsibilities(section: Section) -> list:
     return rows
 
 
+def company_name() -> str:
+    """The company's name — the root node's name, so the chart and the paper never disagree —
+    or "" before a company exists."""
+    company = Company.objects.select_related("root").filter(pk=1).first()
+    return company.root.name if company else ""
+
+
 def load(document_id: int) -> provider.PdfInput:
     document = (
         Document.objects.prefetch_related(
@@ -202,6 +210,7 @@ def load(document_id: int) -> provider.PdfInput:
         upper_footnote=document.footnote1,
         lower_footnote=document.footnote2,
         logo=logo,
+        company_name=company_name() if document.show_company_name else "",
         qr=qr_png(verify_url(document)),
         creater=_signature(signoffs.get(SignOffRole.CREATER)),
         confirmer=_signature(signoffs.get(SignOffRole.CONFIRMER)),

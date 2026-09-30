@@ -7,19 +7,13 @@ from django.utils import timezone
 from apps.core.constants import SectionType, SignOffRole
 from apps.documents import form_schema
 from apps.documents.models import Document
-from apps.organization.models import Company
 
-from .adapter import _read_png, _validation_mark, jalali
+from .adapter import _read_png, _validation_mark, company_name as _company_name, jalali
 from .form_renderer import FormPdfInput, Signer
 from .qr import qr_png, verify_url
 
 #: The approval strip's columns, right to left.
 SIGNER_ORDER = (SignOffRole.CREATER, SignOffRole.CONFIRMER, SignOffRole.APPROVER)
-
-
-def _company_name() -> str:
-    company = Company.objects.select_related("root").filter(pk=1).first()
-    return company.root.name if company else ""
 
 
 def load(document_id: int) -> FormPdfInput:

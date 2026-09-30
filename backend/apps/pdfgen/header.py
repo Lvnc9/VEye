@@ -22,6 +22,12 @@ OUTER_WIDTH = 1.6
 INNER_WIDTH = 0.6
 PADDING = 9.0
 
+#: The company's name, when the document asks for it (2026-09-30): one small muted line at the
+#: top of the middle cell (as on forms), the title centred in what is left below it.
+_COMPANY_SIZES = (9.0, 8.0, 7.0)
+_COMPANY_BAND = 17.0
+_COMPANY_COLOUR = (0.33, 0.33, 0.33)
+
 _TITLE_SIZES = (15.0, 13.5, 12.0, 10.5, 9.5)
 _MAX_TITLE_LINES = 2
 _META_SIZE = 10.5
@@ -70,10 +76,24 @@ def _split_label(row: str) -> tuple[str, str]:
     return label + ":", value.strip()
 
 
-def draw_boxed_header(canvas, *, title, rows, logo, font_name, x0, x1, top):
+def _company_line(name: str, font_name: str, width: float) -> tuple[rtl.Font, str]:
+    """The largest of a few small sizes at which `name` fits on one line; cut with an
+    ellipsis at the smallest when even that is too wide."""
+    font = _fonts(font_name, _COMPANY_SIZES[-1])
+    for size in _COMPANY_SIZES:
+        font = _fonts(font_name, size)
+        if font.width(name) <= width:
+            return font, name
+    while len(name) > 1 and font.width(name + "…") > width:
+        name = name[:-1].rstrip()
+    return font, name + "…"
+
+
+def draw_boxed_header(canvas, *, title, rows, logo, font_name, x0, x1, top, company_name=""):
     """Draw the header with its top edge at `top` and its sides at x0 (left) / x1
     (right). `rows` are the three left-cell lines; `logo` is an `ImageReader` or
     None (an empty cell — V_1.0's black placeholder square would spoil the page).
+    `company_name`, when not empty, is written at the top of the middle cell, centred.
     Colours are set here and the graphics state restored."""
     bottom = top - HEIGHT
     logo_x = x1 - LOGO_CELL
@@ -104,9 +124,22 @@ def draw_boxed_header(canvas, *, title, rows, logo, font_name, x0, x1, top):
 
     # Title: centred in the middle cell, as large as fits in two lines.
     left, right = meta_x + PADDING, logo_x - PADDING
+    zone = HEIGHT  # the height the title is centred in
+    name = (company_name or "").strip()
+    if name:
+        small, name = _company_line(name, font_name, right - left)
+        line = [(name, rtl.NORMAL)]
+        canvas.setFillColorRGB(*_COMPANY_COLOUR)
+        rtl.draw_line(
+            canvas, line, small,
+            x_right=right - ((right - left) - rtl.line_width(line, small)) / 2,
+            y=top - 6.0 - small.size * 0.85,
+        )
+        canvas.setFillColorRGB(0, 0, 0)
+        zone = HEIGHT - _COMPANY_BAND
     font, lines = _wrap_title(title, font_name, right - left)
     lead = font.size * 1.55
-    y = bottom + (HEIGHT + lead * (len(lines) - 1)) / 2 - font.size * 0.32
+    y = bottom + (zone + lead * (len(lines) - 1)) / 2 - font.size * 0.32
     for text in lines:
         line = [(text, rtl.BOLD)]
         x_right = right - ((right - left) - rtl.line_width(line, font)) / 2
