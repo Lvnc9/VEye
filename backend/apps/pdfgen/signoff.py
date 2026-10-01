@@ -1,8 +1,10 @@
 """The sign-off strip on the last page of a پوستر (owner's request, 2026-09-30).
 
 Three columns, right to left: تهیه کننده | تایید کننده | تصویب کننده. Each is a stack —
-the role, then «سمت <role>: …», then «نام و نام خانوادگی <role>: …», then plain «امضا:» with
-the drawn signature (the labels name their signer — owner's request, 2026-10-01) — and the strip is pinned to the foot of the last page, above the footer.
+the role, then the سمت, the name and the drawn signature. Once a step is done these are the
+values alone («مدیر عامل», not «سمت: مدیر عامل»; no «امضا:» beside the signature); a step still
+waiting shows «سمت <role>:», «نام و نام خانوادگی <role>:» and «امضا:» in their place
+(owner's corrections, 2026-10-01) — and the strip is pinned to the foot of the last page, above the footer.
 It is plain text on the page: no table, no grid lines, no shading (owner's correction,
 2026-10-01 — the first version drew it as a boxed table).
 No date and no validity: whether a document is still in force is the watermark's job.
@@ -51,8 +53,9 @@ def _plain(value) -> str:
 
 
 def _lines(label: str, value, font: rtl.Font, width: float) -> list[rtl.Line]:
-    """«label: value», the label bold, wrapped to `width`; just the label when there is no value."""
-    text = f"**{label}**" + (f" {_plain(value)}" if _plain(value) else "")
+    """What a row prints, wrapped to `width`: the value alone once the step is done («مدیر عامل», not
+    «سمت: مدیر عامل»); the bold label as a placeholder while it is not (owner, 2026-10-01)."""
+    text = _plain(value) or f"**{label}**"
     return rtl.wrap(text, font, width)
 
 
@@ -105,13 +108,18 @@ def draw(maker, signers: list, images: list) -> None:
             elif row <= len(rows):
                 baseline = y - PAD - SIZE * 0.85
                 for line in rows[row - 1][index]:
-                    rtl.draw_line(c, line, regular, x_right=x_right - PAD, y=baseline)
+                    inner = column_width - 2 * PAD
+                    x = x_right - PAD - (inner - rtl.line_width(line, regular)) / 2  # centred under the role
+                    rtl.draw_line(c, line, regular, x_right=x, y=baseline)
                     baseline -= SIZE * LEADING
             else:  # the signature cell
-                rtl.draw_line(c, [("امضا:", rtl.BOLD)], small, x_right=x_right - PAD, y=y - PAD - 8.0 * 0.85)
                 image = images[index]
-                if image is not None:
-                    box_w, box_h = column_width - 2 * PAD - 8, height - PAD - 14
+                if image is None:
+                    label = [("امضا:", rtl.BOLD)]
+                    x = x_right - (column_width - rtl.line_width(label, small)) / 2
+                    rtl.draw_line(c, label, small, x_right=x, y=y - PAD - 8.0 * 0.85)
+                else:  # the signature itself, no label
+                    box_w, box_h = column_width - 2 * PAD - 8, height - PAD
                     c.drawImage(
                         image, x_left + (column_width - box_w) / 2, y - height + PAD / 2, box_w, box_h,
                         mask="auto", preserveAspectRatio=True, anchor="c",

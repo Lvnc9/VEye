@@ -148,14 +148,27 @@ class StripTests(SimpleTestCase):
         _, rec = self.draw()
         col = [s for s in rec.strings if s[0] > RIGHT - (RIGHT - LEFT) / 3]  # the rightmost third
         title = next(s for s in col if s[2] == rtl.shape("تهیه کننده:"))
-        post = next(s for s in col if s[2] == rtl.shape(" مدیر واحد"))  # a run after its bold label
-        name = next(s for s in col if s[2] == rtl.shape(" علی رضایی"))
-        label = next(s for s in col if s[2] == rtl.shape("امضا:"))
+        post = next(s for s in col if s[2] == rtl.shape("مدیر واحد"))
+        name = next(s for s in col if s[2] == rtl.shape("علی رضایی"))
         self.assertGreater(title[1], post[1])
         self.assertGreater(post[1], name[1])
-        self.assertGreater(name[1], label[1])
         (x, y, w, page), *_ = [i for i in rec.images if i[0] > RIGHT - (RIGHT - LEFT) / 3]
-        self.assertLess(y, label[1])  # the signature sits under its «امضا:»
+        self.assertLess(y, name[1])  # the signature sits under the name
+
+    def test_a_signed_step_prints_the_values_without_their_labels(self):
+        _, rec = self.draw()
+        third = (RIGHT - LEFT) / 3
+        for lo, hi in ((RIGHT - third, RIGHT), (RIGHT - 2 * third, RIGHT - third)):  # the two signed columns
+            col = [s[2] for s in rec.strings if lo <= s[0] < hi + 1]
+            for word in ("سمت", "نام و نام خانوادگی", "امضا"):
+                self.assertFalse(any(rtl.shape(word) in text for text in col), word)
+        self.assertEqual(len(rec.images), 2)
+
+    def test_a_step_still_waiting_shows_its_labels(self):
+        _, rec = self.draw()
+        self.assertEqual(len(rec.find("سمت تصویب کننده:")), 1)
+        self.assertEqual(len(rec.find("نام و نام خانوادگی تصویب کننده:")), 1)
+        self.assertEqual(len(rec.find("امضا:")), 1)
 
     def test_no_date_and_no_validity_are_printed(self):
         _, rec = self.draw()
@@ -175,11 +188,9 @@ class StripTests(SimpleTestCase):
 
     def test_it_is_full_width_in_three_equal_columns(self):
         _, rec = self.draw()
-        xs = [entry[0] for entry in rec.find("امضا:")]  # the same label once per column, each drawn from its column's right edge
-        column = (RIGHT - LEFT) / 3
-        self.assertEqual(len(xs), 3)
-        self.assertAlmostEqual(xs[0] - xs[1], column, places=1)
-        self.assertAlmostEqual(xs[1] - xs[2], column, places=1)
+        xs = [image[0] for image in rec.images]  # the two signatures, each centred in its column
+        self.assertEqual(len(xs), 2)
+        self.assertAlmostEqual(xs[0] - xs[1], (RIGHT - LEFT) / 3, places=1)
 
     def test_it_stays_on_the_page_when_the_content_leaves_room(self):
         m = maker(cover_page=False)
@@ -202,15 +213,15 @@ class StripTests(SimpleTestCase):
         _, short = self.draw()
         top_of = lambda rec: max(entry[1] for entry in rec.strings)
         self.assertGreater(top_of(tall), top_of(short))
-        # the signature labels stay put: the strip is pinned at the bottom, it grows upwards
+        # the unsigned column's label stays put: the strip is pinned at the bottom, it grows upwards
         self.assertAlmostEqual(tall.find("امضا:")[0][1], short.find("امضا:")[0][1], places=2)
         for entry in tall.strings:
             self.assertGreaterEqual(entry[0], LEFT - 1)
 
     def test_markers_in_a_name_do_not_restyle_it(self):
         _, rec = self.draw(signers=[["**علی** رضایی", "--مدیر--", None], SIGNERS[1], SIGNERS[2]])
-        self.assertTrue(rec.find(" علی رضایی"))
-        self.assertTrue(rec.find(" مدیر"))
+        self.assertTrue(rec.find("علی رضایی"))
+        self.assertTrue(rec.find("مدیر"))
 
     def test_empty_signers_still_print_the_labels(self):
         _, rec = self.draw(signers=[None, None, None])

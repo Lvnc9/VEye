@@ -234,7 +234,8 @@ function LetterBox() {
 
 /** What the printed strip shows (backend `signoff.ROLES`, `form_renderer._approval_strip`): three plain
  *  columns, right to left — تهیه کننده | تایید کننده | تصویب کننده — each a stack of the role, سمت, name and
- *  signature. No table, no lines (owner's correction, 2026-10-01). */
+ *  signature. No table, no lines (owner's correction, 2026-10-01). The designer has nobody signing yet, so it
+ *  shows the placeholders; on paper a done step prints its values alone. */
 const STRIP_ROLES = ["تهیه کننده", "تایید کننده", "تصویب کننده"];
 
 function ApprovalStrip({ size }: { size: number }) {

@@ -584,13 +584,12 @@ class ApprovalStripTests(SimpleTestCase):
         table = self.table()
         rightmost = [unwrap(row[-1]) for row in table._cellvalues]  # a table lays out left to right: the author is last
         self.assertEqual(rightmost[0].text, "تهیه کننده:")
-        self.assertIn("سمت تهیه کننده:", rightmost[1].text)
-        self.assertIn("مدیر واحد", rightmost[1].text)
-        self.assertIn("نام و نام خانوادگی تهیه کننده:", rightmost[2].text)
-        self.assertIn("علی رضایی", rightmost[2].text)
+        # a signed step prints its values alone — «مدیر واحد», not «سمت: مدیر واحد»
+        self.assertEqual(rightmost[1].text, "مدیر واحد")
+        self.assertEqual(rightmost[2].text, "علی رضایی")
         self.assertIsInstance(rightmost[3], form_renderer._SignatureCell)
         self.assertIsNotNone(rightmost[3].reader)
-        self.assertIsNone(unwrap(self.table()._cellvalues[3][1]).reader, "an unsigned column keeps its «امضا:» cell, empty")
+        self.assertIsNone(unwrap(self.table()._cellvalues[3][1]).reader, "an unsigned column keeps its «امضا:» placeholder")
 
     def test_no_date_is_printed(self):
         table = self.table()
@@ -606,7 +605,7 @@ class ApprovalStripTests(SimpleTestCase):
     def test_markers_in_a_name_are_not_styling(self):
         signers = (form_renderer.Signer("تهیه کننده", "**علی**--رضایی"),)
         [row] = [self.table(signers)._cellvalues[2]]
-        self.assertEqual(unwrap(row[0]).text, "**نام و نام خانوادگی تهیه کننده:** علیرضایی")
+        self.assertEqual(unwrap(row[0]).text, "علیرضایی")
 
     def test_it_draws_no_grid_and_no_shading(self):
         style = [command[0] for command in self.table()._bkgrndcmds + self.table()._linecmds]

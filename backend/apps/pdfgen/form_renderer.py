@@ -1016,7 +1016,7 @@ class _Image(Flowable):
 
 
 class _SignatureCell(Flowable):
-    """«امضا:» at the top right, and the drawn signature (if any) filling the rest of the cell."""
+    """The drawn signature filling the cell, centred; an unsigned step shows just «امضا:» as its placeholder."""
 
     def __init__(self, image: bytes | None, size: float, height: float):
         super().__init__()
@@ -1029,15 +1029,14 @@ class _SignatureCell(Flowable):
         return self.width, self.height
 
     def draw(self):
-        font = _fonts(self.size)
-        rtl.draw_line(self.canv, [("امضا:", rtl.BOLD)], font, x_right=self.width - 1.5, y=self.height - self.size * 1.05)
         if self.reader is None:
+            font = _fonts(self.size)
+            rtl.draw_line(self.canv, [("امضا:", rtl.BOLD)], font, x_right=self.width - 1.5, y=self.height - self.size * 1.05)
             return
-        top = self.height - self.size * 1.6
         iw, ih = self.reader.getSize()
-        scale = min((self.width - 6 * mm) / iw, top / ih)
+        scale = min((self.width - 6 * mm) / iw, self.height / ih)
         w, h = iw * scale, ih * scale
-        self.canv.drawImage(self.reader, (self.width - w) / 2, (top - h) / 2, w, h, mask="auto")
+        self.canv.drawImage(self.reader, (self.width - w) / 2, (self.height - h) / 2, w, h, mask="auto")
 
 
 class _BottomAnchored(Flowable):
@@ -1065,9 +1064,18 @@ def _plain(value: str) -> str:
     return text.strip()
 
 
+def _value_or_label(value: str, label: str, size: float) -> RTLParagraph:
+    """A signed step prints what it holds — «مدیر عامل», not «سمت: مدیر عامل»; a step still waiting
+    shows its bold label as the placeholder (owner's correction, 2026-10-01)."""
+    if value:
+        return _cell(value, size)
+    return _cell(label, size, bold=True)
+
+
 def _approval_strip(data: FormPdfInput, width: float) -> list:
     """Three columns, the first signer on the right — تهیه کننده | تایید کننده | تصویب کننده.
-    Each is a stack: the role, «سمت <role>: …», «نام و نام خانوادگی <role>: …», then plain «امضا:» with the signature
+    Each is a stack: the role, the سمت, the name, the signature — the values alone once the step is done,
+    the labels («سمت <role>:», «نام و نام خانوادگی <role>:», «امضا:») only while it is not
     (owner's request, 2026-09-30; no date, no validity). Pinned to the foot of the last page.
     Plain text — no grid, no shading (owner's correction, 2026-10-01): the Table only lines the
     columns up, so the rows of the three signers stay level."""
@@ -1078,8 +1086,8 @@ def _approval_strip(data: FormPdfInput, width: float) -> list:
         columns.append(
             [
                 _cell(signer.role_label + ":", size + 1, bold=True),
-                _cell(f"**سمت {signer.role_label}:** {_plain(signer.position)}".rstrip(), size, align="right"),
-                _cell(f"**نام و نام خانوادگی {signer.role_label}:** {_plain(signer.name)}".rstrip(), size, align="right"),
+                _value_or_label(_plain(signer.position), f"سمت {signer.role_label}:", size),
+                _value_or_label(_plain(signer.name), f"نام و نام خانوادگی {signer.role_label}:", size),
                 _SignatureCell(signer.image, size - 1, 16 * mm),
             ]
         )
