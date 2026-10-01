@@ -28,7 +28,7 @@ whatever its lead could do there.
 from django.db.models import Q
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
-from apps.accounts.models import Capability
+from apps.accounts.models import Capability, User
 
 from .models import Membership, OrgNode, OrgNodeKind
 
@@ -102,6 +102,30 @@ class OrgAccess:
         """Add, edit or remove the people directly in this node: `manage_membership`, or lead of
         the node or an ancestor."""
         return self.holds(Capability.MANAGE_MEMBERSHIP) or self.leads(node)
+
+
+def ancestor_paths(path: str) -> list[str]:
+    """Every ancestor path of `path`, inclusive: "0000000001/0000000007/" ->
+    ["0000000001/", "0000000001/0000000007/"]. The reverse direction of `OrgAccess.leads` (which
+    asks, for one lead path, "is this node beneath it?"); this instead builds every path that
+    *could* be a lead's, for `users_leading_at_or_above`."""
+    segments = path.strip("/").split("/")
+    return ["/".join(segments[: i + 1]) + "/" for i in range(len(segments))]
+
+
+def users_leading_at_or_above(node: OrgNode, kinds=None):
+    """Every active user who leads `node` or an ancestor of it — optionally only an ancestor of
+    one of `kinds` (e.g. the Phase 14 confirming kinds: واحد / حوزه / شرکت, never بخش). This is the
+    reverse of `OrgAccess.leads`: not "can this one person act here", but "who are all the people
+    who could" — used by `apps.documents.authority` to decide whom to notify, never to decide
+    access by itself (that stays `leads`/`leads_of_kind`, checked per person, per request).
+    """
+    memberships = Membership.objects.filter(
+        node__path__in=ancestor_paths(node.path), is_lead=True, node__is_active=True
+    )
+    if kinds is not None:
+        memberships = memberships.filter(node__kind__in=kinds)
+    return User.objects.filter(pk__in=memberships.values("user_id"), is_active=True)
 
 
 def access_for(request) -> OrgAccess:

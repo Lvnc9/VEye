@@ -20,6 +20,7 @@ from apps.accounts.models import FULL_ACCESS_POSITIONS, ROLL_CAPABILITIES, Acces
 from apps.accounts.tests import LOCMEM_CACHE, make_user
 from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_search_term
+from apps.notifications.models import Notification, NotificationKind
 
 from . import memberships, queries, tree
 from .access import OrgAccess, access_for
@@ -906,6 +907,49 @@ class MembershipServiceTests(MembershipAssertions, SampleTree, TestCase):
         join(self.ali, self.u2)
         tree.archive_node(self.u2)
         self.assertEqual(Membership.objects.filter(node=self.u2).count(), 1)
+
+
+class MembershipNotificationTests(MembershipAssertions, SampleTree, TestCase):
+    """Phase 15: apps.notifications is told whenever someone's place in the chart changes."""
+
+    def setUp(self):
+        self.build()
+        self.ali = person("9200000030")
+
+    def notifications_for(self, user):
+        return Notification.objects.filter(recipient=user)
+
+    def test_joining_as_a_member_notifies_them(self):
+        join(self.ali, self.s1)
+        notification = self.notifications_for(self.ali).get()
+        self.assertEqual(notification.kind, NotificationKind.MEMBERSHIP_ADDED)
+        self.assertIn(self.s1.name, notification.title)
+
+    def test_joining_as_a_lead_notifies_them_as_a_lead(self):
+        join(self.ali, self.s1, is_lead=True)
+        notification = self.notifications_for(self.ali).get()
+        self.assertEqual(notification.kind, NotificationKind.LEAD_ASSIGNED)
+
+    def test_being_promoted_to_lead_notifies_them_once(self):
+        m = join(self.ali, self.s1)
+        self.assertEqual(self.notifications_for(self.ali).count(), 1)  # MEMBERSHIP_ADDED, from joining
+        memberships.update_membership(m, is_lead=True)
+        self.assertEqual(
+            list(self.notifications_for(self.ali).order_by("id").values_list("kind", flat=True)),
+            [NotificationKind.MEMBERSHIP_ADDED, NotificationKind.LEAD_ASSIGNED],
+        )
+
+    def test_staying_a_lead_notifies_nobody_again(self):
+        m = join(self.ali, self.s1, is_lead=True)
+        self.assertEqual(self.notifications_for(self.ali).count(), 1)
+        memberships.update_membership(m, position_label="عنوان جدید")
+        self.assertEqual(self.notifications_for(self.ali).count(), 1)  # no second LEAD_ASSIGNED
+
+    def test_leaving_notifies_them(self):
+        m = join(self.ali, self.s1)
+        memberships.remove_membership(m)
+        kinds = list(self.notifications_for(self.ali).order_by("id").values_list("kind", flat=True))
+        self.assertEqual(kinds, [NotificationKind.MEMBERSHIP_ADDED, NotificationKind.MEMBERSHIP_REMOVED])
 
 
 class MembershipConstraintTests(SampleTree, TestCase):

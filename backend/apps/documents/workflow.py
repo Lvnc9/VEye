@@ -27,6 +27,8 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 
 from apps.core.constants import DocumentEventKind, DocumentStatus, SignOffRole
 from apps.core.exceptions import ConflictError
+from apps.notifications import services as notifications
+from apps.notifications.models import NotificationKind
 
 from . import authority as document_authority
 from .files import normalize_signature
@@ -164,6 +166,13 @@ def submit(*, user, document_id: int, signature) -> Document:
 
     _sign(document, SignOffRole.CREATER, user, signature)
     _record(document, kind=DocumentEventKind.SUBMITTED, to_status=DocumentStatus.AWAITING_CONFIRMATION, user=user)
+    notifications.notify_many(
+        document_authority.confirm_eligible_users(document),
+        kind=NotificationKind.DOCUMENT_AWAITING_CONFIRMATION,
+        title=f"«{document.full_code}» برای تایید ارسال شد",
+        body=document.title,
+        url=f"/documents/{document.pk}/edit",
+    )
     return document
 
 
@@ -176,6 +185,13 @@ def confirm(*, user, document_id: int, signature) -> Document:
 
     _sign(document, SignOffRole.CONFIRMER, user, signature)
     _record(document, kind=DocumentEventKind.CONFIRMED, to_status=DocumentStatus.AWAITING_APPROVAL, user=user)
+    notifications.notify_many(
+        document_authority.approve_eligible_users(),
+        kind=NotificationKind.DOCUMENT_AWAITING_APPROVAL,
+        title=f"«{document.full_code}» برای تصویب آماده است",
+        body=document.title,
+        url=f"/documents/{document.pk}/edit",
+    )
     return document
 
 
@@ -190,6 +206,13 @@ def approve(*, user, document_id: int, signature) -> Document:
 
     _sign(document, SignOffRole.APPROVER, user, signature)
     _record(document, kind=DocumentEventKind.APPROVED, to_status=DocumentStatus.UNDER_CONTROL, user=user)
+    notifications.notify(
+        document.created_by,
+        kind=NotificationKind.DOCUMENT_APPROVED,
+        title=f"«{document.full_code}» تصویب و ابلاغ شد",
+        body=document.title,
+        url=f"/documents/{document.pk}/edit",
+    )
 
     superseded = _supersede_previous(document, user)
     _queue_pdf_builds(user, document, superseded)
@@ -259,4 +282,11 @@ def return_document(*, user, document_id: int, reason: str) -> Document:
         _delete_storage_on_commit(signoff.signature)
         signoff.delete()
     _record(document, kind=DocumentEventKind.RETURNED, to_status=DocumentStatus.DRAFT, user=user, reason=reason)
+    notifications.notify(
+        document.created_by,
+        kind=NotificationKind.DOCUMENT_RETURNED,
+        title=f"«{document.full_code}» مرجوع شد",
+        body=reason,
+        url=f"/documents/{document.pk}/edit",
+    )
     return document

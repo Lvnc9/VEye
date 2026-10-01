@@ -28,6 +28,8 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from apps.chat import services as chat
 from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_title
+from apps.notifications import services as notifications
+from apps.notifications.models import NotificationKind
 
 from .models import Membership, SetupStep
 from .setup_state import advance_step
@@ -108,6 +110,12 @@ def add_membership(
         added_by=added_by,
     )
     chat.post_system_message(node, f"{user.full_name} به گفتگو اضافه شد.")
+    notifications.notify(
+        user,
+        kind=NotificationKind.LEAD_ASSIGNED if is_lead else NotificationKind.MEMBERSHIP_ADDED,
+        title=f"شما به «{node.name}» اضافه شدید" + (" (مسئول)" if is_lead else ""),
+        url="/organization",
+    )
     if advance_setup:
         advance_step(SetupStep.PEOPLE)
     return membership
@@ -136,11 +144,19 @@ def update_membership(
         _require_may_demote(membership.user_id, may_touch)
         Membership.objects.filter(user_id=membership.user_id, is_primary=True).update(is_primary=False)
         membership.is_primary = True
+    became_lead = is_lead and not membership.is_lead
     if is_lead is not None:
         membership.is_lead = is_lead
     if position_label is not None:
         membership.position_label = normalize_title(position_label)
     membership.save(update_fields=["is_primary", "is_lead", "position_label", "updated_at"])
+    if became_lead:
+        notifications.notify(
+            membership.user,
+            kind=NotificationKind.LEAD_ASSIGNED,
+            title=f"مسئولیت «{membership.node.name}» به شما واگذار شد",
+            url="/organization",
+        )
     return membership
 
 
@@ -149,8 +165,15 @@ def remove_membership(membership: Membership) -> None:
     _lock_user(membership.user_id)
     membership = _lock_membership(membership.pk)
     was_primary = membership.is_primary
+    user, node = membership.user, membership.node
     membership.delete()
-    chat.post_system_message(membership.node, f"{membership.user.full_name} از گفتگو خارج شد.")
+    chat.post_system_message(node, f"{user.full_name} از گفتگو خارج شد.")
+    notifications.notify(
+        user,
+        kind=NotificationKind.MEMBERSHIP_REMOVED,
+        title=f"عضویت شما در «{node.name}» پایان یافت",
+        url="/organization",
+    )
     if was_primary:
         # Keep "any membership => exactly one primary": the earliest remaining one takes over.
         successor = Membership.objects.filter(user_id=membership.user_id).order_by("id").first()

@@ -167,6 +167,7 @@ describe("rules", () => {
 describe("inbox tab and chart affordance", () => {
   it("defaults to conversations", () => {
     expect(parseInboxTab("awaiting")).toBe("awaiting");
+    expect(parseInboxTab("notifications")).toBe("notifications");
     for (const other of [null, "", "x", "conversations"]) expect(parseInboxTab(other)).toBe("conversations");
   });
 

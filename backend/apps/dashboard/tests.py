@@ -236,5 +236,11 @@ class InboxBadgeTests(TestCase):
             self.project_with(self.w.s1b, 0, 1, 2)
             data = self.inbox(self.w.s1b).data
         self.assertEqual((data["due_objectives"], len(data["objectives"])), (3, 2))
-        self.assertEqual(data["total"], data["unread_messages"] + data["awaiting_documents"] + data["due_objectives"])
-        self.assertEqual(data["total"], 4)
+        self.assertEqual(
+            data["total"],
+            data["unread_messages"] + data["awaiting_documents"] + data["due_objectives"] + data["unread_notifications"],
+        )
+        # Phase 15: placing s1b in the chart during world-building also notified them once
+        # (apps.organization.memberships.add_membership) — not asserted on its own here, since the
+        # notifications app's own tests own that behaviour; this just keeps the sum honest.
+        self.assertEqual(data["total"], 4 + data["unread_notifications"])

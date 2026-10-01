@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/v1/", include("apps.pdfgen.urls")),
     path("api/v1/", include("apps.documents.urls")),
     path("api/v1/", include("apps.dashboard.urls")),
+    path("api/v1/", include("apps.notifications.urls")),
 ]
 
 if settings.DEBUG:

@@ -69,6 +69,23 @@ services:
       redis:
         condition: service_healthy
 
+  # Phase 15: the scheduler for apps/notifications/tasks.py (CELERY_BEAT_SCHEDULE). A separate
+  # service from `celery` on purpose — a worker restart must not also restart the scheduler
+  # (and vice versa), and running `beat` twice would fire every reminder twice.
+  celery-beat:
+    build: ./backend
+    command: celery -A config beat --loglevel=info --pidfile=
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   frontend:
     build: ./frontend
     command: npm run dev

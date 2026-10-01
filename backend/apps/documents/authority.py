@@ -11,10 +11,13 @@ disagree: they call the same functions.
 """
 from __future__ import annotations
 
+from functools import reduce
+from operator import or_
+
 from django.db.models import Q
 from rest_framework.exceptions import PermissionDenied
 
-from apps.accounts.models import FULL_ACCESS_POSITIONS, Capability
+from apps.accounts.models import FULL_ACCESS_POSITIONS, Capability, User
 from apps.organization.access import OrgAccess
 from apps.organization.models import OrgNode, OrgNodeKind
 
@@ -177,3 +180,32 @@ def owner_node_choices(user) -> list[dict]:
         }
         for node in eligible_owner_nodes(user)
     ]
+
+
+# -- who to notify (Phase 15) -------------------------------------------------
+#
+# The functions above answer "may *this* person act?"; a reminder needs the opposite question —
+# "who *are* all the people who could?" — so `workflow.py` knows who to tell. Kept here, not in
+# `apps.notifications`, because it is exactly the Phase 14 rule above, read backwards; the
+# structural guard in `apps/organization/tests.py` (`test_no_document_module_reads_the_org_tables`)
+# still holds, since the org-side lookup itself lives in `organization.access`, not here.
+
+
+def approve_eligible_users():
+    """Everyone who could approve any document right now: the مدیر عامل position(s) and every
+    superuser. Used to notify them when a document reaches AWAITING_APPROVAL, and as the fallback
+    for a document with no owner node (nobody else can act on one anyway)."""
+    position_q = reduce(or_, (Q(access_roll=roll, access_level=level) for roll, level in FULL_ACCESS_POSITIONS))
+    return User.objects.filter(is_active=True, is_developer=False).filter(Q(is_superuser=True) | position_q)
+
+
+def confirm_eligible_users(document):
+    """Everyone who could confirm `document` right now: the مسئول of a واحد / حوزه / شرکت at or
+    above its owner node, plus the مدیر عامل (who may always act). A document predating the chart
+    (`owner_node` is NULL) has only the مدیر عامل to tell."""
+    if document.owner_node_id is None:
+        return approve_eligible_users()
+    from apps.organization.access import users_leading_at_or_above
+
+    leads = users_leading_at_or_above(document.owner_node, kinds=CONFIRMING_KINDS)
+    return (leads | approve_eligible_users()).distinct()

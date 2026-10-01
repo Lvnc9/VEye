@@ -234,6 +234,9 @@ export interface InboxSummary {
   unread_messages: number;
   awaiting_documents: number;
   due_objectives: number;
+  /** Unread rows in the «اعلان‌ها» tab (Phase 15) — the only one of these four counts that is a
+   *  real, persisted feed someone can read through and mark read, rather than a live count. */
+  unread_notifications: number;
   total: number;
   objectives: DueObjective[];
 }
@@ -241,10 +244,11 @@ export interface InboxSummary {
 /** The sidebar badge polls this often (the thread itself polls faster). */
 export const BADGE_POLL_MS = 30000;
 
-export type InboxTab = "conversations" | "awaiting";
+export type InboxTab = "conversations" | "awaiting" | "notifications";
 
 export function parseInboxTab(value: string | null): InboxTab {
-  return value === "awaiting" ? "awaiting" : "conversations";
+  if (value === "awaiting" || value === "notifications") return value;
+  return "conversations";
 }
 
 /**

@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "apps.dashboard",
     "apps.pdfgen",
     "apps.importer",
+    "apps.notifications",
 ]
 
 MIDDLEWARE = [
@@ -257,6 +258,23 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=300)
 CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT", default=270)
 
+# Celery beat (Phase 15): the project's first *scheduled* tasks — apps/notifications/tasks.py,
+# run by a dedicated `celery-beat` service (docker-compose.yml), never the worker itself. Each
+# task's own `dedupe_key` (apps.notifications.services.notify) makes a redelivered or repeated
+# run harmless, so the schedule needs no extra locking.
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    "notifications-check-due-objectives": {
+        "task": "notifications.check_due_objectives",
+        "schedule": crontab(hour=7, minute=30),
+    },
+    "notifications-check-stalled-documents": {
+        "task": "notifications.check_stalled_documents",
+        "schedule": crontab(hour=7, minute=45),
+    },
+}
+
 # ---------------------------------------------------------------------------
 # PDF engine (apps.pdfgen, Phase 4)
 # ---------------------------------------------------------------------------
@@ -300,3 +318,7 @@ CHAT_ATTACHMENT_MAX_FILES = env.int("CHAT_ATTACHMENT_MAX_FILES", default=5)
 CHAT_ATTACHMENT_RATELIMIT_RATE = env("CHAT_ATTACHMENT_RATELIMIT_RATE", default="20/m")
 # کارتابل «منتظر اقدام»: an open ریزهدف counts from this many days before its deadline.
 INBOX_DUE_SOON_DAYS = env.int("INBOX_DUE_SOON_DAYS", default=3)
+
+# Notifications (Phase 15): a مستند sitting in AWAITING_CONFIRMATION/AWAITING_APPROVAL longer
+# than this many days gets a reminder (apps/notifications/tasks.check_stalled_documents).
+DOCUMENT_STALL_DAYS = env.int("DOCUMENT_STALL_DAYS", default=3)

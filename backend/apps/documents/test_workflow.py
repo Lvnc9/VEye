@@ -27,6 +27,7 @@ from apps.core.constants import (
 )
 from apps.core.exceptions import ConflictError
 from apps.dashboard.views import METRICS_CACHE_KEY
+from apps.notifications.models import Notification, NotificationKind
 from apps.pdfgen.models import PdfBuild, PdfKind, PdfStatus
 
 from . import services, test_support, workflow
@@ -170,6 +171,55 @@ class HappyPathTests(WorkflowBase):
         self.assertEqual(build.status, PdfStatus.BUILDING)
         self.assertEqual(build.requested_by_id, self.approver.pk)
         self.assertEqual(delay.call_count, 1)
+
+
+class NotificationTests(WorkflowBase):
+    """Phase 15: each transition tells the next actor, or the author, through
+    apps.notifications — the only persisted (mark-read-able) feed in the app."""
+
+    def test_submitting_notifies_every_confirm_eligible_person(self):
+        self.act(self.author, "submit")
+        recipients = set(
+            Notification.objects.filter(kind=NotificationKind.DOCUMENT_AWAITING_CONFIRMATION).values_list(
+                "recipient_id", flat=True
+            )
+        )
+        # confirmer and confirmer2 both lead هوش مصنوعی (RAG's parent واحد); the مدیر عامل may
+        # always confirm too. The author — a صفی with no confirming authority — is not among them.
+        self.assertEqual(recipients, {self.confirmer.pk, self.confirmer2.pk, self.approver.pk})
+
+    def test_confirming_notifies_the_managing_director(self):
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.act(self.author, "submit")
+            self.act(self.confirmer, "confirm")
+        notification = Notification.objects.get(kind=NotificationKind.DOCUMENT_AWAITING_APPROVAL)
+        self.assertEqual(notification.recipient_id, self.approver.pk)
+        self.assertIn(self.doc.full_code, notification.title)
+
+    def test_approving_notifies_the_author(self):
+        self.run_chain()
+        notification = Notification.objects.get(kind=NotificationKind.DOCUMENT_APPROVED)
+        self.assertEqual(notification.recipient_id, self.author.pk)
+
+    def test_returning_notifies_the_author_with_the_reason(self):
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.act(self.author, "submit")
+        self.act(self.confirmer, "return", reason="دلیل آزمایشی")
+        notification = Notification.objects.get(kind=NotificationKind.DOCUMENT_RETURNED)
+        self.assertEqual(notification.recipient_id, self.author.pk)
+        self.assertEqual(notification.body, "دلیل آزمایشی")
+
+    def test_a_document_with_no_owner_node_notifies_only_the_managing_director(self):
+        orphan = make_doc(self.author, title="سند قدیمی")
+        Document.objects.filter(pk=orphan.pk).update(owner_node=None)
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.act(self.approver, "submit", orphan)  # only the مدیر عامل may act on it at all
+        recipients = set(
+            Notification.objects.filter(kind=NotificationKind.DOCUMENT_AWAITING_CONFIRMATION).values_list(
+                "recipient_id", flat=True
+            )
+        )
+        self.assertEqual(recipients, {self.approver.pk})
 
 
 class GuardTests(WorkflowBase):

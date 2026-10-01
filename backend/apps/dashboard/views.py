@@ -149,11 +149,13 @@ class DashboardInboxView(APIView):
     """GET /dashboard/inbox/ — the کارتابل in numbers, for the sidebar badge (polled), plus the
     ریزهدف rows of the «منتظر اقدام» tab.
 
-      unread_messages     unread across everything «گفتگوها» lists (chat/queries.py's definition)
-      awaiting_documents  the same count as /dashboard/awaiting/
-      due_objectives      open ریزهدف assigned to me, in live projects, due within
-                          INBOX_DUE_SOON_DAYS days or already overdue
-      total               the three added — the badge
+      unread_messages      unread across everything «گفتگوها» lists (chat/queries.py's definition)
+      awaiting_documents   the same count as /dashboard/awaiting/
+      due_objectives       open ریزهدف assigned to me, in live projects, due within
+                           INBOX_DUE_SOON_DAYS days or already overdue
+      unread_notifications unread rows in the «اعلان‌ها» tab (Phase 15) — a persisted feed someone
+                           can read through and mark read, unlike the other three numbers here
+      total                the four added — the badge
 
     Chat and projects are imported inside the view (deferred): the dashboard must not become a hub
     that every app's import graph passes through.
@@ -162,11 +164,13 @@ class DashboardInboxView(APIView):
     def get(self, request):
         from apps.chat.access import chat_access_for
         from apps.chat.queries import unread_total
+        from apps.notifications.services import unread_count as unread_notifications
         from apps.projects.models import CLOSED_OBJECTIVE_STATUSES, Objective
 
         user = request.user
         unread = unread_total(chat_access_for(request).listed_conversations(), user)
         documents, _, _ = awaiting_documents(user)
+        notifications = unread_notifications(user)
 
         today = timezone.localdate()
         horizon = today + timedelta(days=settings.INBOX_DUE_SOON_DAYS)
@@ -197,7 +201,8 @@ class DashboardInboxView(APIView):
                 "unread_messages": unread,
                 "awaiting_documents": documents,
                 "due_objectives": due_count,
-                "total": unread + documents + due_count,
+                "unread_notifications": notifications,
+                "total": unread + documents + due_count + notifications,
                 "objectives": objectives,
             }
         )
