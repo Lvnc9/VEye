@@ -608,6 +608,10 @@ class ApprovalStripTests(SimpleTestCase):
         [row] = [self.table(signers)._cellvalues[2]]
         self.assertEqual(unwrap(row[0]).text, "**نام و نام خانوادگی:** علیرضایی")
 
+    def test_it_draws_no_grid_and_no_shading(self):
+        style = [command[0] for command in self.table()._bkgrndcmds + self.table()._linecmds]
+        self.assertEqual(style, [], "plain text, not a boxed table (owner, 2026-10-01)")
+
     def test_it_is_a_conditional_break_then_a_bottom_anchored_table(self):
         [before, anchored] = form_renderer._approval_strip(form_input(signers=self.SIGNERS), 500)
         self.assertIsInstance(before, form_renderer.CondPageBreak)

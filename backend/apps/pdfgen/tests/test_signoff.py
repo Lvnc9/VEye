@@ -163,18 +163,23 @@ class StripTests(SimpleTestCase):
         for word in ("تاریخ", "وضعیت", "معتبر", "منسوخ"):
             self.assertNotIn(rtl.shape(word), text)
 
+    def test_it_is_plain_text_with_no_table_or_boxes(self):
+        _, rec = self.draw()
+        self.assertEqual(rec.rects, [])
+
     def test_the_strip_is_pinned_above_the_footer(self):
-        m, rec = self.draw()
-        bottom = min(r[1] for r in rec.rects)
-        self.assertAlmostEqual(bottom, signoff.BOTTOM, places=2)
-        self.assertGreater(bottom, 90)  # the footer's QR reaches y = 90
+        _, rec = self.draw()
+        lowest = min(i[1] for i in rec.images)  # the signature box is the strip's lowest drawing
+        self.assertAlmostEqual(lowest, signoff.BOTTOM + signoff.PAD / 2, places=2)
+        self.assertGreater(lowest, 90)  # the footer's QR reaches y = 90
 
     def test_it_is_full_width_in_three_equal_columns(self):
         _, rec = self.draw()
-        widths = {round(r[2], 2) for r in rec.rects}
-        self.assertEqual(widths, {round((RIGHT - LEFT) / 3, 2)})
-        self.assertAlmostEqual(min(r[0] for r in rec.rects), LEFT, places=2)
-        self.assertAlmostEqual(max(r[0] + r[2] for r in rec.rects), RIGHT, places=2)
+        xs = [entry[0] for entry in rec.find("امضا:")]  # the same label once per column, each drawn from its column's right edge
+        column = (RIGHT - LEFT) / 3
+        self.assertEqual(len(xs), 3)
+        self.assertAlmostEqual(xs[0] - xs[1], column, places=1)
+        self.assertAlmostEqual(xs[1] - xs[2], column, places=1)
 
     def test_it_stays_on_the_page_when_the_content_leaves_room(self):
         m = maker(cover_page=False)
@@ -189,15 +194,16 @@ class StripTests(SimpleTestCase):
         m.current_y = signoff.BOTTOM + 100  # the strip is taller than that
         _, rec = self.draw(m)
         self.assertEqual(rec.pages, 2)
-        self.assertTrue(all(r[4] == 2 for r in rec.rects), "all of it on the new page")
+        self.assertTrue(all(entry[3] == 2 for entry in rec.strings), "all of it on the new page")
 
-    def test_a_long_name_wraps_and_the_row_grows_for_every_column(self):
+    def test_a_long_name_wraps_and_the_stack_grows_upwards_for_every_column(self):
         long = ["نام بسیار طولانی " * 6, "سمت", None]
         _, tall = self.draw(signers=[long, SIGNERS[1], SIGNERS[2]])
         _, short = self.draw()
-        self.assertGreater(max(r[3] for r in tall.rects), max(r[3] for r in short.rects) - 0.01)
-        heights_tall = sorted({round(r[3], 1) for r in tall.rects})
-        self.assertEqual(len(heights_tall), 4)  # title, post, name, signature: same in each column
+        top_of = lambda rec: max(entry[1] for entry in rec.strings)
+        self.assertGreater(top_of(tall), top_of(short))
+        # the signature labels stay put: the strip is pinned at the bottom, it grows upwards
+        self.assertAlmostEqual(tall.find("امضا:")[0][1], short.find("امضا:")[0][1], places=2)
         for entry in tall.strings:
             self.assertGreaterEqual(entry[0], LEFT - 1)
 

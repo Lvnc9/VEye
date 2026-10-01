@@ -232,40 +232,30 @@ function LetterBox() {
   );
 }
 
-/** What the printed strip shows (backend `signoff.ROLES`, `form_renderer._approval_strip`): the columns
- *  right to left — تهیه کننده | تایید کننده | تصویب کننده — each a stack of the role, سمت, name and signature. */
+/** What the printed strip shows (backend `signoff.ROLES`, `form_renderer._approval_strip`): three plain
+ *  columns, right to left — تهیه کننده | تایید کننده | تصویب کننده — each a stack of the role, سمت, name and
+ *  signature. No table, no lines (owner's correction, 2026-10-01). */
 const STRIP_ROLES = ["تهیه کننده", "تایید کننده", "تصویب کننده"];
 
 function ApprovalStrip({ size }: { size: number }) {
-  const cell = "border-[0.5pt] border-slate-700 px-1 text-start";
   return (
-    <table className="w-full table-fixed border-collapse" style={{ marginTop: mm(6), fontSize: pt(size) }}>
-      <tbody>
-        <tr className="bg-[#e6e8ed] font-bold">
-          {STRIP_ROLES.map((role) => (
-            <td key={role} className="border-[0.5pt] border-slate-700 py-0.5 text-center">
-              {role}:
-            </td>
+    <div className="grid grid-cols-3" style={{ marginTop: mm(6), fontSize: pt(size) }}>
+      {STRIP_ROLES.map((role) => (
+        <div key={role} className="px-1">
+          <div className="text-center font-bold" style={{ fontSize: pt(size + 1), height: mm(6) }}>
+            {role}:
+          </div>
+          {["سمت:", "نام و نام خانوادگی:"].map((label) => (
+            <div key={label} className="font-bold" style={{ height: mm(6) }}>
+              {label}
+            </div>
           ))}
-        </tr>
-        {["سمت:", "نام و نام خانوادگی:"].map((label) => (
-          <tr key={label}>
-            {STRIP_ROLES.map((role) => (
-              <td key={role} className={`${cell} font-bold`} style={{ height: mm(6) }}>
-                {label}
-              </td>
-            ))}
-          </tr>
-        ))}
-        <tr>
-          {STRIP_ROLES.map((role) => (
-            <td key={role} className={`${cell} align-top font-bold`} style={{ height: mm(16), fontSize: pt(size - 1) }}>
-              امضا:
-            </td>
-          ))}
-        </tr>
-      </tbody>
-    </table>
+          <div className="font-bold" style={{ height: mm(16), fontSize: pt(size - 1) }}>
+            امضا:
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

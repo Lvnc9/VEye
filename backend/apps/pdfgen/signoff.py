@@ -3,6 +3,8 @@
 Three columns, right to left: تهیه کننده | تایید کننده | تصویب کننده. Each is a stack —
 the role, then «سمت: …», then «نام و نام خانوادگی: …», then «امضا:» with the drawn
 signature — and the strip is pinned to the foot of the last page, above the footer.
+It is plain text on the page: no table, no grid lines, no shading (owner's correction,
+2026-10-01 — the first version drew it as a boxed table).
 No date and no validity: whether a document is still in force is the watermark's job.
 
 Drawn through `rtl.py` (each run shaped on its own, drawn from the right edge), never
@@ -31,8 +33,6 @@ SIGNATURE_ROW = 62.0
 BOTTOM = 108.0
 #: Content must end at least this far above the strip, or the strip goes on a new page.
 GAP = 14.0
-LINE_WIDTH = 0.6
-TITLE_FILL = 0.92
 
 
 def _fonts(font_name: str, size: float) -> rtl.Font:
@@ -91,21 +91,13 @@ def draw(maker, signers: list, images: list) -> None:
     regular, small = _fonts(maker.font_name, SIZE), _fonts(maker.font_name, 8.0)
     title_font = _fonts(maker.font_name, TITLE_SIZE)
     c.saveState()
-    c.setStrokeColorRGB(0, 0, 0)
-    c.setLineWidth(LINE_WIDTH)
+    c.setFillColorRGB(0, 0, 0)
 
     y = top
     for row, height in enumerate(heights):
         for index in range(len(ROLES)):
             x_right = x1 - index * column_width
             x_left = x_right - column_width
-            if row == 0:
-                c.setFillColorRGB(TITLE_FILL, TITLE_FILL, TITLE_FILL)
-                c.rect(x_left, y - height, column_width, height, fill=1, stroke=1)
-            else:
-                c.rect(x_left, y - height, column_width, height, fill=0, stroke=1)
-            c.setFillColorRGB(0, 0, 0)
-
             if row == 0:
                 line = [(ROLES[index] + ":", rtl.BOLD)]
                 x = x_right - (column_width - rtl.line_width(line, title_font)) / 2

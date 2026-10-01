@@ -1068,7 +1068,9 @@ def _plain(value: str) -> str:
 def _approval_strip(data: FormPdfInput, width: float) -> list:
     """Three columns, the first signer on the right — تهیه کننده | تایید کننده | تصویب کننده.
     Each is a stack: the role, «سمت: …», «نام و نام خانوادگی: …», then «امضا:» with the signature
-    (owner's request, 2026-09-30; no date, no validity). Pinned to the foot of the last page."""
+    (owner's request, 2026-09-30; no date, no validity). Pinned to the foot of the last page.
+    Plain text — no grid, no shading (owner's correction, 2026-10-01): the Table only lines the
+    columns up, so the rows of the three signers stay level."""
     size = data.base_font_size - 1
     signers = list(data.signers)
     columns = []
@@ -1087,8 +1089,6 @@ def _approval_strip(data: FormPdfInput, width: float) -> list:
     table.setStyle(
         TableStyle(
             [
-                ("GRID", (0, 0), (-1, -1), 0.5, LINE_COLOR),
-                ("BACKGROUND", (0, 0), (-1, 0), BAND_FILL),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("VALIGN", (0, 3), (-1, 3), "TOP"),
                 ("TOPPADDING", (0, 0), (-1, -1), 2.5),
