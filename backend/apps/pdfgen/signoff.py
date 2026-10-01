@@ -1,8 +1,8 @@
 """The sign-off strip on the last page of a پوستر (owner's request, 2026-09-30).
 
 Three columns, right to left: تهیه کننده | تایید کننده | تصویب کننده. Each is a stack —
-the role, then «سمت: …», then «نام و نام خانوادگی: …», then «امضا:» with the drawn
-signature — and the strip is pinned to the foot of the last page, above the footer.
+the role, then «سمت <role>: …», then «نام و نام خانوادگی <role>: …», then plain «امضا:» with
+the drawn signature (the labels name their signer — owner's request, 2026-10-01) — and the strip is pinned to the foot of the last page, above the footer.
 It is plain text on the page: no table, no grid lines, no shading (owner's correction,
 2026-10-01 — the first version drew it as a boxed table).
 No date and no validity: whether a document is still in force is the watermark's job.
@@ -61,8 +61,8 @@ def measure(font_name: str, signers: list, column_width: float):
     `signers` are [name, post, signature] triples, first signer rightmost."""
     font = _fonts(font_name, SIZE)
     inner = column_width - 2 * PAD
-    posts = [_lines("سمت:", s[1], font, inner) for s in signers]
-    names = [_lines("نام و نام خانوادگی:", s[0], font, inner) for s in signers]
+    posts = [_lines(f"سمت {role}:", s[1], font, inner) for role, s in zip(ROLES, signers)]
+    names = [_lines(f"نام و نام خانوادگی {role}:", s[0], font, inner) for role, s in zip(ROLES, signers)]
     rows = [posts, names]
     heights = [TITLE_ROW]
     for row in rows:

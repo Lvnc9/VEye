@@ -584,9 +584,9 @@ class ApprovalStripTests(SimpleTestCase):
         table = self.table()
         rightmost = [unwrap(row[-1]) for row in table._cellvalues]  # a table lays out left to right: the author is last
         self.assertEqual(rightmost[0].text, "تهیه کننده:")
-        self.assertIn("سمت", rightmost[1].text)
+        self.assertIn("سمت تهیه کننده:", rightmost[1].text)
         self.assertIn("مدیر واحد", rightmost[1].text)
-        self.assertIn("نام و نام خانوادگی", rightmost[2].text)
+        self.assertIn("نام و نام خانوادگی تهیه کننده:", rightmost[2].text)
         self.assertIn("علی رضایی", rightmost[2].text)
         self.assertIsInstance(rightmost[3], form_renderer._SignatureCell)
         self.assertIsNotNone(rightmost[3].reader)
@@ -600,13 +600,13 @@ class ApprovalStripTests(SimpleTestCase):
 
     def test_an_unnamed_role_still_shows_its_labels(self):
         left = [unwrap(row[0]) for row in self.table()._cellvalues]  # the approver, leftmost
-        self.assertIn("سمت", left[1].text)
-        self.assertIn("نام و نام خانوادگی", left[2].text)
+        self.assertIn("سمت تصویب کننده:", left[1].text)
+        self.assertIn("نام و نام خانوادگی تصویب کننده:", left[2].text)
 
     def test_markers_in_a_name_are_not_styling(self):
         signers = (form_renderer.Signer("تهیه کننده", "**علی**--رضایی"),)
         [row] = [self.table(signers)._cellvalues[2]]
-        self.assertEqual(unwrap(row[0]).text, "**نام و نام خانوادگی:** علیرضایی")
+        self.assertEqual(unwrap(row[0]).text, "**نام و نام خانوادگی تهیه کننده:** علیرضایی")
 
     def test_it_draws_no_grid_and_no_shading(self):
         style = [command[0] for command in self.table()._bkgrndcmds + self.table()._linecmds]

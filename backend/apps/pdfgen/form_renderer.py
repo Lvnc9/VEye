@@ -1067,7 +1067,7 @@ def _plain(value: str) -> str:
 
 def _approval_strip(data: FormPdfInput, width: float) -> list:
     """Three columns, the first signer on the right — تهیه کننده | تایید کننده | تصویب کننده.
-    Each is a stack: the role, «سمت: …», «نام و نام خانوادگی: …», then «امضا:» with the signature
+    Each is a stack: the role, «سمت <role>: …», «نام و نام خانوادگی <role>: …», then plain «امضا:» with the signature
     (owner's request, 2026-09-30; no date, no validity). Pinned to the foot of the last page.
     Plain text — no grid, no shading (owner's correction, 2026-10-01): the Table only lines the
     columns up, so the rows of the three signers stay level."""
@@ -1078,8 +1078,8 @@ def _approval_strip(data: FormPdfInput, width: float) -> list:
         columns.append(
             [
                 _cell(signer.role_label + ":", size + 1, bold=True),
-                _cell(f"**سمت:** {_plain(signer.position)}".rstrip(), size, align="right"),
-                _cell(f"**نام و نام خانوادگی:** {_plain(signer.name)}".rstrip(), size, align="right"),
+                _cell(f"**سمت {signer.role_label}:** {_plain(signer.position)}".rstrip(), size, align="right"),
+                _cell(f"**نام و نام خانوادگی {signer.role_label}:** {_plain(signer.name)}".rstrip(), size, align="right"),
                 _SignatureCell(signer.image, size - 1, 16 * mm),
             ]
         )

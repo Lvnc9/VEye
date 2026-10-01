@@ -245,9 +245,9 @@ function ApprovalStrip({ size }: { size: number }) {
           <div className="text-center font-bold" style={{ fontSize: pt(size + 1), height: mm(6) }}>
             {role}:
           </div>
-          {["سمت:", "نام و نام خانوادگی:"].map((label) => (
+          {["سمت", "نام و نام خانوادگی"].map((label) => (
             <div key={label} className="font-bold" style={{ height: mm(6) }}>
-              {label}
+              {label} {role}:
             </div>
           ))}
           <div className="font-bold" style={{ height: mm(16), fontSize: pt(size - 1) }}>

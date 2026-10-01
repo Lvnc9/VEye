@@ -214,8 +214,10 @@ class StripTests(SimpleTestCase):
 
     def test_empty_signers_still_print_the_labels(self):
         _, rec = self.draw(signers=[None, None, None])
-        self.assertEqual(len(rec.find("سمت:")), 3)
-        self.assertEqual(len(rec.find("نام و نام خانوادگی:")), 3)
+        for role in signoff.ROLES:  # each label names its own signer
+            self.assertEqual(len(rec.find(f"سمت {role}:")), 1, role)
+            self.assertEqual(len(rec.find(f"نام و نام خانوادگی {role}:")), 1, role)
+        self.assertEqual(len(rec.find("امضا:")), 3, "the signature label is just «امضا:»")
         self.assertEqual(rec.images, [])
 
 
