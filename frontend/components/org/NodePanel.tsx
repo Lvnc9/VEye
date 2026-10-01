@@ -13,7 +13,9 @@ import {
   childKindsOf,
   describeNodeBlockers,
   memberCaption,
+  nodeOptions,
   pathLabel,
+  validNewParents,
   type OrgMembership,
   type OrgNode,
   type OrgNodeKind,
@@ -24,7 +26,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { buttonClass } from "@/components/ui/Button";
 import { controlClass } from "@/components/ui/Field";
-import { Archive, ArchiveRestore, Crown, MessageCircle, MessagesSquare, Network, PencilLine, Plus, Search, Trash2, UserPlus, Users, X } from "lucide-react";
+import { Archive, ArchiveRestore, Crown, MessageCircle, MessagesSquare, Move, Network, PencilLine, Plus, Search, Trash2, UserPlus, Users, X } from "lucide-react";
 import { cx } from "@/components/ui/cx";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/IconButton";
@@ -81,7 +83,7 @@ export function NodePanel({
 
       <GroupChat node={node} nodes={nodes} />
       <Members node={node} />
-      {(node.can_add_child || node.can_edit) && <StructureActions node={node} onChanged={onStructureChanged} />}
+      {(node.can_add_child || node.can_edit) && <StructureActions node={node} nodes={nodes} onChanged={onStructureChanged} />}
       </div>
     </aside>
   );
@@ -320,11 +322,21 @@ function PeopleResults({ query, node, memberIds, onAdded, onError }: { query: st
 // Structure
 // ---------------------------------------------------------------------------
 
-function StructureActions({ node, onChanged }: { node: OrgNode; onChanged: (next?: { selectId?: number | null }) => void }) {
+function StructureActions({
+  node,
+  nodes,
+  onChanged,
+}: {
+  node: OrgNode;
+  nodes: OrgNode[];
+  onChanged: (next?: { selectId?: number | null }) => void;
+}) {
   const childKinds = childKindsOf(node.kind);
   const [kind, setKind] = useState<OrgNodeKind>(childKinds[0] ?? "UNIT");
   const [name, setName] = useState("");
   const [rename, setRename] = useState(node.name);
+  const moveTargets = nodeOptions(validNewParents(nodes, node));
+  const [moveTo, setMoveTo] = useState<number | "">("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<"delete" | "archive" | null>(null);
@@ -354,6 +366,14 @@ function StructureActions({ node, onChanged }: { node: OrgNode; onChanged: (next
     event.preventDefault();
     if (!rename.trim() || rename.trim() === node.name) return;
     await run(() => apiPatch(`/org/nodes/${node.id}/`, { name: rename.trim() }), "تغییر نام ممکن نشد.");
+  }
+
+  async function move() {
+    if (moveTo === "") return;
+    // A move needs authority at both ends (organization/views.py); the server re-checks this
+    // whatever the picker offered, so a 403 here is a real "you don't run that branch" answer,
+    // not a bug.
+    if (await run(() => apiPatch(`/org/nodes/${node.id}/`, { parent: moveTo }), "جابه‌جایی ممکن نشد.")) setMoveTo("");
   }
 
   return (
@@ -408,6 +428,28 @@ function StructureActions({ node, onChanged }: { node: OrgNode; onChanged: (next
               تغییر نام
             </button>
           </form>
+
+          {node.kind !== "COMPANY" && node.is_active && moveTargets.length > 0 && (
+            <div className="flex gap-2">
+              <select
+                aria-label="انتقال به زیرمجموعهٔ دیگر"
+                value={moveTo}
+                onChange={(e) => setMoveTo(e.target.value ? Number(e.target.value) : "")}
+                className={`${controlClass} flex-1 px-2 text-sm`}
+              >
+                <option value="">انتقال به…</option>
+                {moveTargets.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <button type="button" disabled={busy || moveTo === ""} onClick={move} className={cx(smallButton, "h-auto shrink-0")}>
+                <Move />
+                انتقال
+              </button>
+            </div>
+          )}
 
           {node.kind !== "COMPANY" && (
             <div className="flex flex-wrap gap-2">

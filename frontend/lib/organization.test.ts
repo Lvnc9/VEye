@@ -15,6 +15,7 @@ import {
   memberCaption,
   nodeOptions,
   pathLabel,
+  validNewParents,
   zoomAround,
   type OrgNode,
   type OrgNodeKind,
@@ -114,6 +115,36 @@ describe("kinds", () => {
   it("counts nodes per kind", () => {
     const { nodes } = sample();
     expect(countByKind(nodes)).toEqual({ COMPANY: 1, DOMAIN: 1, UNIT: 3, SECTION: 1 });
+  });
+});
+
+describe("validNewParents (Phase 16: where a node could move to)", () => {
+  it("offers other nodes of a valid parent kind, never the current parent", () => {
+    const { nodes, s1, u2, u3 } = sample();
+    // s1 (بخش) may move under any other واحد — u1 (its current parent) is excluded.
+    expect(validNewParents(nodes, s1).map((n) => n.id)).toEqual([u2.id, u3.id]);
+  });
+
+  it("never offers a node's own subtree — that would be the server's cycle error", () => {
+    const { nodes, d1, u1, s1 } = sample();
+    // u1 (واحد) may move under the company or another حوزه — but not under its own بخش s1,
+    // which isn't a valid parent kind anyway, and not under itself or d1 (its current parent).
+    const targets = validNewParents(nodes, u1).map((n) => n.id);
+    expect(targets).not.toContain(u1.id);
+    expect(targets).not.toContain(s1.id);
+    expect(targets).not.toContain(d1.id); // current parent
+  });
+
+  it("is empty when the only valid parent is already the current one", () => {
+    const { nodes, d1 } = sample();
+    // d1 (حوزه) may only sit under the company — and it already does.
+    expect(validNewParents(nodes, d1)).toEqual([]);
+  });
+
+  it("excludes archived candidates", () => {
+    const { nodes, s1, u2, u3 } = sample();
+    const archived = nodes.map((n) => (n.id === u2.id ? { ...n, is_active: false } : n));
+    expect(validNewParents(archived, s1).map((n) => n.id)).toEqual([u3.id]);
   });
 });
 

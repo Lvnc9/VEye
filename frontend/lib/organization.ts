@@ -98,6 +98,22 @@ export function childKindsOf(kind: OrgNodeKind): OrgNodeKind[] {
   return CHILD_KINDS[kind];
 }
 
+/** The reverse of `CHILD_KINDS`: which kinds may hold a node of kind `kind` as a child. Used to
+ *  offer only valid move targets (Phase 16) — the server re-checks this anyway (`tree.py`'s
+ *  parent-kind table), this just keeps the picker from showing an option doomed to fail. */
+function parentKindsFor(kind: OrgNodeKind): OrgNodeKind[] {
+  return (Object.keys(CHILD_KINDS) as OrgNodeKind[]).filter((candidate) => CHILD_KINDS[candidate].includes(kind));
+}
+
+/** Where `node` could move to: active nodes of a kind that may hold it, excluding itself, its
+ *  current parent (moving there would be a no-op) and anything already beneath it (the server's
+ *  own cycle check, applied early so the picker never offers an option it would refuse). */
+export function validNewParents(nodes: OrgNode[], node: OrgNode): OrgNode[] {
+  const kinds = parentKindsFor(node.kind);
+  const blocked = new Set([node.id, node.parent, ...descendantsOf(nodes, node.id).map((n) => n.id)]);
+  return nodes.filter((candidate) => candidate.is_active && kinds.includes(candidate.kind) && !blocked.has(candidate.id));
+}
+
 /** The chart as a tree. Order-independent (a child listed before its parent still attaches), and
  *  siblings keep the order they arrived in. Returns the company root, or null for an empty chart. */
 export function buildTree(nodes: OrgNode[]): OrgTreeNode | null {
