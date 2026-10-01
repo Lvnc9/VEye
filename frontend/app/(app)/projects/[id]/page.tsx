@@ -18,12 +18,12 @@ import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { CommentsPanel } from "@/components/projects/CommentsPanel";
 import { DocumentLinksPanel } from "@/components/projects/DocumentLinksPanel";
 import { MeetingsPanel } from "@/components/projects/MeetingsPanel";
+import { MembersPanel } from "@/components/projects/MembersPanel";
 import { ObjectiveTree } from "@/components/projects/ObjectiveTree";
 import { ProjectActivityFeed } from "@/components/projects/ProjectActivityFeed";
 import { AlarmClock, Archive, ArchiveRestore, ArrowRight, CalendarClock, CalendarPlus, Flag, Users } from "lucide-react";
 import Link from "next/link";
 import { Alert } from "@/components/ui/Alert";
-import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { cardClass } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -168,21 +168,6 @@ export default function ProjectDetailPage() {
             </div>
           ))}
         </dl>
-
-        <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-          {data.members.map((member) => (
-            <span
-              key={member.id}
-              title={`${member.user_name} — ${member.role_label}`}
-              className="flex items-center gap-1.5 rounded-full bg-white py-1 pe-3 ps-1 text-xs text-slate-700 ring-1 ring-inset ring-slate-200"
-            >
-              <Avatar name={member.user_name} size="xs" />
-              {member.user_name}
-              {member.role === "MANAGER" && <span className="text-brand-700">(مدیر)</span>}
-              {member.is_guest && <span className="text-slate-500">· مهمان</span>}
-            </span>
-          ))}
-        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -194,6 +179,7 @@ export default function ProjectDetailPage() {
           ) : (
             <ObjectiveTree project={data} objectives={objectives.data ?? []} onChanged={refresh} />
           )}
+          <MembersPanel projectId={projectId} members={data.members} canEdit={data.can_edit} onChanged={refresh} />
           <MeetingsPanel
             projectId={projectId}
             members={data.members}
