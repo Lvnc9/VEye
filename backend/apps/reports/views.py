@@ -15,6 +15,9 @@ from apps.projects.models import ProjectMember, ProjectRole
 from apps.projects.queries import progress_percent, with_progress
 from rest_framework.permissions import IsAuthenticated
 
+from rest_framework.response import Response
+
+from . import kpi
 from .csv_export import csv_response
 
 
@@ -90,3 +93,13 @@ class ProjectsExportView(_ReportView):
                 ]
             )
         return csv_response("projects", PROJECT_HEADER, rows)
+
+
+class KpiView(_ReportView):
+    """GET /reports/kpi/ — the company numbers (definitions in `kpi.py`, shown beside each number on
+    the screen). `?days=` is the window the document figures look back over (7–730, default 90); the
+    project figures are about *now*. Not cached: the project half is scoped to the viewer, and the
+    queries are aggregates over rows that already exist."""
+
+    def get(self, request):
+        return Response(kpi.compute(request, kpi.clamp_days(request.query_params.get("days"))))

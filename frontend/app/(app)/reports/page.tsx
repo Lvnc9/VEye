@@ -5,6 +5,7 @@ import { ApiError, apiDownload } from "@/lib/api-client";
 import { useCurrentUser } from "@/lib/current-user";
 import { documentsExportPath, projectsExportPath } from "@/lib/reports";
 import { DOCUMENT_CATEGORY_LABELS, DOCUMENT_GROUP_LABELS, DOCUMENT_STATUS_LABELS } from "@/lib/types";
+import { KpiPanel } from "@/components/reports/KpiPanel";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -56,7 +57,9 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="گزارش‌ها" subtitle="خروجی جدول‌ها برای کار با اکسل — فایل CSV با نویسهٔ فارسی درست" />
+      <PageHeader title="گزارش‌ها" subtitle="شاخص‌های کلیدی، و خروجی جدول‌ها برای کار با اکسل" />
+      <KpiPanel />
+
       {error && <ErrorBanner message={error} />}
 
       <div className="grid gap-6 lg:grid-cols-2">
