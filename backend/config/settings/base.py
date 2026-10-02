@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "apps.importer",
     "apps.notifications",
     "apps.reports",
+    "apps.quality",
 ]
 
 MIDDLEWARE = [

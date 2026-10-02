@@ -299,6 +299,15 @@ class PersonnelViewSet(viewsets.ModelViewSet):
                 code="user_has_delegations",
                 delegations=delegation_count,
             )
+        # Quality records (Phase 18) reference their reporter and, from the next slice, their assignees
+        # with PROTECT: they are never deleted, so neither is the person who filed them.
+        quality_count = person.reported_nonconformances.count()
+        if quality_count:
+            raise ConflictError(
+                "این شخص عدم‌انطباق ثبت کرده است و حذف نمی‌شود. به‌جای حذف، حساب او را غیرفعال کنید.",
+                code="user_has_quality_records",
+                records=quality_count,
+            )
         # Documents reference their author with on_delete=PROTECT, so removing
         # someone who ever authored one would otherwise be an unhandled 500. The
         # right way to retire a person is to deactivate them (is_active=false),

@@ -45,6 +45,11 @@ class Capability(models.TextChoices):
     # never widens who can *see* anything (every export is scoped like the screen it mirrors); this
     # only decides who gets the surface, so ستادی managers can have it without any org-management right.
     VIEW_REPORTS = "view_reports", "مشاهدهٔ گزارش‌ها"
+    # Phase 18: the quality module. Anyone may *report* a problem; this is the cross-company quality
+    # role — see every record, triage, verify, plan audits — held by ستادی (the «نماینده مدیریت» is a
+    # ستادی لول ۱) and کارفرمایی. Like the org capabilities it is the coarse "may I use this surface"
+    # axis: *which* records a lead manages comes from the chart (quality/access.py).
+    MANAGE_QUALITY = "manage_quality", "مدیریت کیفیت"
 
 
 #: Access roll -> capabilities. See User.capabilities for the rationale.
@@ -59,7 +64,12 @@ class Capability(models.TextChoices):
 ROLL_CAPABILITIES = {
     AccessRoll.GUILD: frozenset({Capability.PRINT_DOCUMENT}),
     AccessRoll.HEADQUARTERS: frozenset(
-        {Capability.PRINT_DOCUMENT, Capability.CREATE_PROJECT, Capability.VIEW_REPORTS}
+        {
+            Capability.PRINT_DOCUMENT,
+            Capability.CREATE_PROJECT,
+            Capability.VIEW_REPORTS,
+            Capability.MANAGE_QUALITY,
+        }
     ),
     AccessRoll.EMPLOYER: frozenset(
         {
@@ -69,6 +79,7 @@ ROLL_CAPABILITIES = {
             Capability.MANAGE_MEMBERSHIP,
             Capability.CREATE_PROJECT,
             Capability.VIEW_REPORTS,
+            Capability.MANAGE_QUALITY,
         }
     ),
 }
