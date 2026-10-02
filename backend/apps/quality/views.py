@@ -10,15 +10,20 @@ from apps.core.pagination import DefaultPagination
 from apps.organization.access import access_for
 
 from . import services
-from .access import can_manage, can_report, visible_nonconformances
-from .models import CorrectiveAction, NcSeverity, NcSource, NcStatus, NonConformance
-from .queries import with_action_counts
+from .access import can_manage, can_report, visible_audits, visible_nonconformances
+from .models import AuditStatus, CorrectiveAction, NcSeverity, NcSource, NcStatus, NonConformance
+from .queries import with_action_counts, with_finding_counts
 from .serializers import (
     AcceptSerializer,
     ActionCreateSerializer,
     ActionUpdateSerializer,
+    AuditCompleteSerializer,
+    AuditCreateSerializer,
+    AuditSerializer,
+    AuditUpdateSerializer,
     CloseSerializer,
     CorrectiveActionSerializer,
+    FindingCreateSerializer,
     NonConformanceCreateSerializer,
     NonConformanceSerializer,
     NonConformanceUpdateSerializer,
@@ -40,8 +45,9 @@ class NonConformanceViewSet(
     read is a 404 and cannot leak through a list or an action route. Anyone signed in may report; the
     rest needs the record's manager (`manage_quality`, or leading its node or one above it).
     Filters: `?status= ?severity= ?source=`, `?node=<id>` (that node **and everything beneath it**),
-    `?mine=reported|assigned|manage`, `?overdue=1` (has an action past its deadline),
-    `?q=` (title, description, or a code like `NC-0042` / `42`).
+    `?audit=<id>` (the findings of one audit), `?mine=reported|assigned|manage`,
+    `?overdue=1` (has an action past its deadline), `?q=` (title, description, or a code like
+    `NC-0042` / `42`).
 
     Corrective actions live under `…/{id}/actions/`; the record's own transitions are `accept`,
     `reject`, `close` and `reopen`. Every row carries the derived `actions_*` counts and the `can_*`
@@ -67,6 +73,8 @@ class NonConformanceViewSet(
                 queryset = queryset.filter(**{param: value}) if value in allowed else queryset.none()
         if node := params.get("node"):
             queryset = self._within_node(queryset, node)
+        if audit := params.get("audit"):
+            queryset = queryset.filter(audit_id=audit) if audit.isdigit() else queryset.none()
         mine = params.get("mine")
         if mine == "reported":
             queryset = queryset.filter(reported_by=self.request.user)
@@ -224,3 +232,110 @@ class NonConformanceViewSet(
         serializer.is_valid(raise_exception=True)
         dropped = services.cancel_action(nc, target, actor=request.user, reason=serializer.validated_data["reason"])
         return Response(self._action_payload(nc, dropped))
+
+
+
+class AuditViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/quality/audits/` — planned checks of one part of the chart.
+
+    As for records, **`get_queryset()` decides visibility** (`visible_audits`): an audit you may not
+    read is a 404 everywhere. Only `manage_quality` plans, edits and cancels; the lead auditor (or
+    `manage_quality`) starts, completes and raises findings. A finding is a non-conformance, so it is
+    created here (`…/{id}/findings/`) but listed and worked on under `/quality/nonconformances/`
+    (`?audit=<id>` gives an audit's findings).
+    Filters: `?status=`, `?node=<id>` (audits of that node **and everything beneath it**),
+    `?mine=auditor|manage`, `?q=` (title, or a code like `AU-0007` / `7`).
+    """
+
+    serializer_class = AuditSerializer
+    pagination_class = DefaultPagination
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def _visible(self):
+        return with_finding_counts(visible_audits(self.request))
+
+    def get_queryset(self):
+        queryset = self._visible()
+        params = self.request.query_params
+        if self.action != "list":
+            return queryset
+        value = params.get("status")
+        if value:
+            queryset = queryset.filter(status=value) if value in AuditStatus.values else queryset.none()
+        if node := params.get("node"):
+            from apps.organization.models import OrgNode
+
+            target = OrgNode.objects.filter(pk=node).first() if node.isdigit() else None
+            queryset = queryset.filter(scope_node__path__startswith=target.path) if target else queryset.none()
+        mine = params.get("mine")
+        if mine == "auditor":
+            queryset = queryset.filter(lead_auditor=self.request.user)
+        elif mine == "manage":
+            org = access_for(self.request)
+            if not org.holds(Capability.MANAGE_QUALITY):
+                queryset = queryset.filter(org.led_subtree_q("scope_node__path"))
+        if term := (params.get("q") or "").strip():
+            query = Q(title__icontains=term)
+            digits = term.upper().removeprefix("AU-").lstrip("0")
+            if digits.isdigit():
+                query |= Q(pk=int(digits))
+            queryset = queryset.filter(query)
+        return queryset
+
+    def _one(self, audit):
+        return AuditSerializer(self._visible().get(pk=audit.pk), context=self.get_serializer_context()).data
+
+    def create(self, request, *args, **kwargs):
+        serializer = AuditCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        audit = services.plan_audit(actor=request.user, **serializer.validated_data)
+        return Response(self._one(audit), status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        audit = self.get_object()
+        serializer = AuditUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        audit = services.edit_audit(audit, actor=request.user, changes=dict(serializer.validated_data))
+        return Response(self._one(audit))
+
+    @action(detail=True, methods=["post"])
+    def start(self, request, pk=None):
+        audit = services.start_audit(self.get_object(), actor=request.user)
+        return Response(self._one(audit))
+
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        audit = self.get_object()
+        serializer = AuditCompleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        audit = services.complete_audit(audit, actor=request.user, summary=serializer.validated_data["summary"])
+        return Response(self._one(audit))
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        audit = self.get_object()
+        serializer = ReasonSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        audit = services.cancel_audit(audit, actor=request.user, reason=serializer.validated_data["reason"])
+        return Response(self._one(audit))
+
+    @action(detail=True, methods=["post"])
+    def findings(self, request, pk=None):
+        """Raise a finding — creates a non-conformance (source AUDIT) and answers with it, as the
+        record's own endpoints do."""
+        audit = self.get_object()
+        serializer = FindingCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        nc = services.raise_finding(audit, actor=request.user, **serializer.validated_data)
+        fresh = with_action_counts(visible_nonconformances(request)).get(pk=nc.pk)
+        return Response(
+            NonConformanceSerializer(fresh, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
+        )

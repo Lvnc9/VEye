@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import NonConformance, QualityEvent
+from .models import InternalAudit, NonConformance, QualityEvent
 
 
 @admin.register(NonConformance)
@@ -22,3 +22,14 @@ class QualityEventAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(InternalAudit)
+class InternalAuditAdmin(admin.ModelAdmin):
+    list_display = ["id", "title", "status", "scope_node", "lead_auditor", "planned_on"]
+    list_filter = ["status"]
+    search_fields = ["title"]
+    readonly_fields = [f.name for f in InternalAudit._meta.fields]
+
+    def has_add_permission(self, request):
+        return False  # written only through quality.services, which records the history

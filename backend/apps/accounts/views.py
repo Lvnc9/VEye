@@ -299,12 +299,17 @@ class PersonnelViewSet(viewsets.ModelViewSet):
                 code="user_has_delegations",
                 delegations=delegation_count,
             )
-        # Quality records (Phase 18) reference their reporter and their action assignees with PROTECT:
-        # they are never deleted, so neither is the person who filed or was given one.
-        quality_count = person.reported_nonconformances.count() + person.assigned_corrective_actions.count()
+        # Quality records (Phase 18) reference their reporter, their action assignees and an audit's
+        # lead auditor with PROTECT: they are never deleted, so neither is the person who filed, was
+        # given or led one.
+        quality_count = (
+            person.reported_nonconformances.count()
+            + person.assigned_corrective_actions.count()
+            + person.led_audits.count()
+        )
         if quality_count:
             raise ConflictError(
-                "این شخص عدم‌انطباق ثبت کرده است و حذف نمی‌شود. به‌جای حذف، حساب او را غیرفعال کنید.",
+                "این شخص در سوابق کیفیت (عدم‌انطباق، اقدام اصلاحی یا ممیزی) حضور دارد و حذف نمی‌شود. به‌جای حذف، حساب او را غیرفعال کنید.",
                 code="user_has_quality_records",
                 records=quality_count,
             )

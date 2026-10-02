@@ -17,7 +17,15 @@ from apps.organization.access import OrgAccess
 from apps.organization.models import Delegation
 
 from . import services  # noqa: F401
-from .models import NcSeverity, NcSource, NcStatus, NonConformance, QualityEvent, QualityEventKind
+from .models import (
+    InternalAudit,
+    NcSeverity,
+    NcSource,
+    NcStatus,
+    NonConformance,
+    QualityEvent,
+    QualityEventKind,
+)
 
 LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "veye-quality-tests"}}
 _n = [0]
@@ -78,3 +86,49 @@ class QualityBase(TestCase):
         return list(events.order_by("id").values_list("kind", flat=True))
 
 
+
+
+class AuditBase(QualityBase):
+    """Audits live over the unit «هوش مصنوعی» (AI): its مسئول can read them, the مسئول of its بخش RAG —
+    *beneath* the scope — cannot, and the sibling unit's can't either. The auditor has no place in the
+    chart: whatever they may do comes from being named."""
+
+    def setUp(self):
+        super().setUp()
+        self.auditor = person(name="ممیز")
+
+    def audit_body(self, **over):
+        data = {
+            "title": "ممیزی داخلی هوش مصنوعی", "scope_node": self.org.ai.pk, "lead_auditor": self.auditor.pk,
+            "planned_on": (timezone.localdate() + timedelta(days=7)).isoformat(),
+        }
+        return {**data, **over}
+
+    def plan(self, user=None, **over) -> InternalAudit:
+        response = self.api(user or self.qm).post(reverse("audit-list"), self.audit_body(**over), format="json")
+        assert response.status_code == 201, response.data
+        return InternalAudit.objects.get(pk=response.data["id"])
+
+    def running(self, **over) -> InternalAudit:
+        """A planned audit that its lead auditor has started."""
+        audit = self.plan(**over)
+        response = self.api(audit.lead_auditor).post(self.audit_url("audit-start", audit))
+        assert response.status_code == 200, response.data
+        audit.refresh_from_db()
+        return audit
+
+    def finding_body(self, **over):
+        return {**{"title": "ثبت نشدن بازبینی", "description": "بازبینی کد ثبت نشده بود"}, **over}
+
+    def raise_finding(self, audit, user=None, **over) -> NonConformance:
+        response = self.api(user or audit.lead_auditor).post(
+            self.audit_url("audit-findings", audit), self.finding_body(**over), format="json"
+        )
+        assert response.status_code == 201, response.data
+        return NonConformance.objects.get(pk=response.data["id"])
+
+    def audit_url(self, name, audit):
+        return reverse(name, args=[audit.pk])
+
+    def audit_kinds(self, audit):
+        return list(QualityEvent.objects.filter(audit=audit).order_by("id").values_list("kind", flat=True))

@@ -29,6 +29,8 @@ class NotificationKind(models.TextChoices):
     CAPA_CANCELLED = "capa_cancelled", "اقدام اصلاحی شما لغو شد"
     CAPA_DUE_SOON = "capa_due_soon", "اقدام اصلاحی نزدیک به مهلت است"
     CAPA_OVERDUE = "capa_overdue", "اقدام اصلاحی از مهلت گذشته است"
+    AUDIT_PLANNED = "audit_planned", "ممیزی داخلی برنامه‌ریزی شد"
+    AUDIT_CANCELLED = "audit_cancelled", "ممیزی داخلی لغو شد"
     OBJECTIVE_DUE_SOON = "objective_due_soon", "ریزهدف نزدیک به مهلت است"
     OBJECTIVE_OVERDUE = "objective_overdue", "ریزهدف از مهلت گذشته است"
 

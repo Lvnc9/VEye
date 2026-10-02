@@ -20,11 +20,20 @@ from apps.organization.access import OrgAccess, users_leading_at_or_above
 from apps.organization.models import OrgNode
 from apps.organization.tree import lock_node
 
-from .access import NOT_A_MANAGER, can_manage, can_report, require_manager
+from .access import (
+    NOT_A_MANAGER,
+    can_manage,
+    can_report,
+    require_audit_planner,
+    require_audit_runner,
+    require_manager,
+)
 from .models import (
     FINAL_ACTION_STATUSES,
     ActionStatus,
+    AuditStatus,
     CorrectiveAction,
+    InternalAudit,
     NcSeverity,
     NcSource,
     NcStatus,
@@ -86,11 +95,9 @@ def _require_status(nc: NonConformance, expected, verb: str) -> None:
         )
 
 
-def _require_active_node(node: OrgNode) -> None:
+def _require_active_node(node: OrgNode, message: str = "برای گرهٔ بایگانی‌شده نمی‌توان عدم‌انطباق ثبت کرد.") -> None:
     if not node.is_active:
-        raise ConflictError(
-            "برای گرهٔ بایگانی‌شده نمی‌توان عدم‌انطباق ثبت کرد.", code="node_archived", node_id=node.pk
-        )
+        raise ConflictError(message, code="node_archived", node_id=node.pk)
 
 
 def _chain_leads(node: OrgNode, *skip):
@@ -105,13 +112,12 @@ def _chain_leads(node: OrgNode, *skip):
 # -- report and edit ---------------------------------------------------------
 
 
-@transaction.atomic
-def report(
-    *, actor, title, description, owner_node, source=NcSource.INTERNAL, severity=NcSeverity.MINOR,
-    detected_on=None, related_document=None,
+def _file(
+    *, actor, title, description, owner_node, source, severity, detected_on, related_document, audit=None
 ) -> NonConformance:
-    """Anyone may report one. It needs an *active* node — whose process this is — but no authority
-    over it: a person who sees a problem in another unit is exactly who should be able to say so."""
+    """Validate and create the row — the part a report and an audit's finding have in common. It
+    writes no history and tells nobody: each caller's event differs (a finding's one line is
+    `finding_raised`), so each records its own."""
     if not can_report(actor):
         raise PermissionDenied("این حساب نمی‌تواند عدم‌انطباق ثبت کند.")
     title = normalize_title(_clean_text(title, "title", max_length=TITLE_MAX))
@@ -122,21 +128,38 @@ def report(
         raise ValidationError({"detected_on": ["تاریخ کشف نمی‌تواند در آینده باشد."]})
     node = lock_node(owner_node.pk)
     _require_active_node(node)
-
-    nc = NonConformance.objects.create(
+    return NonConformance.objects.create(
         title=title, description=description, source=source, severity=severity, owner_node=node,
-        reported_by=actor, detected_on=detected_on, related_document=related_document,
+        reported_by=actor, detected_on=detected_on, related_document=related_document, audit=audit,
+    )
+
+
+def _announce(nc: NonConformance, actor, body: str = "") -> None:
+    """Tell the people who lead the record's node (and above) that it exists."""
+    notifications.notify_many(
+        _chain_leads(nc.owner_node, actor),
+        kind=NotificationKind.NC_REPORTED,
+        title=f"«{nc.code}» ثبت شد: {nc.title}",
+        body=body or nc.owner_node.name,
+        url=f"/quality/{nc.pk}",
+    )
+
+
+@transaction.atomic
+def report(
+    *, actor, title, description, owner_node, source=NcSource.INTERNAL, severity=NcSeverity.MINOR,
+    detected_on=None, related_document=None,
+) -> NonConformance:
+    """Anyone may report one. It needs an *active* node — whose process this is — but no authority
+    over it: a person who sees a problem in another unit is exactly who should be able to say so."""
+    nc = _file(
+        actor=actor, title=title, description=description, owner_node=owner_node, source=source,
+        severity=severity, detected_on=detected_on, related_document=related_document,
     )
     record_event(
         QualityEventKind.NC_REPORTED, actor, nc=nc, subject_title=nc.title, to_status=NcStatus.OPEN
     )
-    notifications.notify_many(
-        _chain_leads(node, actor),
-        kind=NotificationKind.NC_REPORTED,
-        title=f"«{nc.code}» ثبت شد: {nc.title}",
-        body=node.name,
-        url=f"/quality/{nc.pk}",
-    )
+    _announce(nc, actor)
     return nc
 
 
@@ -339,9 +362,9 @@ def _require_not_final(action: CorrectiveAction) -> None:
         )
 
 
-def _require_eligible(user) -> None:
+def _require_eligible(user, who: str = "مسئول اقدام", code: str = "assignee_not_eligible") -> None:
     if not user.is_active or user.is_developer:
-        raise ConflictError("این شخص نمی‌تواند مسئول اقدام شود.", code="assignee_not_eligible", user_id=user.pk)
+        raise ConflictError(f"این شخص نمی‌تواند {who} شود.", code=code, user_id=user.pk)
 
 
 def _require_future(due_on: datetime.date) -> None:
@@ -349,9 +372,12 @@ def _require_future(due_on: datetime.date) -> None:
         raise ConflictError("مهلت نمی‌تواند در گذشته باشد.", code="due_in_past")
 
 
-def _tell(person, actor, kind, nc: NonConformance, title: str, body: str = "") -> None:
+def _tell(person, actor, kind, record, title: str, body: str = "") -> None:
+    """Notify one person about a record — never the person who just acted. `record` is a
+    non-conformance or an audit; the link goes to its own page."""
     if person.pk != actor.pk:
-        notifications.notify(person, kind=kind, title=title, body=body, url=f"/quality/{nc.pk}")
+        url = f"/quality/audits/{record.pk}" if isinstance(record, InternalAudit) else f"/quality/{record.pk}"
+        notifications.notify(person, kind=kind, title=title, body=body, url=url)
 
 
 @transaction.atomic
@@ -527,3 +553,218 @@ def cancel_action(nc: NonConformance, action: CorrectiveAction, *, actor, reason
     )
     _tell(action.assignee, actor, NotificationKind.CAPA_CANCELLED, nc, f"اقدام «{action.title}» لغو شد", action.cancel_reason)
     return action
+
+
+# -- internal audits -----------------------------------------------------------
+
+AUDIT_EDITABLE = {
+    "title": "عنوان",
+    "scope_node": "گرهٔ ممیزی‌شونده",
+    "planned_on": "تاریخ برنامه",
+    "lead_auditor": "ممیز اصلی",
+}
+#: Once an audit is running its scope and plan are fixed — findings already hang off them — but the
+#: person leading it can still be replaced (an auditor falls ill mid-audit).
+AUDIT_EDITABLE_WHILE_RUNNING = {"lead_auditor"}
+
+
+def _lock_audit(pk: int) -> InternalAudit:
+    try:
+        return (
+            InternalAudit.objects.select_for_update(of=("self",))
+            .select_related("scope_node", "lead_auditor")
+            .get(pk=pk)
+        )
+    except InternalAudit.DoesNotExist:
+        raise NotFound("ممیزی یافت نشد.")
+
+
+def _require_audit_status(audit: InternalAudit, expected, verb: str) -> None:
+    allowed = (expected,) if isinstance(expected, str) else tuple(expected)
+    if audit.status not in allowed:
+        raise ConflictError(
+            f"این ممیزی در وضعیت «{audit.get_status_display()}» است و نمی‌توان آن را {verb}.",
+            code="wrong_status",
+            status=audit.status,
+        )
+
+
+def _require_plan_date(planned_on: datetime.date) -> None:
+    if planned_on < timezone.localdate():
+        raise ConflictError("تاریخ برنامهٔ ممیزی نمی‌تواند در گذشته باشد.", code="planned_in_past")
+
+
+def _tell_auditor(audit: InternalAudit, actor) -> None:
+    _tell(
+        audit.lead_auditor, actor, NotificationKind.AUDIT_PLANNED, audit, f"ممیزی «{audit.code}» به شما سپرده شد",
+        f"{audit.title} — {audit.scope_node.name}",
+    )
+
+
+@transaction.atomic
+def plan_audit(*, actor, title, scope_node, lead_auditor, planned_on) -> InternalAudit:
+    """Only `manage_quality` plans one. The auditor must be someone who can act (active, not the
+    developer account); whether they are *independent* of the audited unit is not enforced — the
+    quality manager who names them is trusted with that judgement."""
+    require_audit_planner(actor)
+    title = normalize_title(_clean_text(title, "title", max_length=TITLE_MAX))
+    _require_eligible(lead_auditor, "ممیز اصلی", "auditor_not_eligible")
+    _require_plan_date(planned_on)
+    node = lock_node(scope_node.pk)
+    _require_active_node(node, "برای گرهٔ بایگانی‌شده نمی‌توان ممیزی برنامه‌ریزی کرد.")
+    audit = InternalAudit.objects.create(
+        title=title, scope_node=node, lead_auditor=lead_auditor, planned_on=planned_on
+    )
+    record_event(
+        QualityEventKind.AUDIT_PLANNED, actor, audit=audit, subject_title=audit.title,
+        to_status=AuditStatus.PLANNED, note=lead_auditor.full_name,
+    )
+    _tell_auditor(audit, actor)
+    notifications.notify_many(
+        _chain_leads(node, actor, lead_auditor),
+        kind=NotificationKind.AUDIT_PLANNED,
+        title=f"ممیزی داخلی «{node.name}» برنامه‌ریزی شد",
+        body=audit.title,
+        url=f"/quality/audits/{audit.pk}",
+    )
+    return audit
+
+
+@transaction.atomic
+def edit_audit(audit: InternalAudit, *, actor, changes: dict) -> InternalAudit:
+    """`manage_quality` only. While it is PLANNED everything may change; once it is running only the
+    lead auditor can be replaced; a finished or called-off audit is read-only. Only real changes are
+    recorded, and a changed auditor is told."""
+    audit = _lock_audit(audit.pk)
+    require_audit_planner(actor)
+    _require_audit_status(audit, (AuditStatus.PLANNED, AuditStatus.IN_PROGRESS), "ویرایش کرد")
+    allowed = AUDIT_EDITABLE if audit.status == AuditStatus.PLANNED else AUDIT_EDITABLE_WHILE_RUNNING
+    blocked = set(changes) - set(allowed)
+    if blocked:
+        raise ValidationError({name: ["این فیلد پس از آغاز ممیزی قابل ویرایش نیست."] for name in sorted(blocked)})
+
+    edited, old_auditor = [], None
+    if "title" in changes:
+        title = normalize_title(_clean_text(changes["title"], "title", max_length=TITLE_MAX))
+        if title != audit.title:
+            audit.title = title
+            edited.append("title")
+    if "planned_on" in changes and changes["planned_on"] != audit.planned_on:
+        _require_plan_date(changes["planned_on"])
+        audit.planned_on = changes["planned_on"]
+        edited.append("planned_on")
+    if "scope_node" in changes and changes["scope_node"].pk != audit.scope_node_id:
+        node = lock_node(changes["scope_node"].pk)
+        _require_active_node(node, "برای گرهٔ بایگانی‌شده نمی‌توان ممیزی برنامه‌ریزی کرد.")
+        audit.scope_node = node
+        edited.append("scope_node")
+    auditor_changed = "lead_auditor" in changes and changes["lead_auditor"].pk != audit.lead_auditor_id
+    if auditor_changed:
+        _require_eligible(changes["lead_auditor"], "ممیز اصلی", "auditor_not_eligible")
+        old_auditor = audit.lead_auditor.full_name
+        audit.lead_auditor = changes["lead_auditor"]
+        edited.append("lead_auditor")
+    if not edited:
+        return audit
+    audit.save(update_fields=[*edited, "updated_at"])
+    plain = [name for name in edited if name != "lead_auditor"]
+    if plain:
+        record_event(
+            QualityEventKind.AUDIT_EDITED, actor, audit=audit, subject_title=audit.title,
+            note="، ".join(AUDIT_EDITABLE[name] for name in plain),
+        )
+    if auditor_changed:
+        record_event(
+            QualityEventKind.AUDIT_AUDITOR_CHANGED, actor, audit=audit, subject_title=audit.title,
+            note=f"{old_auditor} ← {audit.lead_auditor.full_name}",
+        )
+        _tell_auditor(audit, actor)
+    return audit
+
+
+@transaction.atomic
+def start_audit(audit: InternalAudit, *, actor) -> InternalAudit:
+    """PLANNED → IN_PROGRESS, by the lead auditor or `manage_quality`. Starting early (before
+    `planned_on`) is allowed: the date is a plan, not a gate."""
+    audit = _lock_audit(audit.pk)
+    require_audit_runner(actor, audit)
+    _require_audit_status(audit, AuditStatus.PLANNED, "آغاز کرد")
+    audit.status, audit.started_at = AuditStatus.IN_PROGRESS, timezone.now()
+    audit.save(update_fields=["status", "started_at", "updated_at"])
+    record_event(
+        QualityEventKind.AUDIT_STARTED, actor, audit=audit, subject_title=audit.title,
+        from_status=AuditStatus.PLANNED, to_status=AuditStatus.IN_PROGRESS,
+    )
+    return audit
+
+
+@transaction.atomic
+def complete_audit(audit: InternalAudit, *, actor, summary) -> InternalAudit:
+    """IN_PROGRESS → COMPLETED with a written summary. «No findings» is a legitimate result — but it has
+    to be said, so the summary is required whether or not anything was raised."""
+    audit = _lock_audit(audit.pk)
+    require_audit_runner(actor, audit)
+    _require_audit_status(audit, AuditStatus.IN_PROGRESS, "تکمیل کرد")
+    audit.summary = _clean_text(summary, "summary", max_length=TEXT_MAX)
+    audit.status, audit.completed_at = AuditStatus.COMPLETED, timezone.now()
+    audit.save(update_fields=["summary", "status", "completed_at", "updated_at"])
+    record_event(
+        QualityEventKind.AUDIT_COMPLETED, actor, audit=audit, subject_title=audit.title,
+        from_status=AuditStatus.IN_PROGRESS, to_status=AuditStatus.COMPLETED, note=audit.summary,
+    )
+    return audit
+
+
+@transaction.atomic
+def cancel_audit(audit: InternalAudit, *, actor, reason) -> InternalAudit:
+    """Called off before it is finished — `manage_quality` only, reason required. Findings already
+    raised stay: they are real non-conformances and carry on their own course."""
+    audit = _lock_audit(audit.pk)
+    require_audit_planner(actor)
+    _require_audit_status(audit, (AuditStatus.PLANNED, AuditStatus.IN_PROGRESS), "لغو کرد")
+    previous = audit.status
+    audit.cancel_reason = _clean_text(reason, "reason", max_length=TEXT_MAX)
+    audit.status = AuditStatus.CANCELLED
+    audit.save(update_fields=["cancel_reason", "status", "updated_at"])
+    record_event(
+        QualityEventKind.AUDIT_CANCELLED, actor, audit=audit, subject_title=audit.title,
+        from_status=previous, to_status=AuditStatus.CANCELLED, note=audit.cancel_reason,
+    )
+    _tell(
+        audit.lead_auditor, actor, NotificationKind.AUDIT_CANCELLED, audit, f"ممیزی «{audit.code}» لغو شد",
+        audit.cancel_reason,
+    )
+    return audit
+
+
+@transaction.atomic
+def raise_finding(
+    audit: InternalAudit, *, actor, title, description, owner_node=None, severity=NcSeverity.MINOR,
+    detected_on=None, related_document=None,
+) -> NonConformance:
+    """A finding is a non-conformance, filed from inside a running audit: its source is AUDIT, it
+    points back at the audit, and its owner node is the audited node — or any node *beneath* it (an
+    audit of a unit that finds the problem in one of its sections). Observations are simply MINOR.
+    Only the lead auditor (or `manage_quality`) raises one, and only while the audit is IN_PROGRESS."""
+    audit = _lock_audit(audit.pk)
+    require_audit_runner(actor, audit)
+    if audit.status != AuditStatus.IN_PROGRESS:
+        raise ConflictError(
+            "یافته فقط وقتی ممیزی «در حال انجام» است ثبت می‌شود.", code="audit_not_in_progress", status=audit.status
+        )
+    node = lock_node(owner_node.pk) if owner_node is not None else audit.scope_node
+    if not node.path.startswith(audit.scope_node.path):
+        raise ValidationError(
+            {"owner_node": ["گرهٔ یافته باید خودِ گرهٔ ممیزی‌شونده یا یکی از زیرمجموعه‌های آن باشد."]}
+        )
+    nc = _file(
+        actor=actor, title=title, description=description, owner_node=node, source=NcSource.AUDIT,
+        severity=severity, detected_on=detected_on, related_document=related_document, audit=audit,
+    )
+    # One line for the moment, on the audit's timeline *and* the record's: no separate `nc_reported`.
+    record_event(
+        QualityEventKind.FINDING_RAISED, actor, nc=nc, audit=audit, subject_title=nc.title,
+        to_status=NcStatus.OPEN, note=f"{audit.code}: {audit.title}",
+    )
+    _announce(nc, actor, body=f"یافتهٔ {audit.code} · {nc.owner_node.name}")
+    return nc

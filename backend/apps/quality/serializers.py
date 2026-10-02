@@ -6,12 +6,14 @@ from apps.documents.models import Document
 from apps.organization.access import access_for
 from apps.organization.models import OrgNode
 
-from .access import can_manage
+from .access import can_manage, can_plan_audits, can_run_audit
 from .models import (
     FINAL_ACTION_STATUSES,
     OPEN_ACTION_STATUSES,
     ActionStatus,
+    AuditStatus,
     CorrectiveAction,
+    InternalAudit,
     NcSeverity,
     NcSource,
     NcStatus,
@@ -37,6 +39,10 @@ class NonConformanceSerializer(serializers.ModelSerializer):
     reported_by_name = serializers.CharField(source="reported_by.full_name", read_only=True)
     related_document_code = serializers.SerializerMethodField()
     related_document_title = serializers.SerializerMethodField()
+    #: The audit that raised it (a finding), if any — the code and title are shown to whoever may read
+    #: the record; the audit's own page is still scoped by `visible_audits`.
+    audit_code = serializers.SerializerMethodField()
+    audit_title = serializers.SerializerMethodField()
     #: Derived, never stored (queries.with_action_counts) — absent only if a caller forgot to annotate.
     actions_total = serializers.IntegerField(read_only=True, default=0)
     actions_verified = serializers.IntegerField(read_only=True, default=0)
@@ -53,7 +59,7 @@ class NonConformanceSerializer(serializers.ModelSerializer):
             "id", "code", "title", "description", "source", "source_label", "severity", "severity_label",
             "status", "status_label", "owner_node", "owner_node_name", "reported_by", "reported_by_name",
             "detected_on", "related_document", "related_document_code", "related_document_title",
-            "root_cause", "rejection_reason", "effectiveness_note", "accepted_at", "closed_at",
+            "audit", "audit_code", "audit_title", "root_cause", "rejection_reason", "effectiveness_note", "accepted_at", "closed_at",
             "created_at", "actions_total", "actions_verified", "actions_overdue",
             "can_edit", "can_triage", "can_reopen", "can_add_action", "can_close",
         ]
@@ -67,6 +73,12 @@ class NonConformanceSerializer(serializers.ModelSerializer):
 
     def get_related_document_title(self, obj):
         return obj.related_document.title if obj.related_document_id else None
+
+    def get_audit_code(self, obj):
+        return obj.audit.code if obj.audit_id else None
+
+    def get_audit_title(self, obj):
+        return obj.audit.title if obj.audit_id else None
 
     def get_can_edit(self, obj) -> bool:
         if obj.status == NcStatus.IN_PROGRESS:
@@ -133,15 +145,17 @@ class QualityEventSerializer(serializers.ModelSerializer):
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
     nc_code = serializers.SerializerMethodField()
     nc_title = serializers.SerializerMethodField()
+    audit_code = serializers.SerializerMethodField()
+    audit_title = serializers.SerializerMethodField()
     from_status_label = serializers.SerializerMethodField()
     to_status_label = serializers.SerializerMethodField()
 
     class Meta:
         model = QualityEvent
         fields = [
-            "id", "kind", "kind_label", "nc", "nc_code", "nc_title", "actor_name", "actor_title",
-            "subject_title", "from_status", "to_status", "from_status_label", "to_status_label",
-            "note", "created_at",
+            "id", "kind", "kind_label", "nc", "nc_code", "nc_title", "audit", "audit_code", "audit_title",
+            "actor_name", "actor_title", "subject_title", "from_status", "to_status",
+            "from_status_label", "to_status_label", "note", "created_at",
         ]
         read_only_fields = fields
 
@@ -151,13 +165,20 @@ class QualityEventSerializer(serializers.ModelSerializer):
     def get_nc_title(self, obj):
         return obj.nc.title if obj.nc_id else None
 
+    def get_audit_code(self, obj):
+        return obj.audit.code if obj.audit_id else None
+
+    def get_audit_title(self, obj):
+        return obj.audit.title if obj.audit_id else None
+
     @staticmethod
     def _label(kind: str, value: str) -> str:
-        """A status's Persian label — from the record's enum or the action's, by the kind of event.
-        `action_due_changed` carries ISO dates in these fields, `action_assigned` carries none."""
+        """A status's Persian label — from the record's enum, the action's or the audit's, by the kind
+        of event. `action_due_changed` carries ISO dates in these fields, and `action_assigned`,
+        `audit_edited` and `audit_auditor_changed` carry none."""
         if not value:
             return ""
-        enum = ActionStatus if kind in _ACTION_STATUS_KINDS else NcStatus if kind.startswith("nc_") else None
+        enum = _STATUS_ENUM_BY_KIND.get(kind) or (NcStatus if kind.startswith("nc_") else None)
         try:
             return enum(value).label if enum else ""
         except ValueError:
@@ -170,11 +191,18 @@ class QualityEventSerializer(serializers.ModelSerializer):
         return self._label(obj.kind, obj.to_status)
 
 
-_ACTION_STATUS_KINDS = {
-    QualityEventKind.ACTION_STATUS_CHANGED,
-    QualityEventKind.ACTION_VERIFIED,
-    QualityEventKind.ACTION_VERIFICATION_FAILED,
-    QualityEventKind.ACTION_CANCELLED,
+#: Which status vocabulary an event's `from_status` / `to_status` are written in. Every other `nc_*`
+#: kind uses the record's (`QualityEventSerializer._label`).
+_STATUS_ENUM_BY_KIND = {
+    QualityEventKind.ACTION_STATUS_CHANGED: ActionStatus,
+    QualityEventKind.ACTION_VERIFIED: ActionStatus,
+    QualityEventKind.ACTION_VERIFICATION_FAILED: ActionStatus,
+    QualityEventKind.ACTION_CANCELLED: ActionStatus,
+    QualityEventKind.AUDIT_PLANNED: AuditStatus,
+    QualityEventKind.AUDIT_STARTED: AuditStatus,
+    QualityEventKind.AUDIT_COMPLETED: AuditStatus,
+    QualityEventKind.AUDIT_CANCELLED: AuditStatus,
+    QualityEventKind.FINDING_RAISED: NcStatus,
 }
 
 
@@ -255,3 +283,97 @@ class VerifySerializer(serializers.Serializer):
 
 class CloseSerializer(serializers.Serializer):
     effectiveness_note = serializers.CharField(max_length=4000)
+
+
+class AuditSerializer(serializers.ModelSerializer):
+    """An audit as the list and the detail page need it. As for records, the `can_*` flags come from the
+    functions the write endpoints enforce, so a button is never offered that the server would refuse.
+    Needs `request` in the context; build the queryset with `visible_audits` and `with_finding_counts`."""
+
+    code = serializers.CharField(read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    scope_node_name = serializers.CharField(source="scope_node.name", read_only=True)
+    lead_auditor_name = serializers.CharField(source="lead_auditor.full_name", read_only=True)
+    lead_auditor_title = serializers.CharField(source="lead_auditor.title", read_only=True)
+    lead_auditor_is_active = serializers.BooleanField(source="lead_auditor.is_active", read_only=True)
+    #: Derived, never stored (queries.with_finding_counts).
+    findings_total = serializers.IntegerField(read_only=True, default=0)
+    findings_open = serializers.IntegerField(read_only=True, default=0)
+    can_edit = serializers.SerializerMethodField()
+    can_change_auditor = serializers.SerializerMethodField()
+    can_start = serializers.SerializerMethodField()
+    can_complete = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
+    can_raise_finding = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InternalAudit
+        fields = [
+            "id", "code", "title", "scope_node", "scope_node_name", "lead_auditor", "lead_auditor_name",
+            "lead_auditor_title", "lead_auditor_is_active", "planned_on", "status", "status_label",
+            "summary", "cancel_reason", "started_at", "completed_at", "created_at",
+            "findings_total", "findings_open",
+            "can_edit", "can_change_auditor", "can_start", "can_complete", "can_cancel", "can_raise_finding",
+        ]
+        read_only_fields = fields
+
+    def _org(self):
+        return access_for(self.context["request"])
+
+    def _planner_may_change(self, obj) -> bool:
+        """Not over yet, and the viewer plans audits."""
+        return obj.status in (AuditStatus.PLANNED, AuditStatus.IN_PROGRESS) and can_plan_audits(self._org())
+
+    def get_can_edit(self, obj) -> bool:
+        """The plan itself — title, date, scope. Only until it starts: findings hang off the scope."""
+        return obj.status == AuditStatus.PLANNED and can_plan_audits(self._org())
+
+    def get_can_change_auditor(self, obj) -> bool:
+        """Replacing the lead auditor stays possible while the audit runs (one falls ill mid-audit)."""
+        return self._planner_may_change(obj)
+
+    def get_can_cancel(self, obj) -> bool:
+        return self._planner_may_change(obj)
+
+    def get_can_start(self, obj) -> bool:
+        return obj.status == AuditStatus.PLANNED and can_run_audit(self._org(), obj)
+
+    def get_can_complete(self, obj) -> bool:
+        return obj.status == AuditStatus.IN_PROGRESS and can_run_audit(self._org(), obj)
+
+    def get_can_raise_finding(self, obj) -> bool:
+        return obj.status == AuditStatus.IN_PROGRESS and can_run_audit(self._org(), obj)
+
+
+class AuditCreateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255)
+    scope_node = serializers.PrimaryKeyRelatedField(queryset=OrgNode.objects.all())
+    lead_auditor = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    planned_on = serializers.DateField()
+
+
+class AuditUpdateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255, required=False)
+    scope_node = serializers.PrimaryKeyRelatedField(queryset=OrgNode.objects.all(), required=False)
+    lead_auditor = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
+    planned_on = serializers.DateField(required=False)
+
+
+class AuditCompleteSerializer(serializers.Serializer):
+    summary = serializers.CharField(max_length=4000)
+
+
+class FindingCreateSerializer(serializers.Serializer):
+    """A finding: the record's fields minus `source` (always AUDIT). `owner_node` is optional — it
+    defaults to the audited node — and must lie within it (the service checks)."""
+
+    title = serializers.CharField(max_length=255)
+    description = serializers.CharField(max_length=4000)
+    owner_node = serializers.PrimaryKeyRelatedField(
+        queryset=OrgNode.objects.all(), required=False, allow_null=True, default=None
+    )
+    severity = serializers.ChoiceField(choices=NcSeverity.choices, required=False, default=NcSeverity.MINOR)
+    detected_on = serializers.DateField(required=False, default=None, allow_null=True)
+    related_document = serializers.PrimaryKeyRelatedField(
+        queryset=Document.objects.all(), required=False, allow_null=True, default=None
+    )

@@ -1,12 +1,15 @@
 """The quality module (Phase 18): what went wrong, and proof that it was fixed.
 
 A non-conformance is a recorded problem; corrective actions are the fixes; an internal audit finds
-problems; a risk is a problem that has not happened yet. This file holds the first two (slices 1-2:
-the non-conformance and its corrective actions) and the history every part of the module shares. Like projects, none of it is a controlled document:
-no numbering counter, no revisions — a record's code is simply `NC-` plus its id.
+problems; a risk is a problem that has not happened yet. This file holds the first three (slices 1-2:
+the non-conformance and its corrective actions; slice 5: the audit, whose findings *are*
+non-conformances) and the history every part of the module shares. Like projects, none of it is a
+controlled document: no numbering counter, no revisions — a record's code is simply `NC-` / `AU-`
+plus its id.
 
 Nothing here is ever deleted. A report that turns out to be nothing is *rejected*, an action that is
-no longer needed is *cancelled*: the trail of what was claimed and decided is the whole point.
+no longer needed is *cancelled*, an audit that will not happen is *cancelled*: the trail of what was
+claimed and decided is the whole point.
 """
 from django.conf import settings
 from django.db import models
@@ -60,6 +63,11 @@ class NonConformance(TimeStampedModel):
     #: The procedure or instruction it relates to — the project's «مستند پیوست» idea, for one document.
     related_document = models.ForeignKey(
         "documents.Document", null=True, blank=True, on_delete=models.PROTECT, related_name="nonconformances"
+    )
+    #: The audit that found it, if one did — a finding is just a non-conformance with this set (and
+    #: `source` AUDIT), so everything below applies to it unchanged. PROTECT: audits are never deleted.
+    audit = models.ForeignKey(
+        "InternalAudit", null=True, blank=True, on_delete=models.PROTECT, related_name="findings"
     )
     #: Written when it is accepted (ریشه‌یابی).
     root_cause = models.TextField(blank=True)
@@ -151,6 +159,67 @@ class CorrectiveAction(TimeStampedModel):
         return f"{self.nc.code}: {self.title}"
 
 
+class AuditStatus(models.TextChoices):
+    """An audit's life: planned, carried out, then reported on — or called off. Findings can be raised
+    only while it is being carried out."""
+
+    PLANNED = "PLANNED", "برنامه‌ریزی‌شده"
+    IN_PROGRESS = "IN_PROGRESS", "در حال انجام"
+    COMPLETED = "COMPLETED", "انجام‌شده"
+    CANCELLED = "CANCELLED", "لغو شد"
+
+
+#: An audit in one of these is over: it can no longer change.
+FINAL_AUDIT_STATUSES = (AuditStatus.COMPLETED, AuditStatus.CANCELLED)
+
+
+class InternalAudit(TimeStampedModel):
+    """A planned check of one part of the chart (`scope_node` and everything beneath it) by a named
+    lead auditor. Its output is a summary and its findings — non-conformances with `audit` set
+    (`findings`). Planning and cancelling belong to `manage_quality` alone: an independent function,
+    so a unit's lead does not schedule (or call off) the audit of their own unit."""
+
+    title = models.CharField(max_length=255)
+    #: PROTECT: a node that is audited cannot be deleted (archive it), like one that owns records.
+    scope_node = models.ForeignKey(OrgNode, on_delete=models.PROTECT, related_name="audits")
+    lead_auditor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="led_audits"
+    )
+    planned_on = models.DateField()
+    status = models.CharField(max_length=12, choices=AuditStatus.choices, default=AuditStatus.PLANNED)
+    #: Written when it is completed: what was checked and what was found (required — «no findings»
+    #: is a result, but it has to be said).
+    summary = models.TextField(blank=True)
+    cancel_reason = models.TextField(blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-planned_on", "-id"]
+        constraints = [
+            CheckConstraint(
+                check=~Q(status=AuditStatus.COMPLETED) | Q(completed_at__isnull=False),
+                name="audit_completed_has_completed_at",
+            ),
+            CheckConstraint(
+                check=~Q(status__in=[AuditStatus.IN_PROGRESS, AuditStatus.COMPLETED]) | Q(started_at__isnull=False),
+                name="audit_running_has_started_at",
+            ),
+        ]
+        indexes = [
+            Index(fields=["status", "scope_node"], name="audit_status_node_idx"),
+            Index(fields=["lead_auditor", "status"], name="audit_auditor_status_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.code} {self.title}"
+
+    @property
+    def code(self) -> str:
+        """`AU-0007` — the id, zero-padded, the same device as `NonConformance.code`."""
+        return f"AU-{self.pk:04d}"
+
+
 class QualityEventKind(models.TextChoices):
     NC_REPORTED = "nc_reported", "عدم‌انطباق ثبت شد"
     NC_EDITED = "nc_edited", "عدم‌انطباق ویرایش شد"
@@ -166,6 +235,15 @@ class QualityEventKind(models.TextChoices):
     ACTION_VERIFIED = "action_verified", "اقدام تایید شد"
     ACTION_VERIFICATION_FAILED = "action_verification_failed", "تایید اقدام ناموفق بود"
     ACTION_CANCELLED = "action_cancelled", "اقدام لغو شد"
+    AUDIT_PLANNED = "audit_planned", "ممیزی برنامه‌ریزی شد"
+    AUDIT_EDITED = "audit_edited", "ممیزی ویرایش شد"
+    AUDIT_AUDITOR_CHANGED = "audit_auditor_changed", "ممیز اصلی تغییر کرد"
+    AUDIT_STARTED = "audit_started", "ممیزی آغاز شد"
+    AUDIT_COMPLETED = "audit_completed", "ممیزی انجام شد"
+    AUDIT_CANCELLED = "audit_cancelled", "ممیزی لغو شد"
+    #: A finding is a non-conformance, so this is also *its* first line — raised in an audit it has no
+    #: separate `nc_reported` (one line, not two for the same moment).
+    FINDING_RAISED = "finding_raised", "یافتهٔ ممیزی ثبت شد"
 
 
 class QualityEvent(TimeStampedModel):
@@ -176,6 +254,9 @@ class QualityEvent(TimeStampedModel):
     line."""
 
     nc = models.ForeignKey(NonConformance, null=True, blank=True, on_delete=models.CASCADE, related_name="events")
+    #: The audit it is about, if any (a finding line carries both: it belongs to the audit's timeline
+    #: and to the record's).
+    audit = models.ForeignKey(InternalAudit, null=True, blank=True, on_delete=models.CASCADE, related_name="events")
     #: The action it is about, if any. SET_NULL: an action is never deleted, but if one ever were its
     #: history would still read correctly through `subject_title`.
     action = models.ForeignKey(
@@ -198,7 +279,10 @@ class QualityEvent(TimeStampedModel):
     class Meta:
         # Forward, so nc.events.all() reads as a timeline; the feed views order newest first.
         ordering = ["created_at", "id"]
-        indexes = [Index(fields=["nc", "created_at"], name="qevent_nc_time_idx")]
+        indexes = [
+            Index(fields=["nc", "created_at"], name="qevent_nc_time_idx"),
+            Index(fields=["audit", "created_at"], name="qevent_audit_time_idx"),
+        ]
 
     def __str__(self):
         return f"{self.kind} by {self.actor_name}"
