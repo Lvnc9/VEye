@@ -336,3 +336,19 @@ export function memberCaption(membership: Pick<OrgMembership, "is_lead" | "posit
   if (membership.position_label) return membership.position_label;
   return membership.is_lead ? `مسئول ${nodeName}` : "";
 }
+
+/** A temporary cover for a مسئول (Phase 16, `GET /org/delegations/`): while the window is open the
+ *  delegate acts as a lead of the node and everything beneath it. */
+export interface Delegation {
+  id: number;
+  node: number;
+  node_name: string;
+  delegate: number;
+  delegate_name: string;
+  delegate_title: string;
+  starts_on: string;
+  ends_on: string;
+  note: string;
+  /** Covering today (the server's clock). */
+  is_active: boolean;
+}

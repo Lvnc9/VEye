@@ -4,7 +4,7 @@ from operator import or_
 
 from django.conf import settings
 from django.db import models
-from django.db.models import CheckConstraint, Index, Q, UniqueConstraint
+from django.db.models import CheckConstraint, F, Index, Q, UniqueConstraint
 
 from apps.core.models import TimeStampedModel
 
@@ -210,3 +210,40 @@ class Membership(TimeStampedModel):
 
     def __str__(self):
         return f"{self.user.full_name} @ {self.node.name}"
+
+
+class Delegation(TimeStampedModel):
+    """Temporary cover for a مسئول who is away (Phase 16, «جانشینی/پوشش غیبت»): while
+    `starts_on <= today <= ends_on`, `delegate` is treated as if they led `node` too —
+    `OrgAccess.lead_nodes` folds an active delegation in alongside real lead memberships, so
+    *every* authority question already keyed off "do you lead this node" (document write/confirm,
+    managing members, project/chat access) honours a delegation automatically. Nothing elsewhere
+    needs to know delegations exist.
+
+    Deliberately **not** a second kind of `Membership`: a delegation carries no position in the
+    chart, no chat membership, and needs nobody to remember to remove it — it simply stops
+    mattering once `ends_on` passes. `ends_on` is required (no indefinite delegation): this is
+    vacation cover, not a standing deputy — a standing second-in-command is an ordinary
+    `Membership` with `is_lead=True`.
+    """
+
+    node = models.ForeignKey(OrgNode, on_delete=models.CASCADE, related_name="delegations")
+    delegate = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="delegations_received"
+    )
+    starts_on = models.DateField()
+    ends_on = models.DateField()
+    note = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["-starts_on", "-id"]
+        constraints = [
+            CheckConstraint(check=Q(ends_on__gte=F("starts_on")), name="delegation_ends_not_before_start")
+        ]
+        indexes = [Index(fields=["node", "starts_on", "ends_on"], name="delegation_node_window_idx")]
+
+    def __str__(self):
+        return f"{self.delegate.full_name} covers {self.node.name} ({self.starts_on}–{self.ends_on})"

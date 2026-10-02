@@ -3,7 +3,7 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from .access import access_for
-from .models import Company, Membership, OrgNode, OrgNodeKind
+from .models import Company, Delegation, Membership, OrgNode, OrgNodeKind
 
 User = get_user_model()
 
@@ -187,3 +187,39 @@ class PersonSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "full_name", "title", "is_active", "memberships"]
         read_only_fields = fields
+
+
+class DelegationSerializer(serializers.ModelSerializer):
+    """A delegation as the node panel lists it: who covers, where, from when to when. Never a
+    national code or phone. `is_active` is "covering today", computed so the client needn't."""
+
+    delegate_name = serializers.CharField(source="delegate.full_name", read_only=True)
+    delegate_title = serializers.CharField(source="delegate.title", read_only=True)
+    node_name = serializers.CharField(source="node.name", read_only=True)
+    is_active = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Delegation
+        fields = [
+            "id", "node", "node_name", "delegate", "delegate_name", "delegate_title",
+            "starts_on", "ends_on", "note", "is_active",
+        ]
+        read_only_fields = fields
+
+    def get_is_active(self, obj) -> bool:
+        from django.utils import timezone
+
+        return obj.starts_on <= timezone.localdate() <= obj.ends_on
+
+
+class DelegationCreateSerializer(serializers.Serializer):
+    node = serializers.PrimaryKeyRelatedField(queryset=OrgNode.objects.all())
+    delegate = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    starts_on = serializers.DateField()
+    ends_on = serializers.DateField()
+    note = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        if attrs["ends_on"] < attrs["starts_on"]:
+            raise serializers.ValidationError({"ends_on": ["پایان بازه نباید پیش از شروع آن باشد."]})
+        return attrs

@@ -5,6 +5,7 @@ from .setup_views import SetupBootstrapView, SetupCompleteView, SetupStartView, 
 from .views import (
     CompanyLogoView,
     CompanyView,
+    DelegationViewSet,
     DocumentDefaultsView,
     MembershipViewSet,
     OrgNodeViewSet,
@@ -16,6 +17,7 @@ from .views import (
 router = SimpleRouter()
 router.register(r"org/nodes", OrgNodeViewSet, basename="org-node")
 router.register(r"org/memberships", MembershipViewSet, basename="org-membership")
+router.register(r"org/delegations", DelegationViewSet, basename="org-delegation")
 
 urlpatterns = [
     path("setup/status/", SetupStatusView.as_view(), name="setup-status"),

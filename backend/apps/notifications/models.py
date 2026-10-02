@@ -17,6 +17,7 @@ class NotificationKind(models.TextChoices):
     MEMBERSHIP_ADDED = "membership_added", "عضویت جدید در ساختار سازمانی"
     MEMBERSHIP_REMOVED = "membership_removed", "پایان عضویت در ساختار سازمانی"
     LEAD_ASSIGNED = "lead_assigned", "مسئولیت یک گره به شما واگذار شد"
+    DELEGATION_RECEIVED = "delegation_received", "جانشینی موقت یک مسئول به شما سپرده شد"
     OBJECTIVE_DUE_SOON = "objective_due_soon", "ریزهدف نزدیک به مهلت است"
     OBJECTIVE_OVERDUE = "objective_overdue", "ریزهدف از مهلت گذشته است"
 

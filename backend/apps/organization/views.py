@@ -14,11 +14,13 @@ from apps.accounts.models import Capability
 from apps.core.pagination import DefaultPagination
 from apps.core.permissions import HasCapability
 
-from . import memberships, queries, services, tree
+from . import delegations, memberships, queries, services, tree
 from .access import CanEditNode, CanManageMembership, access_for
-from .models import Company, Membership, OrgNode
+from .models import Company, Delegation, Membership, OrgNode
 from .serializers import (
     CompanyUpdateSerializer,
+    DelegationCreateSerializer,
+    DelegationSerializer,
     DocumentDefaultsSerializer,
     MembershipCreateSerializer,
     MembershipSerializer,
@@ -315,3 +317,45 @@ class PeopleView(generics.ListAPIView):
         queryset = queries.search_people(queryset, params.get("q", ""))
         placed = Membership.objects.select_related("node").order_by("-is_primary", "node__path")
         return queryset.prefetch_related(Prefetch("memberships", queryset=placed)).order_by("full_name", "id")
+
+
+class DelegationViewSet(viewsets.ModelViewSet):
+    """`/org/delegations/` — temporary cover for a مسئول (Phase 16). Readable by anyone signed in
+    (the chart already is); creating or ending one needs the same authority as managing a node's
+    members: `manage_membership`, or leading the node (or an ancestor). A delegation is never
+    edited — end it and make another. Filters: `?node=`, `?delegate=`, `?current=1` (covering
+    today or later; the default hides ones that have already ended)."""
+
+    queryset = Delegation.objects.all()
+    serializer_class = DelegationSerializer
+    pagination_class = DefaultPagination
+    permission_classes = [IsAuthenticated, CanManageMembership]
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def get_queryset(self):
+        from django.utils import timezone
+
+        queryset = super().get_queryset().select_related("node", "delegate")
+        params = self.request.query_params
+        for field in ("node", "delegate"):
+            if value := params.get(field):
+                queryset = queryset.filter(**{f"{field}_id": value}) if value.isdigit() else queryset.none()
+        if self.action == "list" and not _flag(self.request, "include_ended"):
+            queryset = queryset.filter(ends_on__gte=timezone.localdate())
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        serializer = DelegationCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        if not access_for(request).can_manage_members(data["node"]):
+            raise PermissionDenied("شما مسئول این گره یا گره‌های بالادستی آن نیستید و نمی‌توانید جانشین تعیین کنید.")
+        if data["delegate"].is_developer:
+            raise ValidationError({"delegate": ["حساب توسعه‌دهنده نمی‌تواند جانشین شود."]})
+        delegation = delegations.create_delegation(created_by=request.user, **data)
+        delegation = Delegation.objects.select_related("node", "delegate").get(pk=delegation.pk)
+        return Response(DelegationSerializer(delegation).data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, *args, **kwargs):
+        delegations.end_delegation(self.get_object())
+        return Response(status=status.HTTP_204_NO_CONTENT)

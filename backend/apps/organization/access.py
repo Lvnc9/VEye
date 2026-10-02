@@ -26,11 +26,12 @@ Only memberships on *active* nodes confer authority: an archived node is retired
 whatever its lead could do there.
 """
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from apps.accounts.models import Capability, User
 
-from .models import Membership, OrgNode, OrgNodeKind
+from .models import Delegation, Membership, OrgNode, OrgNodeKind
 
 
 class OrgAccess:
@@ -45,13 +46,19 @@ class OrgAccess:
 
     @property
     def lead_nodes(self) -> tuple[tuple[str, str], ...]:
-        """(`path`, `kind`) of every active node this person leads. The one query."""
+        """(`path`, `kind`) of every active node this person leads — or covers today under a
+        `Delegation` (Phase 16): while the window is open a delegate counts as a lead of that node,
+        so every question below (and in `documents/authority.py`) honours it with no other change.
+        One query (a UNION of the two sources), once per request."""
         if self._leads is None:
-            self._leads = tuple(
-                Membership.objects.filter(user=self.user, is_lead=True, node__is_active=True)
-                .order_by("id")
-                .values_list("node__path", "node__kind")
+            today = timezone.localdate()
+            led = Membership.objects.filter(user=self.user, is_lead=True, node__is_active=True).values_list(
+                "node__path", "node__kind"
             )
+            covered = Delegation.objects.filter(
+                delegate=self.user, starts_on__lte=today, ends_on__gte=today, node__is_active=True
+            ).values_list("node__path", "node__kind")
+            self._leads = tuple(led.union(covered))
         return self._leads
 
     @property

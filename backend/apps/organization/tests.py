@@ -5,6 +5,7 @@ import pathlib
 import shutil
 import tempfile
 import threading
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest import mock
 
@@ -12,6 +13,7 @@ from django.db import IntegrityError, connection, transaction
 from django.db.models import ProtectedError
 from django.test import TestCase, TransactionTestCase, override_settings, skipUnlessDBFeature
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
@@ -22,9 +24,9 @@ from apps.core.exceptions import ConflictError
 from apps.core.text import normalize_search_term
 from apps.notifications.models import Notification, NotificationKind
 
-from . import memberships, queries, tree
+from . import delegations, memberships, queries, tree
 from .access import OrgAccess, access_for
-from .models import ALLOWED_PARENT_KINDS, Company, Membership, OrgNode, OrgNodeKind, SetupStep
+from .models import ALLOWED_PARENT_KINDS, Company, Delegation, Membership, OrgNode, OrgNodeKind, SetupStep
 
 COMPANY, DOMAIN, UNIT, SECTION = (
     OrgNodeKind.COMPANY,
@@ -1840,3 +1842,188 @@ class MeContextTests(ApiTestCase):
         self.as_(self.guild)
         with self.assertNumQueries(3):  # the company, the memberships, the lead nodes (the user comes from the session)
             self.client.get(reverse("auth-me"))
+
+
+
+# ---------------------------------------------------------------------------
+# Phase 16: temporary cover for a مسئول
+# ---------------------------------------------------------------------------
+
+
+class DelegationAccessTests(SampleTree, TestCase):
+    """A delegate counts as a lead of the node only while the window is open — through the same
+    `OrgAccess` every other authority question already asks."""
+
+    def setUp(self):
+        self.build()
+        self.lead = person("9500000001")
+        self.cover = person("9500000002")
+        join(self.lead, self.u1, is_lead=True)
+        self.today = timezone.localdate()
+
+    def delegate(self, starts_in=0, ends_in=5, node=None):
+        return Delegation.objects.create(
+            node=node or self.u1,
+            delegate=self.cover,
+            starts_on=self.today + timedelta(days=starts_in),
+            ends_on=self.today + timedelta(days=ends_in),
+        )
+
+    def test_an_open_window_makes_the_delegate_a_lead_of_the_subtree(self):
+        self.delegate()
+        access = OrgAccess(self.cover)
+        self.assertTrue(access.leads(self.u1))
+        self.assertTrue(access.leads(self.s1))  # below it, like a real lead
+        self.assertFalse(access.leads(self.u2))  # a sibling: nothing
+        self.assertFalse(access.leads(self.d1))  # above it: nothing
+
+    def test_before_and_after_the_window_they_lead_nothing(self):
+        self.delegate(starts_in=1, ends_in=3)
+        self.assertFalse(OrgAccess(self.cover).leads(self.u1))  # not yet
+        Delegation.objects.all().delete()
+        self.delegate(starts_in=-5, ends_in=-1)
+        self.assertFalse(OrgAccess(self.cover).leads(self.u1))  # over
+
+    def test_the_first_and_last_day_are_inclusive(self):
+        self.delegate(starts_in=0, ends_in=0)
+        self.assertTrue(OrgAccess(self.cover).leads(self.u1))
+
+    def test_an_archived_node_confers_nothing(self):
+        self.delegate()
+        tree.archive_node(self.s1)
+        tree.archive_node(self.u1)
+        self.assertFalse(OrgAccess(self.cover).leads(self.u1))
+
+    def test_a_delegation_never_grants_a_capability(self):
+        self.delegate()
+        for capability in (Capability.MANAGE_ORGANIZATION, Capability.MANAGE_MEMBERSHIP, Capability.CREATE_PROJECT):
+            self.assertFalse(self.cover.has_capability(capability))
+
+    def test_it_is_still_one_query(self):
+        self.delegate()
+        access = OrgAccess(self.cover)
+        with self.assertNumQueries(1):
+            access.leads(self.u1)
+
+    def test_the_documents_authority_honours_it_with_no_other_change(self):
+        from apps.documents.authority import DocumentAuthority
+
+        document = SimpleNamespace(owner_node=self.s1)
+        self.assertFalse(DocumentAuthority(self.cover).can_author(document))
+        self.delegate()
+        authority = DocumentAuthority(self.cover)
+        self.assertTrue(authority.can_author(document))
+        self.assertTrue(authority.can_confirm(document))  # u1 is a واحد above the بخش
+        self.assertFalse(authority.can_approve(document))  # only the مدیر عامل
+
+
+class DelegationApiTests(ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.build()
+        self.lead = person("9510000001")
+        self.cover = person("9510000002")
+        self.other_lead = person("9510000003")
+        join(self.lead, self.u1, is_lead=True)
+        join(self.other_lead, self.u2, is_lead=True)
+        self.today = timezone.localdate()
+
+    def body(self, **over):
+        data = {
+            "node": self.u1.pk,
+            "delegate": self.cover.pk,
+            "starts_on": self.today.isoformat(),
+            "ends_on": (self.today + timedelta(days=7)).isoformat(),
+            "note": "مرخصی",
+        }
+        return {**data, **over}
+
+    def test_a_lead_names_a_delegate_for_their_own_node(self):
+        response = self.as_(self.lead).post(reverse("org-delegation-list"), self.body(), format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data["is_active"])
+        self.assertEqual(response.data["delegate_name"], self.cover.full_name)
+        self.assertTrue(OrgAccess(self.cover).leads(self.s1))
+
+    def test_the_delegate_is_notified(self):
+        from apps.notifications.models import Notification, NotificationKind
+
+        self.as_(self.lead).post(reverse("org-delegation-list"), self.body(), format="json")
+        notification = Notification.objects.get(recipient=self.cover)
+        self.assertEqual(notification.kind, NotificationKind.DELEGATION_RECEIVED)
+
+    def test_a_lead_cannot_delegate_a_node_they_do_not_lead(self):
+        response = self.as_(self.other_lead).post(reverse("org-delegation-list"), self.body(), format="json")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Delegation.objects.count(), 0)
+
+    def test_a_plain_member_cannot_delegate(self):
+        response = self.as_(self.guild).post(reverse("org-delegation-list"), self.body(), format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_a_manager_of_the_whole_company_can(self):
+        response = self.as_(self.ceo).post(reverse("org-delegation-list"), self.body(), format="json")
+        self.assertEqual(response.status_code, 201)
+
+    def test_the_end_may_not_precede_the_start(self):
+        response = self.as_(self.lead).post(
+            reverse("org-delegation-list"),
+            self.body(ends_on=(self.today - timedelta(days=1)).isoformat()),
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_window_wholly_in_the_past_is_refused(self):
+        past = (self.today - timedelta(days=10)).isoformat()
+        response = self.as_(self.lead).post(
+            reverse("org-delegation-list"),
+            self.body(starts_on=past, ends_on=(self.today - timedelta(days=2)).isoformat()),
+            format="json",
+        )
+        self.assertEqual((response.status_code, response.data["code"]), (409, "window_in_past"))
+
+    def test_an_inactive_person_cannot_be_the_delegate(self):
+        self.cover.is_active = False
+        self.cover.save()
+        response = self.as_(self.lead).post(reverse("org-delegation-list"), self.body(), format="json")
+        self.assertEqual((response.status_code, response.data["code"]), (409, "delegate_not_eligible"))
+
+    def test_an_archived_node_takes_no_delegate(self):
+        tree.archive_node(self.s1)
+        tree.archive_node(self.u1)
+        response = self.as_(self.ceo).post(reverse("org-delegation-list"), self.body(), format="json")
+        self.assertEqual((response.status_code, response.data["code"]), (409, "node_archived"))
+
+    def test_the_list_hides_ended_delegations_unless_asked(self):
+        Delegation.objects.create(
+            node=self.u1, delegate=self.cover,
+            starts_on=self.today - timedelta(days=9), ends_on=self.today - timedelta(days=2),
+        )
+        live = Delegation.objects.create(
+            node=self.u1, delegate=self.cover, starts_on=self.today, ends_on=self.today + timedelta(days=2)
+        )
+        client = self.as_(self.guild)
+        rows = client.get(reverse("org-delegation-list"), {"node": self.u1.pk}).data["results"]
+        self.assertEqual([r["id"] for r in rows], [live.pk])
+        everything = client.get(reverse("org-delegation-list"), {"node": self.u1.pk, "include_ended": "1"}).data
+        self.assertEqual(everything["count"], 2)
+
+    def test_ending_early_removes_the_cover(self):
+        delegation = delegations.create_delegation(
+            node=self.u1, delegate=self.cover, starts_on=self.today, ends_on=self.today + timedelta(days=3)
+        )
+        self.assertEqual(self.as_(self.other_lead).delete(reverse("org-delegation-detail", args=[delegation.pk])).status_code, 403)
+        self.assertEqual(self.as_(self.lead).delete(reverse("org-delegation-detail", args=[delegation.pk])).status_code, 204)
+        self.assertFalse(OrgAccess(self.cover).leads(self.u1))
+
+    def test_a_delegation_cannot_be_edited(self):
+        delegation = delegations.create_delegation(
+            node=self.u1, delegate=self.cover, starts_on=self.today, ends_on=self.today + timedelta(days=3)
+        )
+        response = self.as_(self.lead).patch(
+            reverse("org-delegation-detail", args=[delegation.pk]), {"note": "x"}, format="json"
+        )
+        self.assertEqual(response.status_code, 405)
+
+    def test_requires_authentication(self):
+        self.assertEqual(APIClient().get(reverse("org-delegation-list")).status_code, 401)

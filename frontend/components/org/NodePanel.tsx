@@ -23,6 +23,7 @@ import {
 } from "@/lib/organization";
 import type { Paginated } from "@/lib/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { DelegationsSection } from "@/components/org/DelegationsSection";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { buttonClass } from "@/components/ui/Button";
 import { controlClass } from "@/components/ui/Field";
@@ -83,6 +84,7 @@ export function NodePanel({
 
       <GroupChat node={node} nodes={nodes} />
       <Members node={node} />
+      {node.can_manage_members && node.is_active && <DelegationsSection node={node} />}
       {(node.can_add_child || node.can_edit) && <StructureActions node={node} nodes={nodes} onChanged={onStructureChanged} />}
       </div>
     </aside>
