@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_NC_FILTERS,
+  actionCreatePayload,
+  actionFormFrom,
+  actionPatchPayload,
+  closeHint,
+  emptyActionForm,
+  statusButtons,
+  validateActionForm,
+  type CorrectiveAction,
   NC_SEVERITY_LABELS,
   NC_SOURCE_LABELS,
   NC_STATUS_LABELS,
@@ -207,5 +215,118 @@ describe("a history entry's second line", () => {
   it("shows an assignment as the note and an unremarkable event as nothing", () => {
     expect(qualityEventDetail(event({ kind: "action_assigned", note: "الف ← ب" }))).toBe("الف ← ب");
     expect(qualityEventDetail(event())).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Corrective actions
+// ---------------------------------------------------------------------------
+
+function action(over: Partial<CorrectiveAction> = {}): CorrectiveAction {
+  return {
+    id: 5,
+    nc: 42,
+    title: "آموزش تیم",
+    description: "دو جلسه",
+    assignee: 8,
+    assignee_name: "کارگر",
+    assignee_title: "کارمند",
+    assignee_is_active: true,
+    due_on: "2026-10-20",
+    status: "TODO",
+    status_label: "انجام نشده",
+    is_overdue: false,
+    completed_at: null,
+    verified_by_name: null,
+    verified_at: null,
+    verification_note: "",
+    cancel_reason: "",
+    created_at: "2026-10-02T06:00:00Z",
+    can_edit: true,
+    can_set_status: true,
+    can_verify: false,
+    can_cancel: true,
+    ...over,
+  };
+}
+
+describe("the status buttons an action offers", () => {
+  it("offers exactly the server's graph, forward first", () => {
+    expect(statusButtons(action({ status: "TODO" })).map((b) => b.status)).toEqual(["IN_PROGRESS"]);
+    expect(statusButtons(action({ status: "IN_PROGRESS" })).map((b) => b.status)).toEqual(["DONE", "TODO"]);
+    expect(statusButtons(action({ status: "DONE" })).map((b) => b.status)).toEqual(["IN_PROGRESS"]);
+    expect(statusButtons(action({ status: "IN_PROGRESS" })).map((b) => b.forward)).toEqual([true, false]);
+  });
+
+  it("never offers a shortcut: no TODO → DONE, and VERIFIED / CANCELLED have their own dialogs", () => {
+    const all = (["TODO", "IN_PROGRESS", "DONE", "VERIFIED", "CANCELLED"] as const).flatMap((status) => statusButtons(action({ status })));
+    expect(all.map((b) => b.status)).not.toContain("VERIFIED");
+    expect(all.map((b) => b.status)).not.toContain("CANCELLED");
+    expect(statusButtons(action({ status: "TODO" })).map((b) => b.status)).not.toContain("DONE");
+    expect(statusButtons(action({ status: "VERIFIED" }))).toEqual([]);
+    expect(statusButtons(action({ status: "CANCELLED" }))).toEqual([]);
+  });
+
+  it("offers nothing when the server says the viewer may not move it", () => {
+    expect(statusButtons(action({ status: "IN_PROGRESS", can_set_status: false }))).toEqual([]);
+  });
+});
+
+describe("why a record cannot be closed yet", () => {
+  const base = { status: "IN_PROGRESS" as const, can_add_action: true, can_close: false, actions_total: 0, actions_verified: 0 };
+
+  it("says a plan is needed when there are no actions", () => {
+    expect(closeHint(base)).toBe("برای بستن، دست‌کم یک اقدام اصلاحی لازم است.");
+  });
+
+  it("counts what is still unverified, in Persian digits", () => {
+    expect(closeHint({ ...base, actions_total: 3, actions_verified: 1 })).toBe("برای بستن، ۲ اقدام دیگر باید تایید شود.");
+  });
+
+  it("says nothing when closing is available", () => {
+    expect(closeHint({ ...base, can_close: true, actions_total: 2, actions_verified: 2 })).toBeNull();
+  });
+
+  it("says nothing to someone who could not close it anyway, or on a record not being worked", () => {
+    expect(closeHint({ ...base, can_add_action: false })).toBeNull();
+    expect(closeHint({ ...base, status: "OPEN" })).toBeNull();
+    expect(closeHint({ ...base, status: "CLOSED" })).toBeNull();
+  });
+});
+
+describe("the action form", () => {
+  it("asks for what is missing, in Persian", () => {
+    const errors = validateActionForm(emptyActionForm(), TODAY);
+    expect(Object.keys(errors).sort()).toEqual(["assignee", "due_on", "title"]);
+    expect(validateActionForm({ title: "الف", description: "", assignee: 8, due_on: TODAY }, TODAY)).toEqual({});
+  });
+
+  it("allows a deadline of today but not the past", () => {
+    const form = { title: "الف", description: "", assignee: 8, due_on: "2026-10-01" };
+    expect(validateActionForm(form, TODAY).due_on).toBe("مهلت نمی‌تواند در گذشته باشد.");
+    expect(validateActionForm({ ...form, due_on: TODAY }, TODAY)).toEqual({});
+  });
+
+  it("lets an already-overdue action be edited without being re-dated", () => {
+    const overdue = action({ due_on: "2026-09-20" });
+    const form = { ...actionFormFrom(overdue), title: "عنوان بهتر" };
+    expect(validateActionForm(form, TODAY, overdue)).toEqual({});
+    expect(validateActionForm({ ...form, due_on: "2026-09-25" }, TODAY, overdue).due_on).toBeTruthy(); // a *new* past date is still refused
+  });
+
+  it("builds the create body trimmed", () => {
+    expect(actionCreatePayload({ title: " الف ", description: " ب ", assignee: 8, due_on: TODAY })).toEqual({
+      title: "الف",
+      description: "ب",
+      assignee: 8,
+      due_on: TODAY,
+    });
+  });
+
+  it("builds the edit body from only what changed", () => {
+    const current = action();
+    expect(actionPatchPayload(current, actionFormFrom(current))).toEqual({});
+    expect(actionPatchPayload(current, { ...actionFormFrom(current), assignee: 9, title: " جدید " })).toEqual({ assignee: 9, title: "جدید" });
+    expect(actionPatchPayload(current, { ...actionFormFrom(current), title: `${current.title} ` })).toEqual({});
   });
 });

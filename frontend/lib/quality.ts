@@ -282,3 +282,137 @@ export function qualityEventDetail(event: QualityEvent): string {
   }
   return event.note;
 }
+
+// ---------------------------------------------------------------------------
+// Corrective actions (slice 4)
+// ---------------------------------------------------------------------------
+
+export const ACTION_STATUS_TONE: Record<ActionStatus, QualityTone> = {
+  TODO: "neutral",
+  IN_PROGRESS: "brand",
+  DONE: "warning",
+  VERIFIED: "success",
+  CANCELLED: "neutral",
+};
+
+export interface CorrectiveAction {
+  id: number;
+  nc: number;
+  title: string;
+  description: string;
+  assignee: number;
+  assignee_name: string;
+  assignee_title: string;
+  /** A person deactivated after being assigned: the action stays, and a manager reassigns it. */
+  assignee_is_active: boolean;
+  due_on: string;
+  status: ActionStatus;
+  status_label: string;
+  /** Still the assignee's to do *and* past its deadline — a DONE action waits on a verifier, it is not late. */
+  is_overdue: boolean;
+  completed_at: string | null;
+  verified_by_name: string | null;
+  verified_at: string | null;
+  verification_note: string;
+  cancel_reason: string;
+  created_at: string;
+  /** What the viewer may do right now — the same functions the endpoints enforce. */
+  can_edit: boolean;
+  can_set_status: boolean;
+  can_verify: boolean;
+  can_cancel: boolean;
+}
+
+/** One status button: where it goes and what it says. */
+export interface StatusButton {
+  status: ActionStatus;
+  label: string;
+  /** A step *forward* is the primary button; stepping back is quiet. */
+  forward: boolean;
+}
+
+/** The status moves the viewer may make by hand — the server's graph (`quality/services.STATUS_GRAPH`)
+ *  with a label per move, offered only when the server says `can_set_status`. VERIFIED and CANCELLED are
+ *  never offered here: they have their own dialogs. */
+export function statusButtons(action: Pick<CorrectiveAction, "status" | "can_set_status">): StatusButton[] {
+  if (!action.can_set_status) return [];
+  switch (action.status) {
+    case "TODO":
+      return [{ status: "IN_PROGRESS", label: "شروع کار", forward: true }];
+    case "IN_PROGRESS":
+      return [
+        { status: "DONE", label: "انجام شد", forward: true },
+        { status: "TODO", label: "بازگشت به انجام‌نشده", forward: false },
+      ];
+    case "DONE":
+      return [{ status: "IN_PROGRESS", label: "بازگشت به در حال انجام", forward: false }];
+    default:
+      return [];
+  }
+}
+
+/** Why the close button is missing, for a manager looking at a record being worked — or `null` when it is
+ *  available (or the viewer could not close it anyway). The rule is the server's: at least one action and
+ *  every non-cancelled one verified; the effectiveness note is typed in the dialog. */
+export function closeHint(
+  nc: Pick<NonConformance, "status" | "can_add_action" | "can_close" | "actions_total" | "actions_verified">,
+): string | null {
+  if (nc.status !== "IN_PROGRESS" || !nc.can_add_action || nc.can_close) return null;
+  if (nc.actions_total === 0) return "برای بستن، دست‌کم یک اقدام اصلاحی لازم است.";
+  const unverified = nc.actions_total - nc.actions_verified;
+  return `برای بستن، ${toPersianDigits(unverified)} اقدام دیگر باید تایید شود.`;
+}
+
+export interface ActionForm {
+  title: string;
+  description: string;
+  assignee: number | null;
+  /** ISO date. */
+  due_on: string;
+}
+
+export function emptyActionForm(): ActionForm {
+  return { title: "", description: "", assignee: null, due_on: "" };
+}
+
+export function actionFormFrom(action: CorrectiveAction): ActionForm {
+  return { title: action.title, description: action.description, assignee: action.assignee, due_on: action.due_on };
+}
+
+/** Early Persian messages, as for the report form. A deadline in the past is refused only when it is *new*
+ *  or *changed* — an overdue action must stay editable (its title, say) without being re-dated, which is
+ *  exactly the server's rule. */
+export function validateActionForm(
+  form: ActionForm,
+  today: string,
+  original?: Pick<CorrectiveAction, "due_on">,
+): Partial<Record<keyof ActionForm, string>> {
+  const errors: Partial<Record<keyof ActionForm, string>> = {};
+  if (!form.title.trim()) errors.title = "عنوان اقدام را بنویسید.";
+  else if (form.title.trim().length > TITLE_MAX) errors.title = `عنوان نباید بیش از ${toPersianDigits(TITLE_MAX)} نویسه باشد.`;
+  if (form.description.trim().length > TEXT_MAX) errors.description = `شرح نباید بیش از ${toPersianDigits(TEXT_MAX)} نویسه باشد.`;
+  if (form.assignee === null) errors.assignee = "مسئول انجام اقدام را انتخاب کنید.";
+  if (!form.due_on) errors.due_on = "مهلت را مشخص کنید.";
+  else if (form.due_on < today && form.due_on !== original?.due_on) errors.due_on = "مهلت نمی‌تواند در گذشته باشد.";
+  return errors;
+}
+
+export function actionCreatePayload(form: ActionForm): Record<string, unknown> {
+  return {
+    title: form.title.trim(),
+    description: form.description.trim(),
+    assignee: form.assignee,
+    due_on: form.due_on,
+  };
+}
+
+/** Only what changed, so an edit that changes nothing sends nothing (and logs nothing). */
+export function actionPatchPayload(action: CorrectiveAction, form: ActionForm): Record<string, unknown> {
+  const original = actionFormFrom(action);
+  const next = { ...form, title: form.title.trim(), description: form.description.trim() };
+  const body: Record<string, unknown> = {};
+  for (const key of Object.keys(next) as (keyof ActionForm)[]) {
+    if (next[key] !== original[key]) body[key] = next[key];
+  }
+  return body;
+}

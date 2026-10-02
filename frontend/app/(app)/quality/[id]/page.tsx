@@ -5,21 +5,19 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { apiPost } from "@/lib/api-client";
 import { formatJalali } from "@/lib/jalali";
-import { actionsProgress, actionsSummary, type NcSeverity, type NonConformance } from "@/lib/quality";
-import { toPersianDigits } from "@/lib/jalali";
+import type { NcSeverity, NonConformance } from "@/lib/quality";
 import { useApiQuery } from "@/lib/use-api-query";
 import { Code } from "@/components/Code";
 import { AcceptDialog } from "@/components/quality/AcceptDialog";
+import { ActionsPanel } from "@/components/quality/ActionsPanel";
 import { NcStatusBadge, SeverityBadge } from "@/components/quality/Badges";
 import { NcActivityFeed } from "@/components/quality/NcActivityFeed";
 import { NcFormDialog } from "@/components/quality/NcFormDialog";
 import { TextDialog } from "@/components/quality/TextDialog";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
-import { AlarmClock, ArrowRight, Building2, CalendarSearch, CheckCheck, FileText, ListChecks, Pencil, RotateCcw, ShieldAlert, UserRound, XCircle } from "lucide-react";
-import { Alert } from "@/components/ui/Alert";
+import { ArrowRight, Building2, CalendarSearch, CheckCheck, FileText, Pencil, RotateCcw, ShieldAlert, UserRound, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Card, CardHeader, cardClass } from "@/components/ui/Card";
-import { ProgressBar } from "@/components/ui/ProgressBar";
+import { Card, cardClass } from "@/components/ui/Card";
 import { cx } from "@/components/ui/cx";
 
 type Dialog = "edit" | "accept" | "reject" | "reopen" | null;
@@ -64,8 +62,6 @@ export default function NonConformancePage() {
     await apiPost(`/quality/nonconformances/${ncId}/accept/`, { root_cause: rootCause, severity });
     refresh();
   }
-
-  const progress = actionsProgress(nc);
 
   return (
     <div className="space-y-6">
@@ -153,27 +149,7 @@ export default function NonConformancePage() {
             </div>
           </Card>
 
-          <Card aria-label="اقدام‌های اصلاحی">
-            <CardHeader title="اقدام‌های اصلاحی" icon={<ListChecks />} />
-            {nc.status === "OPEN" && (
-              <Alert tone="info">پس از پذیرش و ریشه‌یابی توسط مسئول، می‌توان برای این مورد اقدام اصلاحی تعیین کرد.</Alert>
-            )}
-            {nc.status === "REJECTED" && <Alert tone="warning">این مورد رد شده و اقدامی برای آن تعیین نمی‌شود.</Alert>}
-            {(nc.status === "IN_PROGRESS" || nc.status === "CLOSED") && (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <ProgressBar value={progress} className="h-2.5 min-w-40 max-w-md flex-1" label="پیشرفت اقدام‌ها" />
-                  <span className="text-sm font-bold text-slate-700">{actionsSummary(nc)}</span>
-                  {nc.actions_overdue > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs text-rose-800 ring-1 ring-inset ring-rose-600/20">
-                      <AlarmClock className="size-3.5" />
-                      {toPersianDigits(nc.actions_overdue)} اقدام دیرکرد
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </Card>
+          <ActionsPanel nc={nc} version={reload} onChanged={refresh} />
         </div>
         <aside>
           <NcActivityFeed ncId={ncId} version={reload} />
