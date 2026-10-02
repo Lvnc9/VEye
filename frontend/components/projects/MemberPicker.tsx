@@ -1,18 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import { useApiQuery } from "@/lib/use-api-query";
 import type { OrgMembership, Person } from "@/lib/organization";
 import type { DraftMember, ProjectRole } from "@/lib/projects";
 import type { Paginated } from "@/lib/types";
-import { buttonClass } from "@/components/ui/Button";
 import { controlClass } from "@/components/ui/Field";
-import { Check, Crown, Search, UserPlus, X } from "lucide-react";
+import { Check, Crown, X } from "lucide-react";
+import { PersonPicker } from "@/components/PersonPicker";
 import { Avatar } from "@/components/ui/Avatar";
 import { SkeletonLines } from "@/components/ui/Skeleton";
 import { cx } from "@/components/ui/cx";
 
-const button = buttonClass({ variant: "secondary", size: "sm" });
 const select = `${controlClass} h-8 px-2 text-xs`;
 
 /**
@@ -29,7 +27,6 @@ export function MemberPicker({
   members: DraftMember[];
   onChange: (members: DraftMember[]) => void;
 }) {
-  const [guestQuery, setGuestQuery] = useState("");
   const seeded = useApiQuery<Paginated<OrgMembership>>(`/org/nodes/${sectionId}/members/?page_size=200`);
   const memberIds = new Set(members.map((m) => m.user));
 
@@ -48,7 +45,6 @@ export function MemberPicker({
   function addGuest(person: Person) {
     if (memberIds.has(person.id)) return;
     onChange([...members, { user: person.id, name: person.full_name, title: person.title, role: "MEMBER" }]);
-    setGuestQuery("");
   }
 
   return (
@@ -111,24 +107,12 @@ export function MemberPicker({
         )}
       </div>
 
-      <div>
-        <label htmlFor="guest-search" className="mb-1.5 block text-xs text-slate-500">
-          افزودن از بخش دیگر
-        </label>
-        <div className="relative">
-          <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
-          <input
-            id="guest-search"
-            value={guestQuery}
-            onChange={(e) => setGuestQuery(e.target.value)}
-            placeholder="جست و جوی نام (دست‌کم دو حرف)"
-            className={`${controlClass} h-10 w-full pr-9 pl-3 text-sm`}
-          />
-        </div>
-        {guestQuery.trim().length >= 2 && (
-          <GuestResults key={guestQuery} query={guestQuery} memberIds={memberIds} onAdd={addGuest} />
-        )}
-      </div>
+      <PersonPicker
+        id="guest-search"
+        label="افزودن از بخش دیگر"
+        excludedIds={memberIds}
+        onPick={addGuest}
+      />
 
       {members.length > 0 && (
         <div>
@@ -158,34 +142,5 @@ export function MemberPicker({
         </div>
       )}
     </div>
-  );
-}
-
-function GuestResults({ query, memberIds, onAdd }: { query: string; memberIds: Set<number>; onAdd: (person: Person) => void }) {
-  const people = useApiQuery<Paginated<Person>>(`/org/people/?q=${encodeURIComponent(query)}&page_size=8`);
-  if (people.loading) return <p className="mt-2 text-xs text-slate-500">در حال جستجو...</p>;
-  if (people.error) return <p className="mt-1 text-xs text-rose-600">{people.error}</p>;
-  const rows = people.data?.results ?? [];
-  if (rows.length === 0) return <p className="mt-1 text-xs text-slate-500">کسی با این نام پیدا نشد.</p>;
-  return (
-    <ul className="mt-2 space-y-1.5 animate-fade-in">
-      {rows.map((person) => {
-        const already = memberIds.has(person.id);
-        return (
-          <li key={person.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition-colors hover:border-slate-300">
-            <span className="flex min-w-0 items-center gap-2">
-              <Avatar name={person.full_name} size="sm" />
-              <span className="min-w-0 truncate">
-                {person.full_name} <span className="text-xs text-slate-500">{person.title}</span>
-              </span>
-            </span>
-            <button type="button" disabled={already} onClick={() => onAdd(person)} className={button}>
-              {already ? <Check /> : <UserPlus />}
-              {already ? "افزوده شد" : "افزودن"}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
   );
 }

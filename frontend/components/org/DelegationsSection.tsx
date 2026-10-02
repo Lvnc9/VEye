@@ -8,11 +8,12 @@ import type { Paginated } from "@/lib/types";
 import { useApiQuery } from "@/lib/use-api-query";
 import { ErrorBanner } from "@/components/StatusBanner";
 import { JalaliDatePicker } from "@/components/JalaliDatePicker";
+import { PersonPicker } from "@/components/PersonPicker";
 import { Avatar } from "@/components/ui/Avatar";
 import { buttonClass } from "@/components/ui/Button";
 import { controlClass } from "@/components/ui/Field";
 import { IconButton } from "@/components/ui/IconButton";
-import { Check, Search, UserCheck, UserX } from "lucide-react";
+import { Check, UserCheck, UserX } from "lucide-react";
 
 const smallButton = buttonClass({ variant: "secondary", size: "sm" });
 
@@ -31,7 +32,6 @@ export function DelegationsSection({ node }: { node: OrgNode }) {
   const [reload, setReload] = useState(0);
   const delegations = useApiQuery<Paginated<Delegation>>(`/org/delegations/?node=${node.id}&page_size=50`, reload);
   const [delegate, setDelegate] = useState<Person | null>(null);
-  const [query, setQuery] = useState("");
   const [from, setFrom] = useState(todayIso());
   const [to, setTo] = useState("");
   const [note, setNote] = useState("");
@@ -47,7 +47,6 @@ export function DelegationsSection({ node }: { node: OrgNode }) {
     try {
       await apiPost("/org/delegations/", { node: node.id, delegate: delegate.id, starts_on: from, ends_on: to, note });
       setDelegate(null);
-      setQuery("");
       setTo("");
       setNote("");
       setReload((n) => n + 1);
@@ -110,19 +109,13 @@ export function DelegationsSection({ node }: { node: OrgNode }) {
             </button>
           </p>
         ) : (
-          <>
-            <div className="relative">
-              <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
-              <input
-                aria-label="جست‌وجوی جانشین"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="نام جانشین (دست‌کم دو حرف)"
-                className={`${controlClass} h-10 w-full pr-9 pl-3 text-sm`}
-              />
-            </div>
-            {query.trim().length >= 2 && <PersonResults key={query} query={query} onPick={setDelegate} />}
-          </>
+          <PersonPicker
+            id={`deleg-person-${node.id}`}
+            ariaLabel="جست‌وجوی جانشین"
+            placeholder="نام جانشین (دست‌کم دو حرف)"
+            pickLabel="انتخاب"
+            onPick={setDelegate}
+          />
         )}
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -148,31 +141,5 @@ export function DelegationsSection({ node }: { node: OrgNode }) {
         </button>
       </div>
     </section>
-  );
-}
-
-function PersonResults({ query, onPick }: { query: string; onPick: (person: Person) => void }) {
-  const people = useApiQuery<Paginated<Person>>(`/org/people/?q=${encodeURIComponent(query)}&page_size=6`);
-  if (people.loading) return <p className="text-xs text-slate-500">در حال جستجو...</p>;
-  if (people.error) return <p className="text-xs text-rose-600">{people.error}</p>;
-  const rows = people.data?.results ?? [];
-  if (rows.length === 0) return <p className="text-xs text-slate-500">کسی با این نام پیدا نشد.</p>;
-  return (
-    <ul className="space-y-1.5">
-      {rows.map((person) => (
-        <li key={person.id}>
-          <button
-            type="button"
-            onClick={() => onPick(person)}
-            className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-start text-sm transition-colors hover:border-slate-300"
-          >
-            <Avatar name={person.full_name} size="sm" />
-            <span className="min-w-0 truncate">
-              {person.full_name} <span className="text-xs text-slate-500">{person.title}</span>
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
   );
 }

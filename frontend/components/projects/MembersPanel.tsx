@@ -3,14 +3,12 @@
 import { useState } from "react";
 import { ApiError, apiDelete, apiPatch, apiPost } from "@/lib/api-client";
 import type { ProjectMember, ProjectRole } from "@/lib/projects";
-import type { Paginated } from "@/lib/types";
 import type { Person } from "@/lib/organization";
-import { useApiQuery } from "@/lib/use-api-query";
 import { ErrorBanner } from "@/components/StatusBanner";
+import { PersonPicker } from "@/components/PersonPicker";
 import { Avatar } from "@/components/ui/Avatar";
-import { buttonClass } from "@/components/ui/Button";
 import { controlClass } from "@/components/ui/Field";
-import { Check, Crown, Search, UserMinus, UserPlus, Users } from "lucide-react";
+import { Crown, UserMinus, Users } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { IconButton } from "@/components/ui/IconButton";
 
@@ -34,7 +32,6 @@ export function MembersPanel({
   canEdit: boolean;
   onChanged: () => void;
 }) {
-  const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const memberIds = new Set(members.map((m) => m.user));
@@ -70,7 +67,6 @@ export function MembersPanel({
     setError(null);
     try {
       await apiPost(`/projects/${projectId}/members/`, { user: person.id });
-      setQuery("");
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "افزودن عضو ممکن نشد.");
@@ -128,67 +124,9 @@ export function MembersPanel({
 
       {canEdit && (
         <div className="mt-4 border-t border-slate-100 pt-4">
-          <label htmlFor="add-member-search" className="mb-1.5 block text-xs text-slate-500">
-            افزودن عضو
-          </label>
-          <div className="relative">
-            <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
-            <input
-              id="add-member-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="جست و جوی نام (دست‌کم دو حرف)"
-              className={`${controlClass} h-10 w-full pr-9 pl-3 text-sm`}
-            />
-          </div>
-          {query.trim().length >= 2 && <PersonResults key={query} query={query} memberIds={memberIds} onAdd={add} />}
+          <PersonPicker id="add-member-search" label="افزودن عضو" excludedIds={memberIds} onPick={add} />
         </div>
       )}
     </Card>
-  );
-}
-
-function PersonResults({
-  query,
-  memberIds,
-  onAdd,
-}: {
-  query: string;
-  memberIds: Set<number>;
-  onAdd: (person: Person) => void;
-}) {
-  const people = useApiQuery<Paginated<Person>>(`/org/people/?q=${encodeURIComponent(query)}&page_size=8`);
-  if (people.loading) return <p className="mt-2 text-xs text-slate-500">در حال جستجو...</p>;
-  if (people.error) return <p className="mt-1 text-xs text-rose-600">{people.error}</p>;
-  const rows = people.data?.results ?? [];
-  if (rows.length === 0) return <p className="mt-1 text-xs text-slate-500">کسی با این نام پیدا نشد.</p>;
-  return (
-    <ul className="mt-2 space-y-1.5 animate-fade-in">
-      {rows.map((person) => {
-        const already = memberIds.has(person.id);
-        return (
-          <li
-            key={person.id}
-            className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition-colors hover:border-slate-300"
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <Avatar name={person.full_name} size="sm" />
-              <span className="min-w-0 truncate">
-                {person.full_name} <span className="text-xs text-slate-500">{person.title}</span>
-              </span>
-            </span>
-            <button
-              type="button"
-              disabled={already}
-              onClick={() => onAdd(person)}
-              className={buttonClass({ variant: "secondary", size: "xs", className: "shrink-0" })}
-            >
-              {already ? <Check /> : <UserPlus />}
-              {already ? "افزوده شد" : "افزودن"}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
   );
 }
