@@ -4,6 +4,7 @@ import { useState } from "react";
 import { OrgTreeList } from "@/components/OrgTreeList";
 import { OrgChart } from "@/components/org/OrgChart";
 import { NodePanel } from "@/components/org/NodePanel";
+import { OrgActivityFeed } from "@/components/org/OrgActivityFeed";
 import { EmptyBanner, ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { useApiQuery } from "@/lib/use-api-query";
 import { countByKind, type Company, type OrgNode, type OrgTreeResponse } from "@/lib/organization";
@@ -102,6 +103,12 @@ export default function OrganizationPage() {
           />
         )}
       </div>
+
+      <OrgActivityFeed
+        node={selected ? { id: selected.id, name: selected.name } : null}
+        version={reload}
+        onClearNode={() => setSelectedId(null)}
+      />
     </div>
   );
 }

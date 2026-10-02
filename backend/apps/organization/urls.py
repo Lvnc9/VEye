@@ -8,6 +8,7 @@ from .views import (
     DelegationViewSet,
     DocumentDefaultsView,
     MembershipViewSet,
+    OrgActivityView,
     OrgNodeViewSet,
     OrgTreeView,
     PeopleView,
@@ -29,5 +30,6 @@ urlpatterns = [
     path("org/company/logo/", CompanyLogoView.as_view(), name="org-company-logo"),
     path("org/company/document-defaults/", DocumentDefaultsView.as_view(), name="org-company-document-defaults"),
     path("org/people/", PeopleView.as_view(), name="org-people"),
+    path("org/activity/", OrgActivityView.as_view(), name="org-activity"),
     path("", include(router.urls)),
 ]

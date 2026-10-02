@@ -5,7 +5,7 @@
  * that. Pure functions, no fetching — relative imports only (vitest has no `@/` alias).
  */
 
-import { toPersianDigits } from "./jalali";
+import { formatJalali, toPersianDigits } from "./jalali";
 
 export type OrgNodeKind = "COMPANY" | "DOMAIN" | "UNIT" | "SECTION";
 
@@ -351,4 +351,72 @@ export interface Delegation {
   note: string;
   /** Covering today (the server's clock). */
   is_active: boolean;
+}
+
+/** One line of the chart's change history (Phase 16, `GET /org/activity/`). Every name is a text
+ *  snapshot, so a line keeps reading correctly after the person or node has changed. */
+export interface OrgEvent {
+  id: number;
+  kind: string;
+  kind_label: string;
+  actor_name: string;
+  actor_title: string;
+  node: number | null;
+  node_name: string;
+  subject_name: string;
+  from_value: string;
+  to_value: string;
+  note: string;
+  created_at: string;
+}
+
+export const ORG_EVENT_TONE: Record<string, string> = {
+  node_created: "bg-brand-500",
+  node_renamed: "bg-amber-500",
+  node_moved: "bg-orange-500",
+  node_archived: "bg-slate-400",
+  node_unarchived: "bg-emerald-500",
+  node_deleted: "bg-rose-500",
+  member_added: "bg-teal-500",
+  member_removed: "bg-rose-500",
+  lead_granted: "bg-violet-500",
+  lead_revoked: "bg-slate-400",
+  delegation_created: "bg-indigo-500",
+  delegation_ended: "bg-slate-400",
+};
+
+/** The sentence a history line shows, built from the snapshots (never from live rows). An unknown
+ *  kind — a newer server — falls back to its own label rather than showing nothing. */
+export function describeOrgEvent(event: OrgEvent): string {
+  const node = `«${event.node_name}»`;
+  switch (event.kind) {
+    case "node_created":
+      return `${node}${event.to_value ? ` (${event.to_value})` : ""} ایجاد شد`;
+    case "node_renamed":
+      return `نام «${event.from_value}» به «${event.to_value}» تغییر کرد`;
+    case "node_moved":
+      return event.from_value
+        ? `${node} از «${event.from_value}» به «${event.to_value}» منتقل شد`
+        : `${node} به «${event.to_value}» منتقل شد`;
+    case "node_archived":
+      return `${node} بایگانی شد`;
+    case "node_unarchived":
+      return `${node} از بایگانی خارج شد`;
+    case "node_deleted":
+      return `${node} حذف شد`;
+    case "member_added":
+      return `${event.subject_name} به ${node} افزوده شد${event.note ? ` (${event.note})` : ""}`;
+    case "member_removed":
+      return `${event.subject_name} از ${node} حذف شد`;
+    case "lead_granted":
+      return `${event.subject_name} مسئول ${node} شد`;
+    case "lead_revoked":
+      return `مسئولیت ${node} از ${event.subject_name} برداشته شد`;
+    case "delegation_created":
+      return `${event.subject_name} جانشین ${node} شد (${formatJalali(event.from_value)} تا ${formatJalali(event.to_value)})`;
+    case "delegation_ended":
+      return `جانشینی ${event.subject_name} برای ${node} پایان یافت`;
+    default:
+      return event.kind_label;
+  }
 }

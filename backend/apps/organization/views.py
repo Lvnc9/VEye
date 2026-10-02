@@ -16,7 +16,7 @@ from apps.core.permissions import HasCapability
 
 from . import delegations, memberships, queries, services, tree
 from .access import CanEditNode, CanManageMembership, access_for
-from .models import Company, Delegation, Membership, OrgNode
+from .models import Company, Delegation, Membership, OrgEvent, OrgEventKind, OrgNode
 from .serializers import (
     CompanyUpdateSerializer,
     DelegationCreateSerializer,
@@ -25,6 +25,7 @@ from .serializers import (
     MembershipCreateSerializer,
     MembershipSerializer,
     MembershipUpdateSerializer,
+    OrgEventSerializer,
     OrgNodeCreateSerializer,
     OrgNodeSerializer,
     OrgNodeUpdateSerializer,
@@ -98,11 +99,11 @@ class OrgNodeViewSet(viewsets.ModelViewSet):
         if new_parent is not None and new_parent.pk != node.parent_id:
             if not access_for(request).can_add_child(new_parent):
                 raise PermissionDenied("برای جابه‌جایی باید مسئول گرهٔ مقصد (یا گره‌های بالادستی آن) هم باشید.")
-        node = tree.update_node(node, name=data.get("name"), parent=new_parent)
+        node = tree.update_node(node, name=data.get("name"), parent=new_parent, actor=request.user)
         return Response(self.get_serializer(node).data)
 
     def destroy(self, request, *args, **kwargs):
-        tree.delete_node(self.get_object())
+        tree.delete_node(self.get_object(), actor=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["get"])
@@ -116,11 +117,11 @@ class OrgNodeViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def archive(self, request, pk=None):
-        return Response(self.get_serializer(tree.archive_node(self.get_object())).data)
+        return Response(self.get_serializer(tree.archive_node(self.get_object(), actor=request.user)).data)
 
     @action(detail=True, methods=["post"])
     def unarchive(self, request, pk=None):
-        return Response(self.get_serializer(tree.unarchive_node(self.get_object())).data)
+        return Response(self.get_serializer(tree.unarchive_node(self.get_object(), actor=request.user)).data)
 
 
 class OrgTreeView(APIView):
@@ -278,11 +279,12 @@ class MembershipViewSet(viewsets.ModelViewSet):
             is_primary=data.get("is_primary"),
             position_label=data.get("position_label"),
             may_touch=access_for(request).can_manage_members,
+            actor=request.user,
         )
         return Response(self._payload(membership))
 
     def destroy(self, request, *args, **kwargs):
-        memberships.remove_membership(self.get_object())
+        memberships.remove_membership(self.get_object(), actor=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _payload(self, membership):
@@ -357,5 +359,31 @@ class DelegationViewSet(viewsets.ModelViewSet):
         return Response(DelegationSerializer(delegation).data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, *args, **kwargs):
-        delegations.end_delegation(self.get_object())
+        delegations.end_delegation(self.get_object(), actor=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class OrgActivityView(generics.ListAPIView):
+    """`GET /org/activity/` — the chart's change history (Phase 16), newest first: who created,
+    renamed, moved, archived or deleted a node, who was added, removed or made مسئول, and who named
+    a temporary cover. Readable by anyone signed in, like the chart itself. Filters: `?node=<id>`
+    (that node's own events), `?kind=`, `?days=<n>` (only the last n days)."""
+
+    serializer_class = OrgEventSerializer
+    pagination_class = DefaultPagination
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        queryset = OrgEvent.objects.all()
+        params = self.request.query_params
+        if node := params.get("node"):
+            queryset = queryset.filter(node_id=node) if node.isdigit() else queryset.none()
+        if kind := params.get("kind"):
+            queryset = queryset.filter(kind=kind) if kind in OrgEventKind.values else queryset.none()
+        if (days := params.get("days")) and days.isdigit():
+            queryset = queryset.filter(created_at__gte=timezone.now() - timedelta(days=int(days)))
+        return queryset

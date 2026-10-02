@@ -9,6 +9,7 @@ import {
   clampZoom,
   countByKind,
   describeNodeBlockers,
+  describeOrgEvent,
   descendantsOf,
   fitView,
   initials,
@@ -17,6 +18,7 @@ import {
   pathLabel,
   validNewParents,
   zoomAround,
+  type OrgEvent,
   type OrgNode,
   type OrgNodeKind,
 } from "./organization";
@@ -284,5 +286,55 @@ describe("describeNodeBlockers", () => {
     expect(describeNodeBlockers("x")).toBeNull();
     expect(describeNodeBlockers({ detail: "no" })).toBeNull();
     expect(describeNodeBlockers({ children: 0, members: 0 })).toBeNull();
+  });
+});
+
+describe("describeOrgEvent (Phase 16: a line of the chart's history)", () => {
+  const event = (over: Partial<OrgEvent>): OrgEvent => ({
+    id: 1,
+    kind: "node_created",
+    kind_label: "برچسب",
+    actor_name: "مدیر",
+    actor_title: "",
+    node: 1,
+    node_name: "واحد فروش",
+    subject_name: "علی رضایی",
+    from_value: "",
+    to_value: "",
+    note: "",
+    created_at: "2026-10-02T06:00:00Z",
+    ...over,
+  });
+
+  it("reads each kind as a sentence from the snapshots", () => {
+    expect(describeOrgEvent(event({ kind: "node_created", to_value: "واحد" }))).toBe("«واحد فروش» (واحد) ایجاد شد");
+    expect(describeOrgEvent(event({ kind: "node_renamed", from_value: "قدیم", to_value: "جدید" }))).toBe(
+      "نام «قدیم» به «جدید» تغییر کرد",
+    );
+    expect(describeOrgEvent(event({ kind: "node_moved", from_value: "حوزه یک", to_value: "حوزه دو" }))).toBe(
+      "«واحد فروش» از «حوزه یک» به «حوزه دو» منتقل شد",
+    );
+    expect(describeOrgEvent(event({ kind: "member_added", note: "مسئول" }))).toBe("علی رضایی به «واحد فروش» افزوده شد (مسئول)");
+    expect(describeOrgEvent(event({ kind: "member_added" }))).toBe("علی رضایی به «واحد فروش» افزوده شد");
+    expect(describeOrgEvent(event({ kind: "lead_granted" }))).toBe("علی رضایی مسئول «واحد فروش» شد");
+    expect(describeOrgEvent(event({ kind: "lead_revoked" }))).toBe("مسئولیت «واحد فروش» از علی رضایی برداشته شد");
+    expect(describeOrgEvent(event({ kind: "node_deleted" }))).toBe("«واحد فروش» حذف شد");
+  });
+
+  it("copes with a move that has no recorded old parent", () => {
+    expect(describeOrgEvent(event({ kind: "node_moved", from_value: "", to_value: "حوزه دو" }))).toBe(
+      "«واحد فروش» به «حوزه دو» منتقل شد",
+    );
+  });
+
+  it("shows a delegation's window in Jalali", () => {
+    const text = describeOrgEvent(event({ kind: "delegation_created", from_value: "2026-10-02", to_value: "2026-10-09" }));
+    expect(text.startsWith("علی رضایی جانشین «واحد فروش» شد (")).toBe(true);
+    expect(text).toContain(" تا ");
+    expect(text).not.toContain("2026");
+  });
+
+  it("falls back to the server's label for a kind it does not know", () => {
+    expect(describeOrgEvent(event({ kind: "something_new" }))).toBe("برچسب");
   });
 });

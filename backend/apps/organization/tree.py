@@ -26,7 +26,8 @@ from apps.core.text import normalize_search_term, normalize_title
 
 from apps.chat import services as chat
 
-from .models import ALLOWED_PARENT_KINDS, NODE_NAME_CONSTRAINT, OrgNode, OrgNodeKind
+from . import events
+from .models import ALLOWED_PARENT_KINDS, NODE_NAME_CONSTRAINT, OrgEventKind, OrgNode, OrgNodeKind
 from .setup_state import STEP_FOR_NODE_KIND, advance_step
 
 PATH_SEGMENT_WIDTH = 10
@@ -147,23 +148,27 @@ def create_node(*, kind: str, name: str, parent: OrgNode, created_by=None) -> Or
     name, key = _clean_name(name)
     _check_name_free(parent.pk, key)
     node = _insert(kind=kind, parent=parent, name=name, key=key, created_by=created_by)
+    events.record(OrgEventKind.NODE_CREATED, actor=created_by, node=node, to_value=node.get_kind_display())
     advance_step(STEP_FOR_NODE_KIND[kind])
     return node
 
 
 @transaction.atomic
-def rename_node(node: OrgNode, name: str) -> OrgNode:
+def rename_node(node: OrgNode, name: str, *, actor=None) -> OrgNode:
     node = lock_node(node.pk)
     name, key = _clean_name(name)
     _check_name_free(node.parent_id, key, exclude_pk=node.pk)
+    old_name = node.name
     node.name, node.name_key = name, key
     with _name_collisions_as_conflicts(node.parent_id, key, exclude_pk=node.pk):
         node.save(update_fields=["name", "name_key", "updated_at"])
+    if name != old_name:
+        events.record(OrgEventKind.NODE_RENAMED, actor=actor, node=node, from_value=old_name, to_value=name)
     return node
 
 
 @transaction.atomic
-def move_node(node: OrgNode, new_parent: OrgNode) -> OrgNode:
+def move_node(node: OrgNode, new_parent: OrgNode, *, actor=None) -> OrgNode:
     """Re-parent a node together with its whole subtree.
 
     Every descendant's `path` and `depth` shift in one UPDATE. The kind table still
@@ -188,6 +193,7 @@ def move_node(node: OrgNode, new_parent: OrgNode) -> OrgNode:
     # create "under the subtree" is a create under `node`, which the lock above already
     # serialises (verified with real threads). If nodes below a movable node ever get
     # children of their own, lock `path__startswith=node.path` here.
+    old_parent_name = node.parent.name if node.parent_id else ""
     old_prefix = node.path
     new_prefix = new_parent.path + _segment(node.pk)
     depth_shift = new_parent.depth + 1 - node.depth
@@ -201,21 +207,26 @@ def move_node(node: OrgNode, new_parent: OrgNode) -> OrgNode:
         updated_at=timezone.now(),
     )
     node.refresh_from_db()
+    events.record(
+        OrgEventKind.NODE_MOVED, actor=actor, node=node, from_value=old_parent_name, to_value=new_parent.name
+    )
     return node
 
 
 @transaction.atomic
-def update_node(node: OrgNode, *, name: str | None = None, parent: OrgNode | None = None) -> OrgNode:
+def update_node(
+    node: OrgNode, *, name: str | None = None, parent: OrgNode | None = None, actor=None
+) -> OrgNode:
     """A rename and/or a move as one unit: either both land or neither does."""
     if name is not None:
-        node = rename_node(node, name)
+        node = rename_node(node, name, actor=actor)
     if parent is not None:
-        node = move_node(node, parent)
+        node = move_node(node, parent, actor=actor)
     return node
 
 
 @transaction.atomic
-def archive_node(node: OrgNode) -> OrgNode:
+def archive_node(node: OrgNode, *, actor=None) -> OrgNode:
     """The supported retirement for a node that has (or had) people and work.
 
     Refused while it still has active children, so an active node never sits under an
@@ -233,11 +244,12 @@ def archive_node(node: OrgNode) -> OrgNode:
         )
     node.is_active = False
     node.save(update_fields=["is_active", "updated_at"])
+    events.record(OrgEventKind.NODE_ARCHIVED, actor=actor, node=node)
     return node
 
 
 @transaction.atomic
-def unarchive_node(node: OrgNode) -> OrgNode:
+def unarchive_node(node: OrgNode, *, actor=None) -> OrgNode:
     node = lock_node(node.pk)
     if node.is_active:
         return node
@@ -245,6 +257,7 @@ def unarchive_node(node: OrgNode) -> OrgNode:
         _require_active(lock_node(node.parent_id))
     node.is_active = True
     node.save(update_fields=["is_active", "updated_at"])
+    events.record(OrgEventKind.NODE_UNARCHIVED, actor=actor, node=node)
     return node
 
 
@@ -262,7 +275,7 @@ def node_blockers(node: OrgNode) -> dict[str, int]:
 
 
 @transaction.atomic
-def delete_node(node: OrgNode) -> None:
+def delete_node(node: OrgNode, *, actor=None) -> None:
     """Delete an empty node. PROTECT on every inbound foreign key is the real net; this
     pre-flight exists to say *why* — an unhandled ProtectedError would be a 500."""
     node = lock_node(node.pk)
@@ -275,4 +288,6 @@ def delete_node(node: OrgNode) -> None:
             **blockers,
         )
     chat.delete_node_conversations(node)
+    # Recorded first: the event's FK to the node is SET_NULL, and `node_name` keeps it readable.
+    events.record(OrgEventKind.NODE_DELETED, actor=actor, node=node, from_value=node.get_kind_display())
     node.delete()

@@ -31,7 +31,8 @@ from apps.core.text import normalize_title
 from apps.notifications import services as notifications
 from apps.notifications.models import NotificationKind
 
-from .models import Membership, SetupStep
+from . import events
+from .models import Membership, OrgEventKind, SetupStep
 from .setup_state import advance_step
 from .tree import lock_node
 
@@ -110,6 +111,9 @@ def add_membership(
         added_by=added_by,
     )
     chat.post_system_message(node, f"{user.full_name} به گفتگو اضافه شد.")
+    events.record(
+        OrgEventKind.MEMBER_ADDED, actor=added_by, node=node, subject=user, note="مسئول" if is_lead else ""
+    )
     notifications.notify(
         user,
         kind=NotificationKind.LEAD_ASSIGNED if is_lead else NotificationKind.MEMBERSHIP_ADDED,
@@ -129,6 +133,7 @@ def update_membership(
     is_primary: bool | None = None,
     position_label: str | None = None,
     may_touch=None,
+    actor=None,
 ) -> Membership:
     """Change what a membership says. Which person and which node are fixed — to move someone,
     remove the membership and add a new one, so there is never an ambiguous "before"."""
@@ -145,11 +150,19 @@ def update_membership(
         Membership.objects.filter(user_id=membership.user_id, is_primary=True).update(is_primary=False)
         membership.is_primary = True
     became_lead = is_lead and not membership.is_lead
+    stopped_leading = is_lead is False and membership.is_lead
     if is_lead is not None:
         membership.is_lead = is_lead
     if position_label is not None:
         membership.position_label = normalize_title(position_label)
     membership.save(update_fields=["is_primary", "is_lead", "position_label", "updated_at"])
+    if became_lead or stopped_leading:
+        events.record(
+            OrgEventKind.LEAD_GRANTED if became_lead else OrgEventKind.LEAD_REVOKED,
+            actor=actor,
+            node=membership.node,
+            subject=membership.user,
+        )
     if became_lead:
         notifications.notify(
             membership.user,
@@ -161,13 +174,14 @@ def update_membership(
 
 
 @transaction.atomic
-def remove_membership(membership: Membership) -> None:
+def remove_membership(membership: Membership, *, actor=None) -> None:
     _lock_user(membership.user_id)
     membership = _lock_membership(membership.pk)
     was_primary = membership.is_primary
     user, node = membership.user, membership.node
     membership.delete()
     chat.post_system_message(node, f"{user.full_name} از گفتگو خارج شد.")
+    events.record(OrgEventKind.MEMBER_REMOVED, actor=actor, node=node, subject=user)
     notifications.notify(
         user,
         kind=NotificationKind.MEMBERSHIP_REMOVED,

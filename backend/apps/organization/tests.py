@@ -26,7 +26,7 @@ from apps.notifications.models import Notification, NotificationKind
 
 from . import delegations, memberships, queries, tree
 from .access import OrgAccess, access_for
-from .models import ALLOWED_PARENT_KINDS, Company, Delegation, Membership, OrgNode, OrgNodeKind, SetupStep
+from .models import ALLOWED_PARENT_KINDS, Company, Delegation, Membership, OrgEvent, OrgEventKind, OrgNode, OrgNodeKind, SetupStep
 
 COMPANY, DOMAIN, UNIT, SECTION = (
     OrgNodeKind.COMPANY,
@@ -2027,3 +2027,168 @@ class DelegationApiTests(ApiTestCase):
 
     def test_requires_authentication(self):
         self.assertEqual(APIClient().get(reverse("org-delegation-list")).status_code, 401)
+
+
+# ---------------------------------------------------------------------------
+# Phase 16: the chart's change history
+# ---------------------------------------------------------------------------
+
+
+class OrgEventTests(ApiTestCase):
+    """Every write that changes the structure or someone's place in it leaves one line, with who
+    did it — written by the service in the same transaction, so a refused change leaves none."""
+
+    def setUp(self):
+        super().setUp()
+        self.build()
+        OrgEvent.objects.all().delete()  # building the fixture chart wrote its own «گره ایجاد شد» lines
+        self.ali = person("9600000001", "علی رضایی")
+        self.today = timezone.localdate()
+
+    def kinds(self):
+        return list(OrgEvent.objects.order_by("id").values_list("kind", flat=True))
+
+    def last(self):
+        return OrgEvent.objects.order_by("id").last()
+
+    def test_creating_a_node_through_the_api_names_who_did_it(self):
+        self.as_(self.ceo).post(
+            reverse("org-node-list"), {"kind": SECTION, "name": "بخش نو", "parent": self.u1.pk}, format="json"
+        )
+        event = self.last()
+        self.assertEqual(event.kind, OrgEventKind.NODE_CREATED)
+        self.assertEqual((event.actor_id, event.actor_name, event.node_name), (self.ceo.pk, self.ceo.full_name, "بخش نو"))
+        self.assertEqual(event.actor_title, self.ceo.title)
+
+    def test_renaming_records_the_old_and_new_name(self):
+        self.as_(self.ceo).patch(reverse("org-node-detail", args=[self.u2.pk]), {"name": "مالی و اعتبار"}, format="json")
+        event = self.last()
+        self.assertEqual(event.kind, OrgEventKind.NODE_RENAMED)
+        self.assertEqual((event.from_value, event.to_value), ("واحد مالی", "مالی و اعتبار"))
+
+    def test_a_rename_to_the_same_name_is_not_a_change(self):
+        self.as_(self.ceo).patch(reverse("org-node-detail", args=[self.u2.pk]), {"name": "واحد مالی"}, format="json")
+        self.assertEqual(self.kinds(), [])
+
+    def test_moving_records_the_old_and_new_parent(self):
+        self.as_(self.ceo).patch(reverse("org-node-detail", args=[self.u2.pk]), {"parent": self.d2.pk}, format="json")
+        event = self.last()
+        self.assertEqual(event.kind, OrgEventKind.NODE_MOVED)
+        self.assertEqual((event.from_value, event.to_value), ("حوزه یک", "حوزه دو"))
+
+    def test_a_rename_and_a_move_in_one_request_are_two_lines(self):
+        self.as_(self.ceo).patch(
+            reverse("org-node-detail", args=[self.u2.pk]), {"name": "مالی", "parent": self.d2.pk}, format="json"
+        )
+        self.assertEqual(self.kinds(), [OrgEventKind.NODE_RENAMED, OrgEventKind.NODE_MOVED])
+
+    def test_a_refused_change_leaves_no_line(self):
+        response = self.as_(self.ceo).patch(
+            reverse("org-node-detail", args=[self.u2.pk]), {"name": "واحد فروش", "parent": self.d2.pk}, format="json"
+        )
+        self.assertEqual(response.status_code, 409)  # a واحد named «واحد فروش» already sits under حوزه دو
+        self.assertEqual(self.kinds(), [])
+
+    def test_archive_and_unarchive(self):
+        client = self.as_(self.ceo)
+        client.post(reverse("org-node-archive", args=[self.u2.pk]))
+        client.post(reverse("org-node-unarchive", args=[self.u2.pk]))
+        self.assertEqual(self.kinds(), [OrgEventKind.NODE_ARCHIVED, OrgEventKind.NODE_UNARCHIVED])
+
+    def test_a_deleted_node_stays_readable_in_the_history(self):
+        self.as_(self.ceo).delete(reverse("org-node-detail", args=[self.u4.pk]))
+        event = self.last()
+        self.assertEqual(event.kind, OrgEventKind.NODE_DELETED)
+        self.assertIsNone(event.node_id)  # SET_NULL…
+        self.assertEqual(event.node_name, "واحد مستقل")  # …and the snapshot still says which
+
+    def test_membership_changes_name_the_person_and_the_node(self):
+        client = self.as_(self.ceo)
+        created = client.post(
+            reverse("org-membership-list"), {"user": self.ali.pk, "node": self.s1.pk}, format="json"
+        )
+        membership = created.data["id"]
+        client.patch(reverse("org-membership-detail", args=[membership]), {"is_lead": True}, format="json")
+        client.patch(reverse("org-membership-detail", args=[membership]), {"is_lead": False}, format="json")
+        client.delete(reverse("org-membership-detail", args=[membership]))
+        self.assertEqual(
+            self.kinds(),
+            [OrgEventKind.MEMBER_ADDED, OrgEventKind.LEAD_GRANTED, OrgEventKind.LEAD_REVOKED, OrgEventKind.MEMBER_REMOVED],
+        )
+        self.assertTrue(all(e.subject_name == "علی رضایی" and e.node_name == "بخش یک" for e in OrgEvent.objects.all()))
+        self.assertTrue(all(e.actor_id == self.ceo.pk for e in OrgEvent.objects.all()))
+
+    def test_adding_a_lead_says_so(self):
+        self.as_(self.ceo).post(
+            reverse("org-membership-list"), {"user": self.ali.pk, "node": self.s1.pk, "is_lead": True}, format="json"
+        )
+        self.assertEqual(self.last().note, "مسئول")
+
+    def test_changing_only_a_label_is_not_a_lead_change(self):
+        m = join(self.ali, self.s1, is_lead=True)
+        OrgEvent.objects.all().delete()
+        self.as_(self.ceo).patch(reverse("org-membership-detail", args=[m.pk]), {"position_label": "سرپرست"}, format="json")
+        self.assertEqual(self.kinds(), [])
+
+    def test_delegations_are_logged_both_ways(self):
+        lead = person("9600000002")
+        join(lead, self.u1, is_lead=True)
+        client = self.as_(lead)
+        created = client.post(
+            reverse("org-delegation-list"),
+            {"node": self.u1.pk, "delegate": self.ali.pk, "starts_on": self.today.isoformat(),
+             "ends_on": (self.today + timedelta(days=3)).isoformat()},
+            format="json",
+        )
+        client.delete(reverse("org-delegation-detail", args=[created.data["id"]]))
+        created_event, ended_event = OrgEvent.objects.filter(kind__startswith="delegation").order_by("id")
+        self.assertEqual(created_event.kind, OrgEventKind.DELEGATION_CREATED)
+        self.assertEqual((created_event.actor_id, created_event.subject_name), (lead.pk, "علی رضایی"))
+        self.assertEqual(created_event.to_value, str(self.today + timedelta(days=3)))
+        self.assertEqual(ended_event.kind, OrgEventKind.DELEGATION_ENDED)
+
+    def test_a_change_with_no_actor_is_recorded_as_the_system(self):
+        add(UNIT, "واحد تازه", self.root)  # a fixture, a bootstrap — nobody signed in
+        event = self.last()
+        self.assertEqual((event.actor_id, event.actor_name), (None, "سیستم"))
+
+    def test_the_history_survives_the_actor_leaving(self):
+        self.as_(self.ceo).post(reverse("org-node-archive", args=[self.u2.pk]))
+        self.ceo.is_active = False
+        self.ceo.save()
+        self.assertEqual(self.last().actor_name, self.ceo.full_name)
+
+
+class OrgActivityApiTests(ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.build()
+        OrgEvent.objects.all().delete()  # the fixture chart's own «گره ایجاد شد» lines
+        self.client_ceo = self.as_(self.ceo)
+        self.client.post(reverse("org-node-archive", args=[self.u2.pk]))
+        self.client.patch(reverse("org-node-detail", args=[self.u4.pk]), {"name": "مستقل"}, format="json")
+
+    def test_requires_authentication(self):
+        self.assertEqual(APIClient().get(reverse("org-activity")).status_code, 401)
+
+    def test_anyone_signed_in_reads_it_newest_first(self):
+        rows = self.as_(self.guild).get(reverse("org-activity")).data["results"]
+        self.assertEqual([r["kind"] for r in rows[:2]], [OrgEventKind.NODE_RENAMED, OrgEventKind.NODE_ARCHIVED])
+        self.assertEqual(set(rows[0]), {
+            "id", "kind", "kind_label", "actor_name", "actor_title", "node", "node_name",
+            "subject_name", "from_value", "to_value", "note", "created_at",
+        })  # names only: no national code, phone or user id
+
+    def test_filters(self):
+        client = self.as_(self.guild)
+        by_node = client.get(reverse("org-activity"), {"node": self.u2.pk}).data["results"]
+        self.assertEqual([r["kind"] for r in by_node], [OrgEventKind.NODE_ARCHIVED])
+        by_kind = client.get(reverse("org-activity"), {"kind": OrgEventKind.NODE_RENAMED}).data["results"]
+        self.assertEqual([r["node_name"] for r in by_kind], ["مستقل"])
+        self.assertEqual(client.get(reverse("org-activity"), {"kind": "nonsense"}).data["count"], 0)
+        self.assertEqual(client.get(reverse("org-activity"), {"node": "x"}).data["count"], 0)
+
+    def test_days_keeps_only_recent_lines(self):
+        OrgEvent.objects.filter(kind=OrgEventKind.NODE_ARCHIVED).update(created_at=timezone.now() - timedelta(days=40))
+        recent = self.as_(self.guild).get(reverse("org-activity"), {"days": 7}).data["results"]
+        self.assertEqual([r["kind"] for r in recent], [OrgEventKind.NODE_RENAMED])

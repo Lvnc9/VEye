@@ -247,3 +247,50 @@ class Delegation(TimeStampedModel):
 
     def __str__(self):
         return f"{self.delegate.full_name} covers {self.node.name} ({self.starts_on}–{self.ends_on})"
+
+
+class OrgEventKind(models.TextChoices):
+    NODE_CREATED = "node_created", "گره ایجاد شد"
+    NODE_RENAMED = "node_renamed", "نام گره تغییر کرد"
+    NODE_MOVED = "node_moved", "گره جابه‌جا شد"
+    NODE_ARCHIVED = "node_archived", "گره بایگانی شد"
+    NODE_UNARCHIVED = "node_unarchived", "گره از بایگانی خارج شد"
+    NODE_DELETED = "node_deleted", "گره حذف شد"
+    MEMBER_ADDED = "member_added", "عضو افزوده شد"
+    MEMBER_REMOVED = "member_removed", "عضو حذف شد"
+    LEAD_GRANTED = "lead_granted", "مسئولیت واگذار شد"
+    LEAD_REVOKED = "lead_revoked", "مسئولیت برداشته شد"
+    DELEGATION_CREATED = "delegation_created", "جانشین موقت تعیین شد"
+    DELEGATION_ENDED = "delegation_ended", "جانشینی موقت پایان یافت"
+
+
+class OrgEvent(TimeStampedModel):
+    """One line of the chart's change history (Phase 16) — who changed the structure or someone's
+    place in it, and when. A near-copy of `DocumentEvent`/`ProjectEvent`, including the load-bearing
+    decision: the actor, the node and the person are *text snapshots* beside their (SET_NULL)
+    foreign keys, so the trail keeps reading correctly after someone is deactivated, a node is
+    renamed or a node is deleted. Written by the service functions (`events.record`) inside the same
+    transaction as the change — never by a signal. Before this, a change to `is_lead` or to the tree
+    left only an `updated_at`: the one place in the app where "who made X a مسئول?" had no answer.
+    """
+
+    kind = models.CharField(max_length=24, choices=OrgEventKind.choices)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    actor_name = models.CharField(max_length=255)
+    actor_title = models.CharField(max_length=255, blank=True)
+    node = models.ForeignKey(OrgNode, null=True, blank=True, on_delete=models.SET_NULL, related_name="events")
+    node_name = models.CharField(max_length=255, blank=True)
+    subject = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    #: The person the change is about (a member, a delegate), when there is one.
+    subject_name = models.CharField(max_length=255, blank=True)
+    #: A rename's old and new name, or a move's old and new parent.
+    from_value = models.CharField(max_length=255, blank=True)
+    to_value = models.CharField(max_length=255, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [Index(fields=["node", "created_at"], name="orgevent_node_time_idx")]
+
+    def __str__(self):
+        return f"{self.kind} by {self.actor_name}"

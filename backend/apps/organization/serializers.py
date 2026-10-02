@@ -3,7 +3,7 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from .access import access_for
-from .models import Company, Delegation, Membership, OrgNode, OrgNodeKind
+from .models import Company, Delegation, Membership, OrgEvent, OrgNode, OrgNodeKind
 
 User = get_user_model()
 
@@ -223,3 +223,18 @@ class DelegationCreateSerializer(serializers.Serializer):
         if attrs["ends_on"] < attrs["starts_on"]:
             raise serializers.ValidationError({"ends_on": ["پایان بازه نباید پیش از شروع آن باشد."]})
         return attrs
+
+
+class OrgEventSerializer(serializers.ModelSerializer):
+    """One line of the chart's history. Names only — the snapshots, so a line still reads correctly
+    after the person, the node or its name has changed. Never a national code or phone."""
+
+    kind_label = serializers.CharField(source="get_kind_display", read_only=True)
+
+    class Meta:
+        model = OrgEvent
+        fields = [
+            "id", "kind", "kind_label", "actor_name", "actor_title", "node", "node_name",
+            "subject_name", "from_value", "to_value", "note", "created_at",
+        ]
+        read_only_fields = fields

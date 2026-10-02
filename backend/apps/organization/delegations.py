@@ -13,7 +13,8 @@ from apps.core.text import normalize_title
 from apps.notifications import services as notifications
 from apps.notifications.models import NotificationKind
 
-from .models import Delegation
+from . import events
+from .models import Delegation, OrgEventKind
 
 
 @transaction.atomic
@@ -34,6 +35,10 @@ def create_delegation(*, node, delegate, starts_on, ends_on, note="", created_by
         note=normalize_title(note),
         created_by=created_by,
     )
+    events.record(
+        OrgEventKind.DELEGATION_CREATED, actor=created_by, node=node, subject=delegate,
+        from_value=str(starts_on), to_value=str(ends_on), note=delegation.note,
+    )
     notifications.notify(
         delegate,
         kind=NotificationKind.DELEGATION_RECEIVED,
@@ -45,7 +50,8 @@ def create_delegation(*, node, delegate, starts_on, ends_on, note="", created_by
 
 
 @transaction.atomic
-def end_delegation(delegation: Delegation) -> None:
+def end_delegation(delegation: Delegation, *, actor=None) -> None:
     """Revoke early (or tidy a finished one). A delegation that has simply expired needs nothing —
     this exists for «برگشتم» and for correcting a mistake."""
+    events.record(OrgEventKind.DELEGATION_ENDED, actor=actor, node=delegation.node, subject=delegation.delegate)
     delegation.delete()
