@@ -1,8 +1,8 @@
 """The quality module (Phase 18): what went wrong, and proof that it was fixed.
 
 A non-conformance is a recorded problem; corrective actions are the fixes; an internal audit finds
-problems; a risk is a problem that has not happened yet. This file holds the first of those (slice 1)
-and the history every part of the module shares. Like projects, none of it is a controlled document:
+problems; a risk is a problem that has not happened yet. This file holds the first two (slices 1-2:
+the non-conformance and its corrective actions) and the history every part of the module shares. Like projects, none of it is a controlled document:
 no numbering counter, no revisions — a record's code is simply `NC-` plus its id.
 
 Nothing here is ever deleted. A report that turns out to be nothing is *rejected*, an action that is
@@ -94,6 +94,63 @@ class NonConformance(TimeStampedModel):
         return f"NC-{self.pk:04d}"
 
 
+class ActionStatus(models.TextChoices):
+    """A corrective action's life. The assignee moves it TODO ↔ IN_PROGRESS → DONE; a *different*
+    manager then verifies it (VERIFIED) or sends it back (IN_PROGRESS) — whoever did the work cannot be
+    the one who confirms it worked. CANCELLED is the way out of an action no longer needed; nothing is
+    ever deleted."""
+
+    TODO = "TODO", "انجام نشده"
+    IN_PROGRESS = "IN_PROGRESS", "در حال انجام"
+    DONE = "DONE", "انجام شد، منتظر تایید"
+    VERIFIED = "VERIFIED", "تایید شد"
+    CANCELLED = "CANCELLED", "لغو شد"
+
+
+#: An action in one of these is finished (done and checked, or dropped): it can no longer change.
+FINAL_ACTION_STATUSES = (ActionStatus.VERIFIED, ActionStatus.CANCELLED)
+#: An action in one of these is still the assignee's to do — the ones that can be late.
+OPEN_ACTION_STATUSES = (ActionStatus.TODO, ActionStatus.IN_PROGRESS)
+
+
+class CorrectiveAction(TimeStampedModel):
+    """One fix for a non-conformance: who does what by when, and whether it was checked. Unlike a
+    project objective it has exactly **one** assignee — a named person accountable for it, which is the
+    ISO norm and keeps «who was supposed to do this?» answerable."""
+
+    nc = models.ForeignKey(NonConformance, on_delete=models.CASCADE, related_name="actions")
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="assigned_corrective_actions"
+    )
+    due_on = models.DateField()
+    status = models.CharField(max_length=12, choices=ActionStatus.choices, default=ActionStatus.TODO)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verification_note = models.TextField(blank=True)
+    cancel_reason = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["due_on", "id"]
+        constraints = [
+            CheckConstraint(
+                check=~Q(status=ActionStatus.VERIFIED) | Q(verified_at__isnull=False),
+                name="action_verified_has_verified_at",
+            ),
+        ]
+        indexes = [
+            Index(fields=["nc", "status"], name="action_nc_status_idx"),
+            Index(fields=["assignee", "status"], name="action_assignee_status_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.nc.code}: {self.title}"
+
+
 class QualityEventKind(models.TextChoices):
     NC_REPORTED = "nc_reported", "عدم‌انطباق ثبت شد"
     NC_EDITED = "nc_edited", "عدم‌انطباق ویرایش شد"
@@ -101,6 +158,14 @@ class QualityEventKind(models.TextChoices):
     NC_REJECTED = "nc_rejected", "عدم‌انطباق رد شد"
     NC_CLOSED = "nc_closed", "عدم‌انطباق بسته شد"
     NC_REOPENED = "nc_reopened", "عدم‌انطباق بازگشایی شد"
+    ACTION_ADDED = "action_added", "اقدام اصلاحی افزوده شد"
+    ACTION_EDITED = "action_edited", "اقدام اصلاحی ویرایش شد"
+    ACTION_ASSIGNED = "action_assigned", "اقدام اصلاحی واگذار شد"
+    ACTION_STATUS_CHANGED = "action_status_changed", "وضعیت اقدام تغییر کرد"
+    ACTION_DUE_CHANGED = "action_due_changed", "مهلت اقدام تغییر کرد"
+    ACTION_VERIFIED = "action_verified", "اقدام تایید شد"
+    ACTION_VERIFICATION_FAILED = "action_verification_failed", "تایید اقدام ناموفق بود"
+    ACTION_CANCELLED = "action_cancelled", "اقدام لغو شد"
 
 
 class QualityEvent(TimeStampedModel):
@@ -111,6 +176,11 @@ class QualityEvent(TimeStampedModel):
     line."""
 
     nc = models.ForeignKey(NonConformance, null=True, blank=True, on_delete=models.CASCADE, related_name="events")
+    #: The action it is about, if any. SET_NULL: an action is never deleted, but if one ever were its
+    #: history would still read correctly through `subject_title`.
+    action = models.ForeignKey(
+        CorrectiveAction, null=True, blank=True, on_delete=models.SET_NULL, related_name="events"
+    )
     kind = models.CharField(max_length=32, choices=QualityEventKind.choices)
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
@@ -119,7 +189,8 @@ class QualityEvent(TimeStampedModel):
     actor_title = models.CharField(max_length=255, blank=True)
     #: What the event is about, as it read at the time.
     subject_title = models.CharField(max_length=255, blank=True)
-    #: A status change's before and after (the record's own status enum).
+    #: A status change's before and after (the record's or the action's own status enum); for
+    #: `action_due_changed` the old and new deadline as ISO dates, so the feed needs no extra columns.
     from_status = models.CharField(max_length=16, blank=True)
     to_status = models.CharField(max_length=16, blank=True)
     note = models.TextField(blank=True)

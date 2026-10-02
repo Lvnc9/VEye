@@ -87,3 +87,32 @@ def check_stalled_documents() -> int:
         )
         sent += len(created)
     return sent
+
+
+@shared_task(name="notifications.check_due_actions")
+def check_due_actions() -> int:
+    """Corrective actions (Phase 18) that are due soon or overdue, one reminder per day to the
+    assignee — the same cadence and dedupe as `check_due_objectives`. Only an action the assignee still
+    has to do (TODO / IN_PROGRESS) on a record that is still being worked: a DONE action is waiting on
+    a verifier, and a closed or rejected record has nothing left to chase."""
+    from apps.quality.models import OPEN_ACTION_STATUSES, CorrectiveAction, NcStatus
+
+    today = timezone.localdate()
+    horizon = today + timezone.timedelta(days=settings.INBOX_DUE_SOON_DAYS)
+    due = CorrectiveAction.objects.filter(
+        status__in=OPEN_ACTION_STATUSES, due_on__lte=horizon, nc__status=NcStatus.IN_PROGRESS
+    ).select_related("assignee", "nc")
+    sent = 0
+    for action in due:
+        overdue = action.due_on < today
+        kind = NotificationKind.CAPA_OVERDUE if overdue else NotificationKind.CAPA_DUE_SOON
+        created = services.notify(
+            action.assignee,
+            kind=kind,
+            title=f"اقدام «{action.title}» از مهلت گذشته است" if overdue else f"اقدام «{action.title}» نزدیک به مهلت است",
+            body=f"{action.nc.code}: {action.nc.title}",
+            url=f"/quality/{action.nc_id}",
+            dedupe_key=f"capa:{action.pk}:{kind}:{today.isoformat()}",
+        )
+        sent += 1 if created else 0
+    return sent

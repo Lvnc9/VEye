@@ -275,6 +275,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "notifications.check_stalled_documents",
         "schedule": crontab(hour=7, minute=45),
     },
+    "notifications-check-due-actions": {
+        "task": "notifications.check_due_actions",
+        "schedule": crontab(hour=7, minute=35),
+    },
 }
 
 # ---------------------------------------------------------------------------
