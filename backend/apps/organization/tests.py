@@ -1264,6 +1264,18 @@ class PersonnelDeletionWithMembershipsTests(ApiTestCase):
         self.assertIn("غیرفعال", response.data["detail"])
         self.assertTrue(User.objects.filter(pk=member.pk).exists())
 
+    def test_a_former_delegate_cannot_be_deleted_and_the_answer_names_the_delegation_not_documents(self):
+        self.build()
+        cover = person("9800000010")
+        delegations.create_delegation(
+            node=self.u1, delegate=cover, starts_on=timezone.localdate(),
+            ends_on=timezone.localdate() + timedelta(days=2),
+        )
+        response = self.as_(self.ceo).delete(reverse("personnel-detail", args=[cover.pk]))
+        self.assertEqual((response.status_code, response.data["code"]), (409, "user_has_delegations"))
+        self.assertEqual(response.data["delegations"], 1)
+        self.assertTrue(User.objects.filter(pk=cover.pk).exists())
+
     def test_once_their_memberships_are_gone_they_can_be_deleted(self):
         self.build()
         member = person("9800000002")

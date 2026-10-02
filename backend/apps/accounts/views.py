@@ -290,6 +290,15 @@ class PersonnelViewSet(viewsets.ModelViewSet):
                 code="user_has_projects",
                 projects=project_count,
             )
+        # A temporary cover (Phase 16) references the delegate with PROTECT as well; without this the
+        # handler below would blame documents for it.
+        delegation_count = person.delegations_received.count()
+        if delegation_count:
+            raise ConflictError(
+                "این شخص جانشین موقت یک مسئول بوده است و حذف نمی‌شود. به‌جای حذف، حساب او را غیرفعال کنید.",
+                code="user_has_delegations",
+                delegations=delegation_count,
+            )
         # Documents reference their author with on_delete=PROTECT, so removing
         # someone who ever authored one would otherwise be an unhandled 500. The
         # right way to retire a person is to deactivate them (is_active=false),
