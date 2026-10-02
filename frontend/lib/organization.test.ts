@@ -279,6 +279,7 @@ describe("describeNodeBlockers", () => {
     expect(describeNodeBlockers({ children: 0, members: 0, projects: 1, messages: 12, documents: 3 })).toBe(
       "۱ پروژه، ۱۲ پیام گفتگو، ۳ مستند",
     );
+    expect(describeNodeBlockers({ children: 0, documents: 1, nonconformances: 2 })).toBe("۱ مستند، ۲ عدم‌انطباق");
   });
 
   it("is null when the payload has no counts", () => {

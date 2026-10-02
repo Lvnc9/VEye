@@ -342,3 +342,15 @@ class ListAndFeedTests(QualityBase):
         self.make(lone)
         response = ceo.delete(reverse("personnel-detail", args=[lone.pk]))
         self.assertEqual((response.status_code, response.data["code"]), (409, "user_has_quality_records"))
+
+
+class NodeDeletionTests(QualityBase):
+    """A node that owns records is protected (`owner_node` is PROTECT): the chart's own delete says
+    why, with a count, instead of an unhandled ProtectedError."""
+
+    def test_a_node_that_owns_a_nonconformance_cannot_be_deleted_and_says_how_many(self):
+        self.make(owner_node=self.org.llm.pk)
+        self.make(owner_node=self.org.llm.pk, title="دومی")
+        response = self.api(self.ceo).delete(reverse("org-node-detail", args=[self.org.llm.pk]))
+        self.assertEqual((response.status_code, response.data["code"]), (409, "node_not_empty"))
+        self.assertEqual(response.data["nonconformances"], 2)

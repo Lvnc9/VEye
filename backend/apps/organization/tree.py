@@ -271,6 +271,8 @@ def node_blockers(node: OrgNode) -> dict[str, int]:
         "messages": chat.node_message_count(node),
         # Documents this node owns (Phase 14) — the FK is PROTECT: archive the node instead.
         "documents": node.documents.count(),
+        # Non-conformances this node owns (Phase 18) — PROTECT as well.
+        "nonconformances": node.nonconformances.count(),
     }
 
 
