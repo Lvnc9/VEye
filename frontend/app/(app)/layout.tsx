@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Building2,
   CircleUserRound,
+  ClipboardCheck,
   FilePlus2,
   FolderKanban,
   History,
@@ -71,6 +72,7 @@ function navItemsFor(user: User | null): NavItem[] {
       group: "مستندات",
     },
     { href: "/quality", label: "عدم‌انطباق‌ها", ready: true, icon: ShieldAlert, group: "کیفیت" },
+    { href: "/quality/audits", label: "ممیزی‌ها", ready: true, icon: ClipboardCheck, group: "کیفیت" },
     {
       href: "/personnel/register",
       label: "ثبت پرسنل",

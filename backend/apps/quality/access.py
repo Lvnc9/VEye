@@ -67,7 +67,9 @@ def can_report(user) -> bool:
 
 def visible_nonconformances(request):
     """The records this person may read, with the related rows a list needs."""
-    queryset = NonConformance.objects.select_related("owner_node", "reported_by", "related_document", "audit")
+    queryset = NonConformance.objects.select_related(
+        "owner_node", "reported_by", "related_document", "audit", "audit__scope_node"
+    )
     org = access_for(request)
     if org.holds(Capability.MANAGE_QUALITY):
         return queryset
@@ -80,6 +82,13 @@ def visible_nonconformances(request):
         | Q(assigned)
         | Q(audit__lead_auditor=request.user)
     )
+
+
+def can_read_audit(org: OrgAccess, audit: InternalAudit) -> bool:
+    """The same rule as `visible_audits`, for one audit already in hand (a finding's «از ممیزی …» link is
+    shown only to someone who can open it: a مسئول of a بخش beneath the scope reads the finding but not
+    the audit). `audit.scope_node` should be loaded."""
+    return org.holds(Capability.MANAGE_QUALITY) or audit.lead_auditor_id == org.user.pk or org.leads(audit.scope_node)
 
 
 def visible_audits(request):

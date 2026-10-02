@@ -1,6 +1,6 @@
 /**
  * The quality module's data model and pure logic (Phase 18): non-conformances, their corrective
- * actions and the history. No fetching here — what can be tested without a network, so the screens
+ * actions, internal audits and the history. No fetching here — what can be tested without a network, so the screens
  * stay thin. Relative imports only (vitest has no `@/` alias).
  */
 
@@ -10,6 +10,7 @@ export type NcSource = "AUDIT" | "COMPLAINT" | "INSPECTION" | "INTERNAL" | "OTHE
 export type NcSeverity = "MINOR" | "MAJOR" | "CRITICAL";
 export type NcStatus = "OPEN" | "IN_PROGRESS" | "CLOSED" | "REJECTED";
 export type ActionStatus = "TODO" | "IN_PROGRESS" | "DONE" | "VERIFIED" | "CANCELLED";
+export type AuditStatus = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 
 // Mirrors of the backend's labels (quality/models.py) — the server sends `*_label` with every row; these
 // serve the filter dropdowns and forms, where there is no row yet.
@@ -42,6 +43,13 @@ export const ACTION_STATUS_LABELS: Record<ActionStatus, string> = {
   CANCELLED: "لغو شد",
 };
 
+export const AUDIT_STATUS_LABELS: Record<AuditStatus, string> = {
+  PLANNED: "برنامه‌ریزی‌شده",
+  IN_PROGRESS: "در حال انجام",
+  COMPLETED: "انجام‌شده",
+  CANCELLED: "لغو شد",
+};
+
 /** The tone vocabulary of `components/ui/Badge`. */
 export type QualityTone = "neutral" | "brand" | "success" | "warning" | "danger" | "info" | "violet";
 
@@ -56,6 +64,13 @@ export const NC_SEVERITY_TONE: Record<NcSeverity, QualityTone> = {
   MINOR: "neutral",
   MAJOR: "warning",
   CRITICAL: "danger",
+};
+
+export const AUDIT_STATUS_TONE: Record<AuditStatus, QualityTone> = {
+  PLANNED: "info",
+  IN_PROGRESS: "brand",
+  COMPLETED: "success",
+  CANCELLED: "neutral",
 };
 
 export interface NonConformance {
@@ -78,6 +93,12 @@ export interface NonConformance {
   related_document: number | null;
   related_document_code: string | null;
   related_document_title: string | null;
+  /** The audit that raised it (a finding), if any. The code and title are shown to whoever reads the
+   *  record; `can_view_audit` says whether *this viewer* may open the audit's page. */
+  audit: number | null;
+  audit_code: string | null;
+  audit_title: string | null;
+  can_view_audit: boolean;
   root_cause: string;
   rejection_reason: string;
   effectiveness_note: string;
@@ -103,6 +124,9 @@ export interface QualityEvent {
   nc: number | null;
   nc_code: string | null;
   nc_title: string | null;
+  audit: number | null;
+  audit_code: string | null;
+  audit_title: string | null;
   actor_name: string;
   actor_title: string;
   subject_title: string;
@@ -267,6 +291,13 @@ export const QUALITY_EVENT_TONE: Record<string, string> = {
   action_verified: "bg-emerald-500",
   action_verification_failed: "bg-rose-500",
   action_cancelled: "bg-slate-400",
+  audit_planned: "bg-brand-500",
+  audit_edited: "bg-amber-500",
+  audit_auditor_changed: "bg-teal-500",
+  audit_started: "bg-brand-500",
+  audit_completed: "bg-emerald-500",
+  audit_cancelled: "bg-slate-400",
+  finding_raised: "bg-orange-500",
 };
 
 /** The second line of a history entry — what the kind alone does not say: a before → after, a deadline
@@ -275,7 +306,8 @@ export function qualityEventDetail(event: QualityEvent): string {
   if (event.kind === "action_due_changed") {
     return `${formatJalali(event.from_status)} ← ${formatJalali(event.to_status)}`;
   }
-  if (event.kind === "action_assigned") return event.note;
+  if (event.kind === "action_assigned" || event.kind === "audit_auditor_changed") return event.note;
+  if (event.kind === "audit_planned") return `ممیز اصلی: ${event.note}`;
   if (event.from_status_label && event.to_status_label && event.kind !== "nc_rejected") {
     const move = `${event.from_status_label} ← ${event.to_status_label}`;
     return event.note ? `${move} — ${event.note}` : move;
@@ -415,4 +447,180 @@ export function actionPatchPayload(action: CorrectiveAction, form: ActionForm): 
     if (next[key] !== original[key]) body[key] = next[key];
   }
   return body;
+}
+
+// ---------------------------------------------------------------------------
+// Internal audits (slice 6)
+// ---------------------------------------------------------------------------
+
+export interface InternalAudit {
+  id: number;
+  /** `AU-0007` — built by the server. */
+  code: string;
+  title: string;
+  scope_node: number;
+  scope_node_name: string;
+  lead_auditor: number;
+  lead_auditor_name: string;
+  lead_auditor_title: string;
+  /** A person deactivated after being named: a quality manager replaces them. */
+  lead_auditor_is_active: boolean;
+  planned_on: string;
+  status: AuditStatus;
+  status_label: string;
+  summary: string;
+  cancel_reason: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  /** Derived by the server from the findings, never stored. */
+  findings_total: number;
+  findings_open: number;
+  /** What the viewer may do right now — the very functions the endpoints enforce. `can_edit` (the plan:
+   *  title, date, scope) ends when the audit starts; `can_change_auditor` lasts while it runs. */
+  can_edit: boolean;
+  can_change_auditor: boolean;
+  can_start: boolean;
+  can_complete: boolean;
+  can_cancel: boolean;
+  can_raise_finding: boolean;
+}
+
+export type AuditMine = "" | "auditor" | "manage";
+
+export interface AuditFilters {
+  q: string;
+  status: AuditStatus | "";
+  mine: AuditMine;
+}
+
+export const EMPTY_AUDIT_FILTERS: AuditFilters = { q: "", status: "", mine: "" };
+
+export function hasActiveAuditFilters(filters: AuditFilters): boolean {
+  return Boolean(filters.q.trim() || filters.status || filters.mine);
+}
+
+/** The query string of `GET /quality/audits/` — an empty filter sends nothing at all. */
+export function auditQueryParams(filters: AuditFilters, page: number, pageSize: number): Record<string, string | number> {
+  const params: Record<string, string | number> = { page, page_size: pageSize };
+  if (filters.q.trim()) params.q = filters.q.trim();
+  if (filters.status) params.status = filters.status;
+  if (filters.mine) params.mine = filters.mine;
+  return params;
+}
+
+/** «۳ یافته، ۱ باز» — or «بدون یافته» (a clean audit is a result, not a gap). */
+export function findingsSummary(audit: Pick<InternalAudit, "findings_total" | "findings_open">): string {
+  if (audit.findings_total === 0) return "بدون یافته";
+  const total = `${toPersianDigits(audit.findings_total)} یافته`;
+  return audit.findings_open > 0 ? `${total}، ${toPersianDigits(audit.findings_open)} باز` : total;
+}
+
+/** A planned audit whose date has passed. One already started, finished or called off is not late. */
+export function auditIsLate(audit: Pick<InternalAudit, "status" | "planned_on">, today: string): boolean {
+  return audit.status === "PLANNED" && audit.planned_on < today;
+}
+
+export interface AuditForm {
+  title: string;
+  scope_node: number | null;
+  lead_auditor: number | null;
+  /** ISO date. */
+  planned_on: string;
+}
+
+export function emptyAuditForm(): AuditForm {
+  return { title: "", scope_node: null, lead_auditor: null, planned_on: "" };
+}
+
+export function auditFormFrom(audit: InternalAudit): AuditForm {
+  return {
+    title: audit.title,
+    scope_node: audit.scope_node,
+    lead_auditor: audit.lead_auditor,
+    planned_on: audit.planned_on,
+  };
+}
+
+/** Early Persian messages, as for the other forms. A date in the past is refused only when it is *new* or
+ *  *changed* — a late audit must stay editable (its title, its auditor) without being re-dated, which is
+ *  exactly the server's rule. */
+export function validateAuditForm(
+  form: AuditForm,
+  today: string,
+  original?: Pick<InternalAudit, "planned_on">,
+): Partial<Record<keyof AuditForm, string>> {
+  const errors: Partial<Record<keyof AuditForm, string>> = {};
+  if (!form.title.trim()) errors.title = "عنوان ممیزی را بنویسید.";
+  else if (form.title.trim().length > TITLE_MAX) errors.title = `عنوان نباید بیش از ${toPersianDigits(TITLE_MAX)} نویسه باشد.`;
+  if (form.scope_node === null) errors.scope_node = "گرهٔ ممیزی‌شونده را انتخاب کنید.";
+  if (form.lead_auditor === null) errors.lead_auditor = "ممیز اصلی را انتخاب کنید.";
+  if (!form.planned_on) errors.planned_on = "تاریخ برنامه را مشخص کنید.";
+  else if (form.planned_on < today && form.planned_on !== original?.planned_on) errors.planned_on = "تاریخ برنامه نمی‌تواند در گذشته باشد.";
+  return errors;
+}
+
+export function auditCreatePayload(form: AuditForm): Record<string, unknown> {
+  return {
+    title: form.title.trim(),
+    scope_node: form.scope_node,
+    lead_auditor: form.lead_auditor,
+    planned_on: form.planned_on,
+  };
+}
+
+/** Only what changed, so an edit that changes nothing sends nothing (and logs nothing). */
+export function auditPatchPayload(audit: InternalAudit, form: AuditForm): Record<string, unknown> {
+  const original = auditFormFrom(audit);
+  const next = { ...form, title: form.title.trim() };
+  const body: Record<string, unknown> = {};
+  for (const key of Object.keys(next) as (keyof AuditForm)[]) {
+    if (next[key] !== original[key]) body[key] = next[key];
+  }
+  return body;
+}
+
+export interface FindingForm {
+  title: string;
+  description: string;
+  owner_node: number | null;
+  severity: NcSeverity;
+  /** ISO date. */
+  detected_on: string;
+}
+
+/** A finding starts on the audited node, as the least severe level (an observation), found today. */
+export function emptyFindingForm(scopeNode: number, today: string): FindingForm {
+  return { title: "", description: "", owner_node: scopeNode, severity: "MINOR", detected_on: today };
+}
+
+export function validateFindingForm(form: FindingForm, today: string): Partial<Record<keyof FindingForm, string>> {
+  const errors: Partial<Record<keyof FindingForm, string>> = {};
+  if (!form.title.trim()) errors.title = "عنوان یافته را بنویسید.";
+  else if (form.title.trim().length > TITLE_MAX) errors.title = `عنوان نباید بیش از ${toPersianDigits(TITLE_MAX)} نویسه باشد.`;
+  if (!form.description.trim()) errors.description = "شرح یافته را بنویسید.";
+  else if (form.description.trim().length > TEXT_MAX) errors.description = `شرح نباید بیش از ${toPersianDigits(TEXT_MAX)} نویسه باشد.`;
+  if (form.owner_node === null) errors.owner_node = "گرهٔ مربوط را انتخاب کنید.";
+  if (!form.detected_on) errors.detected_on = "تاریخ کشف را مشخص کنید.";
+  else if (form.detected_on > today) errors.detected_on = "تاریخ کشف نمی‌تواند در آینده باشد.";
+  return errors;
+}
+
+export function findingPayload(form: FindingForm): Record<string, unknown> {
+  return {
+    title: form.title.trim(),
+    description: form.description.trim(),
+    owner_node: form.owner_node,
+    severity: form.severity,
+    detected_on: form.detected_on,
+  };
+}
+
+/** The node and everything beneath it, from the chart as the server sends it (depth-first, with depth):
+ *  a finding may be filed against the audited node or any node under it — never above or beside. */
+export function nodesWithin<T extends { id: number; depth: number }>(nodes: T[], scopeId: number): T[] {
+  const start = nodes.findIndex((node) => node.id === scopeId);
+  if (start === -1) return [];
+  const end = nodes.findIndex((node, index) => index > start && node.depth <= nodes[start].depth);
+  return nodes.slice(start, end === -1 ? undefined : end);
 }

@@ -13,27 +13,15 @@ import { ActionsPanel } from "@/components/quality/ActionsPanel";
 import { NcStatusBadge, SeverityBadge } from "@/components/quality/Badges";
 import { NcActivityFeed } from "@/components/quality/NcActivityFeed";
 import { NcFormDialog } from "@/components/quality/NcFormDialog";
+import { TextBlock } from "@/components/quality/TextBlock";
 import { TextDialog } from "@/components/quality/TextDialog";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
-import { ArrowRight, Building2, CalendarSearch, CheckCheck, FileText, Pencil, RotateCcw, ShieldAlert, UserRound, XCircle } from "lucide-react";
+import { ArrowRight, Building2, CalendarSearch, CheckCheck, ClipboardCheck, FileText, Pencil, RotateCcw, ShieldAlert, UserRound, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, cardClass } from "@/components/ui/Card";
 import { cx } from "@/components/ui/cx";
 
 type Dialog = "edit" | "accept" | "reject" | "reopen" | null;
-
-/** One labelled paragraph of the record — shown only when there is something to say. */
-function TextBlock({ title, text, tone = "plain" }: { title: string; text: string; tone?: "plain" | "danger" | "success" }) {
-  if (!text) return null;
-  const surface =
-    tone === "danger" ? "bg-rose-50/70 ring-rose-200" : tone === "success" ? "bg-emerald-50/70 ring-emerald-200" : "bg-slate-50 ring-slate-200/70";
-  return (
-    <section className={cx("rounded-xl px-4 py-3 ring-1 ring-inset", surface)}>
-      <h3 className="mb-1 text-xs font-bold text-slate-600">{title}</h3>
-      <p className="whitespace-pre-line text-sm leading-7 text-slate-800">{text}</p>
-    </section>
-  );
-}
 
 /** «جزئیات عدم‌انطباق» (Phase 18): the record, the buttons the server says the viewer may press, and its
  *  history. Every button here is a request the server accepts — `can_*` are the very functions it enforces. */
@@ -125,6 +113,24 @@ export default function NonConformancePage() {
             </div>
           ))}
         </dl>
+
+        {nc.audit && nc.audit_code && (
+          <p className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <ClipboardCheck className="size-4 text-slate-400" />
+            یافتهٔ ممیزی:
+            {nc.can_view_audit ? (
+              <Link href={`/quality/audits/${nc.audit}`} className="inline-flex items-center gap-2 hover:text-brand-700">
+                <Code>{nc.audit_code}</Code>
+                <span>{nc.audit_title}</span>
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                <Code>{nc.audit_code}</Code>
+                <span>{nc.audit_title}</span>
+              </span>
+            )}
+          </p>
+        )}
 
         {nc.related_document && nc.related_document_code && (
           <p className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">

@@ -6,7 +6,7 @@ from apps.documents.models import Document
 from apps.organization.access import access_for
 from apps.organization.models import OrgNode
 
-from .access import can_manage, can_plan_audits, can_run_audit
+from .access import can_manage, can_plan_audits, can_read_audit, can_run_audit
 from .models import (
     FINAL_ACTION_STATUSES,
     OPEN_ACTION_STATUSES,
@@ -43,6 +43,7 @@ class NonConformanceSerializer(serializers.ModelSerializer):
     #: the record; the audit's own page is still scoped by `visible_audits`.
     audit_code = serializers.SerializerMethodField()
     audit_title = serializers.SerializerMethodField()
+    can_view_audit = serializers.SerializerMethodField()
     #: Derived, never stored (queries.with_action_counts) — absent only if a caller forgot to annotate.
     actions_total = serializers.IntegerField(read_only=True, default=0)
     actions_verified = serializers.IntegerField(read_only=True, default=0)
@@ -59,7 +60,7 @@ class NonConformanceSerializer(serializers.ModelSerializer):
             "id", "code", "title", "description", "source", "source_label", "severity", "severity_label",
             "status", "status_label", "owner_node", "owner_node_name", "reported_by", "reported_by_name",
             "detected_on", "related_document", "related_document_code", "related_document_title",
-            "audit", "audit_code", "audit_title", "root_cause", "rejection_reason", "effectiveness_note", "accepted_at", "closed_at",
+            "audit", "audit_code", "audit_title", "can_view_audit", "root_cause", "rejection_reason", "effectiveness_note", "accepted_at", "closed_at",
             "created_at", "actions_total", "actions_verified", "actions_overdue",
             "can_edit", "can_triage", "can_reopen", "can_add_action", "can_close",
         ]
@@ -79,6 +80,11 @@ class NonConformanceSerializer(serializers.ModelSerializer):
 
     def get_audit_title(self, obj):
         return obj.audit.title if obj.audit_id else None
+
+    def get_can_view_audit(self, obj) -> bool:
+        """Whether the viewer may open the audit that raised this (the record's `audit_code` is shown to
+        everyone who reads the record; the audit's own page is scoped by `visible_audits`)."""
+        return bool(obj.audit_id) and can_read_audit(access_for(self.context["request"]), obj.audit)
 
     def get_can_edit(self, obj) -> bool:
         if obj.status == NcStatus.IN_PROGRESS:

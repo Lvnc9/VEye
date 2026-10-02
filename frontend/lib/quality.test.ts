@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  AUDIT_STATUS_LABELS,
+  AUDIT_STATUS_TONE,
+  EMPTY_AUDIT_FILTERS,
   EMPTY_NC_FILTERS,
+  QUALITY_EVENT_TONE,
   actionCreatePayload,
   actionFormFrom,
   actionPatchPayload,
@@ -14,15 +18,29 @@ import {
   NC_STATUS_LABELS,
   actionsProgress,
   actionsSummary,
+  auditCreatePayload,
+  auditFormFrom,
+  auditIsLate,
+  auditPatchPayload,
+  auditQueryParams,
   createPayload,
   defaultOwnerNode,
+  emptyAuditForm,
+  emptyFindingForm,
   emptyForm,
+  findingPayload,
+  findingsSummary,
   formFromNc,
+  hasActiveAuditFilters,
   hasActiveFilters,
   ncQueryParams,
+  nodesWithin,
   patchPayload,
   qualityEventDetail,
+  validateAuditForm,
+  validateFindingForm,
   validateNcForm,
+  type InternalAudit,
   type NonConformance,
   type QualityEvent,
 } from "./quality";
@@ -49,6 +67,10 @@ function nc(over: Partial<NonConformance> = {}): NonConformance {
     related_document: null,
     related_document_code: null,
     related_document_title: null,
+    audit: null,
+    audit_code: null,
+    audit_title: null,
+    can_view_audit: false,
     root_cause: "",
     rejection_reason: "",
     effectiveness_note: "",
@@ -75,6 +97,9 @@ function event(over: Partial<QualityEvent> = {}): QualityEvent {
     nc: 42,
     nc_code: "NC-0042",
     nc_title: "قطعهٔ معیوب",
+    audit: null,
+    audit_code: null,
+    audit_title: null,
     actor_name: "مسئول",
     actor_title: "",
     subject_title: "",
@@ -328,5 +353,211 @@ describe("the action form", () => {
     expect(actionPatchPayload(current, actionFormFrom(current))).toEqual({});
     expect(actionPatchPayload(current, { ...actionFormFrom(current), assignee: 9, title: " جدید " })).toEqual({ assignee: 9, title: "جدید" });
     expect(actionPatchPayload(current, { ...actionFormFrom(current), title: `${current.title} ` })).toEqual({});
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Internal audits (slice 6)
+// ---------------------------------------------------------------------------
+
+function audit(over: Partial<InternalAudit> = {}): InternalAudit {
+  return {
+    id: 7,
+    code: "AU-0007",
+    title: "ممیزی داخلی هوش مصنوعی",
+    scope_node: 49,
+    scope_node_name: "هوش مصنوعی",
+    lead_auditor: 5,
+    lead_auditor_name: "ممیز",
+    lead_auditor_title: "",
+    lead_auditor_is_active: true,
+    planned_on: "2026-10-09",
+    status: "PLANNED",
+    status_label: "برنامه‌ریزی‌شده",
+    summary: "",
+    cancel_reason: "",
+    started_at: null,
+    completed_at: null,
+    created_at: "2026-10-01T06:00:00Z",
+    findings_total: 0,
+    findings_open: 0,
+    can_edit: true,
+    can_change_auditor: true,
+    can_start: true,
+    can_complete: false,
+    can_cancel: true,
+    can_raise_finding: false,
+    ...over,
+  };
+}
+
+describe("the audit vocabulary", () => {
+  it("covers every status the server can send, each with a tone", () => {
+    expect(Object.keys(AUDIT_STATUS_LABELS)).toEqual(["PLANNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
+    expect(Object.keys(AUDIT_STATUS_TONE)).toEqual(Object.keys(AUDIT_STATUS_LABELS));
+  });
+
+  it("gives every audit history kind its own dot, so a new kind never falls back to grey unnoticed", () => {
+    for (const kind of [
+      "audit_planned",
+      "audit_edited",
+      "audit_auditor_changed",
+      "audit_started",
+      "audit_completed",
+      "audit_cancelled",
+      "finding_raised",
+    ]) {
+      expect(QUALITY_EVENT_TONE[kind], kind).toBeTruthy();
+    }
+  });
+});
+
+describe("the audit list's query", () => {
+  it("sends only the page when nothing is filtered", () => {
+    expect(auditQueryParams(EMPTY_AUDIT_FILTERS, 1, 20)).toEqual({ page: 1, page_size: 20 });
+  });
+
+  it("sends only what is set, trimmed", () => {
+    expect(auditQueryParams({ q: "  AU-0007 ", status: "IN_PROGRESS", mine: "auditor" }, 2, 20)).toEqual({
+      page: 2,
+      page_size: 20,
+      q: "AU-0007",
+      status: "IN_PROGRESS",
+      mine: "auditor",
+    });
+  });
+
+  it("does not count a whitespace-only search as a filter (the query builder ignores it too)", () => {
+    expect(hasActiveAuditFilters({ ...EMPTY_AUDIT_FILTERS, q: "   " })).toBe(false);
+    expect(hasActiveAuditFilters({ ...EMPTY_AUDIT_FILTERS, mine: "manage" })).toBe(true);
+    expect(hasActiveAuditFilters({ ...EMPTY_AUDIT_FILTERS, status: "PLANNED" })).toBe(true);
+  });
+});
+
+describe("findingsSummary", () => {
+  it("says so when there are none, and how many are still open otherwise", () => {
+    expect(findingsSummary(audit())).toBe("بدون یافته");
+    expect(findingsSummary(audit({ findings_total: 3, findings_open: 0 }))).toBe("۳ یافته");
+    expect(findingsSummary(audit({ findings_total: 3, findings_open: 1 }))).toBe("۳ یافته، ۱ باز");
+  });
+});
+
+describe("auditIsLate", () => {
+  it("is a planned audit whose date has passed — one already started, finished or called off is not late", () => {
+    expect(auditIsLate(audit({ planned_on: "2026-10-01" }), TODAY)).toBe(true);
+    expect(auditIsLate(audit({ planned_on: TODAY }), TODAY)).toBe(false);
+    expect(auditIsLate(audit({ planned_on: "2026-10-09" }), TODAY)).toBe(false);
+    for (const status of ["IN_PROGRESS", "COMPLETED", "CANCELLED"] as const) {
+      expect(auditIsLate(audit({ planned_on: "2026-09-01", status }), TODAY), status).toBe(false);
+    }
+  });
+});
+
+describe("the audit form", () => {
+  const filled = { title: "ممیزی", scope_node: 49, lead_auditor: 5, planned_on: "2026-10-09" };
+
+  it("starts empty, and is filled from an audit", () => {
+    expect(emptyAuditForm()).toEqual({ title: "", scope_node: null, lead_auditor: null, planned_on: "" });
+    expect(auditFormFrom(audit())).toEqual({
+      title: "ممیزی داخلی هوش مصنوعی",
+      scope_node: 49,
+      lead_auditor: 5,
+      planned_on: "2026-10-09",
+    });
+  });
+
+  it("asks for every field in Persian before any request", () => {
+    expect(Object.keys(validateAuditForm(emptyAuditForm(), TODAY)).sort()).toEqual(["lead_auditor", "planned_on", "scope_node", "title"]);
+    expect(validateAuditForm(filled, TODAY)).toEqual({});
+    expect(validateAuditForm({ ...filled, title: "   " }, TODAY).title).toBeTruthy();
+    expect(validateAuditForm({ ...filled, title: "x".repeat(256) }, TODAY).title).toContain("۲۵۵");
+  });
+
+  it("refuses a past date only when it is new or changed — a late audit stays editable", () => {
+    expect(validateAuditForm({ ...filled, planned_on: "2026-10-01" }, TODAY).planned_on).toBeTruthy();
+    const late = audit({ planned_on: "2026-10-01" });
+    expect(validateAuditForm({ ...filled, planned_on: "2026-10-01" }, TODAY, late)).toEqual({});
+    expect(validateAuditForm({ ...filled, planned_on: "2026-09-20" }, TODAY, late).planned_on).toBeTruthy();
+  });
+
+  it("builds the POST body trimmed, and a PATCH body of only what changed", () => {
+    expect(auditCreatePayload({ ...filled, title: "  ممیزی  " })).toEqual({
+      title: "ممیزی",
+      scope_node: 49,
+      lead_auditor: 5,
+      planned_on: "2026-10-09",
+    });
+    const original = audit();
+    expect(auditPatchPayload(original, auditFormFrom(original))).toEqual({});
+    expect(auditPatchPayload(original, { ...auditFormFrom(original), title: "  ممیزی داخلی هوش مصنوعی " })).toEqual({});
+    expect(auditPatchPayload(original, { ...auditFormFrom(original), lead_auditor: 9, planned_on: "2026-10-20" })).toEqual({
+      lead_auditor: 9,
+      planned_on: "2026-10-20",
+    });
+  });
+});
+
+describe("the finding form", () => {
+  it("starts on the audited node with the least severe level and today's date", () => {
+    expect(emptyFindingForm(49, TODAY)).toEqual({ title: "", description: "", owner_node: 49, severity: "MINOR", detected_on: TODAY });
+  });
+
+  it("asks for what the server requires and refuses a date in the future", () => {
+    const form = { ...emptyFindingForm(49, TODAY), title: "عدم ثبت بازبینی", description: "بازبینی کد ثبت نشده بود" };
+    expect(validateFindingForm(form, TODAY)).toEqual({});
+    expect(Object.keys(validateFindingForm(emptyFindingForm(49, TODAY), TODAY)).sort()).toEqual(["description", "title"]);
+    expect(validateFindingForm({ ...form, owner_node: null }, TODAY).owner_node).toBeTruthy();
+    expect(validateFindingForm({ ...form, detected_on: "2026-10-03" }, TODAY).detected_on).toBeTruthy();
+    expect(validateFindingForm({ ...form, detected_on: "" }, TODAY).detected_on).toBeTruthy();
+  });
+
+  it("sends the trimmed text with the node, severity and date", () => {
+    const form = { ...emptyFindingForm(49, TODAY), title: " الف ", description: " ب ", owner_node: 59, severity: "MAJOR" as const };
+    expect(findingPayload(form)).toEqual({ title: "الف", description: "ب", owner_node: 59, severity: "MAJOR", detected_on: TODAY });
+  });
+});
+
+describe("nodesWithin", () => {
+  // The chart as the server sends it: depth-first, with depth.
+  const chart = [
+    { id: 1, depth: 0 },
+    { id: 2, depth: 1 }, // IT
+    { id: 3, depth: 2 }, //   AI  <- the scope
+    { id: 4, depth: 3 }, //     RAG
+    { id: 5, depth: 3 }, //     LLM
+    { id: 6, depth: 2 }, //   dev (a sibling of AI)
+    { id: 7, depth: 1 }, // sales
+  ];
+
+  it("is the node itself and everything beneath it — never a sibling or what comes after", () => {
+    expect(nodesWithin(chart, 3).map((n) => n.id)).toEqual([3, 4, 5]);
+    expect(nodesWithin(chart, 2).map((n) => n.id)).toEqual([2, 3, 4, 5, 6]);
+    expect(nodesWithin(chart, 1).map((n) => n.id)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it("is just the leaf for a leaf, and nothing for an unknown node", () => {
+    expect(nodesWithin(chart, 5).map((n) => n.id)).toEqual([5]);
+    expect(nodesWithin(chart, 99)).toEqual([]);
+  });
+});
+
+describe("audit history lines", () => {
+  it("name the auditor when it is planned, and what a move or a decision said", () => {
+    expect(qualityEventDetail(event({ kind: "audit_planned", note: "ممیز" }))).toBe("ممیز اصلی: ممیز");
+    expect(qualityEventDetail(event({ kind: "audit_auditor_changed", note: "الف ← ب" }))).toBe("الف ← ب");
+    expect(
+      qualityEventDetail(
+        event({
+          kind: "audit_completed",
+          from_status: "IN_PROGRESS",
+          to_status: "COMPLETED",
+          from_status_label: "در حال انجام",
+          to_status_label: "انجام‌شده",
+          note: "همه چیز بررسی شد",
+        }),
+      ),
+    ).toBe("در حال انجام ← انجام‌شده — همه چیز بررسی شد");
+    expect(qualityEventDetail(event({ kind: "finding_raised", note: "AU-0007: ممیزی داخلی" }))).toBe("AU-0007: ممیزی داخلی");
   });
 });

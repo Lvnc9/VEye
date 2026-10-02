@@ -331,6 +331,19 @@ class FindingTests(AuditBase):
         plain = self.make()
         self.assertEqual(self.api(self.reporter).get(reverse("nonconformance-detail", args=[plain.pk])).data["audit"], None)
 
+    def test_the_records_audit_link_is_offered_only_to_someone_who_can_open_the_audit(self):
+        """`can_view_audit` is `visible_audits`' rule for one audit: a lead of a بخش beneath the audited
+        unit reads the finding but not the audit, so the link must not be drawn for them."""
+        nc = self.raise_finding(self.audit, owner_node=self.org.rag.pk)
+        url = reverse("nonconformance-detail", args=[nc.pk])
+        for viewer in (self.qm, self.ceo, self.auditor, self.ai_lead, self.rag_lead):
+            flag = self.api(viewer).get(url).data["can_view_audit"]
+            opened = self.api(viewer).get(self.audit_url("audit-detail", self.audit)).status_code == 200
+            self.assertEqual(flag, opened, viewer.full_name)
+        self.assertEqual(self.api(self.rag_lead).get(url).data["can_view_audit"], False)
+        plain = self.make()
+        self.assertEqual(self.api(self.reporter).get(reverse("nonconformance-detail", args=[plain.pk])).data["can_view_audit"], False)
+
     def test_one_line_in_both_timelines_not_two(self):
         nc = self.raise_finding(self.audit)
         self.assertEqual(self.kinds(nc), [QualityEventKind.FINDING_RAISED])  # no separate nc_reported
