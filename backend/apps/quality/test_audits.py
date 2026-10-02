@@ -130,6 +130,8 @@ class VisibilityTests(AuditBase):
         self.assertEqual(by(q="توسعه"), {self.elsewhere.pk})
         self.assertEqual(by(q=self.audit.code), {self.audit.pk})
         self.assertEqual(by(q=str(self.audit.pk)), {self.audit.pk})
+        persian = str(self.audit.pk).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+        self.assertEqual(by(q=f"AU-{persian}"), {self.audit.pk})  # a code typed on a Persian keyboard
         self.assertEqual(by(mine="auditor"), set())  # the planner audits nothing
         mine = lambda user, value: {r["id"] for r in self.api(user).get(reverse("audit-list"), {"mine": value}).data["results"]}
         self.assertEqual(mine(self.auditor, "auditor"), {self.audit.pk})

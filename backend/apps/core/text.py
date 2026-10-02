@@ -18,6 +18,9 @@ _LETTERS = str.maketrans({"ي": "ی", "ى": "ی", "ك": "ک"})
 # Persian (U+06F0-06F9) and Arabic-Indic (U+0660-0669) digits -> ASCII.
 _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
+# ASCII digits -> Persian (U+06F0-06F9), for text the server writes for people to read.
+_PERSIAN_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
 _WHITESPACE = re.compile(r"\s+")
 
 
@@ -28,6 +31,10 @@ def normalize_letters(text: str) -> str:
 
 def to_latin_digits(text: str) -> str:
     return text.translate(_DIGITS)
+
+
+def to_persian_digits(text: str) -> str:
+    return text.translate(_PERSIAN_DIGITS)
 
 
 def normalize_title(text: str) -> str:

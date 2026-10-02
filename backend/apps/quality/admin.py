@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import InternalAudit, NonConformance, QualityEvent
+from .models import InternalAudit, NonConformance, QualityEvent, RiskItem
 
 
 @admin.register(NonConformance)
@@ -30,6 +30,17 @@ class InternalAuditAdmin(admin.ModelAdmin):
     list_filter = ["status"]
     search_fields = ["title"]
     readonly_fields = [f.name for f in InternalAudit._meta.fields]
+
+    def has_add_permission(self, request):
+        return False  # written only through quality.services, which records the history
+
+
+@admin.register(RiskItem)
+class RiskItemAdmin(admin.ModelAdmin):
+    list_display = ["id", "title", "status", "likelihood", "impact", "owner_node", "owner", "review_on"]
+    list_filter = ["status"]
+    search_fields = ["title", "description"]
+    readonly_fields = [f.name for f in RiskItem._meta.fields]
 
     def has_add_permission(self, request):
         return False  # written only through quality.services, which records the history

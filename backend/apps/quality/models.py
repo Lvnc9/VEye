@@ -1,15 +1,15 @@
 """The quality module (Phase 18): what went wrong, and proof that it was fixed.
 
 A non-conformance is a recorded problem; corrective actions are the fixes; an internal audit finds
-problems; a risk is a problem that has not happened yet. This file holds the first three (slices 1-2:
+problems; a risk is a problem that has not happened yet. This file holds all four (slices 1-2:
 the non-conformance and its corrective actions; slice 5: the audit, whose findings *are*
-non-conformances) and the history every part of the module shares. Like projects, none of it is a
-controlled document: no numbering counter, no revisions — a record's code is simply `NC-` / `AU-`
-plus its id.
+non-conformances; slice 7: the risk) and the history every part of the module shares. Like projects,
+none of it is a controlled document: no numbering counter, no revisions — a record's code is simply
+`NC-` / `AU-` / `RK-` plus its id.
 
 Nothing here is ever deleted. A report that turns out to be nothing is *rejected*, an action that is
-no longer needed is *cancelled*, an audit that will not happen is *cancelled*: the trail of what was
-claimed and decided is the whole point.
+no longer needed is *cancelled*, an audit that will not happen is *cancelled*, a risk that is gone is
+*closed*: the trail of what was claimed and decided is the whole point.
 """
 from django.conf import settings
 from django.db import models
@@ -220,6 +220,68 @@ class InternalAudit(TimeStampedModel):
         return f"AU-{self.pk:04d}"
 
 
+class RiskStatus(models.TextChoices):
+    """A risk's life. Moved *permissively*, like a project's status: any status to any other, every move
+    recorded rather than guarded — there is no sequence a risk is obliged to follow (it may be accepted
+    straight away, or come back from closed when the cause returns)."""
+
+    IDENTIFIED = "IDENTIFIED", "شناسایی‌شده"
+    MITIGATING = "MITIGATING", "در حال کاهش"
+    ACCEPTED = "ACCEPTED", "پذیرفته‌شده"
+    CLOSED = "CLOSED", "بسته‌شده"
+
+
+#: The statuses a risk is still on the register in — what the heat map counts by default.
+LIVE_RISK_STATUSES = (RiskStatus.IDENTIFIED, RiskStatus.MITIGATING, RiskStatus.ACCEPTED)
+
+RISK_SCALE = range(1, 6)  # likelihood and impact are each 1 (lowest) to 5 (highest)
+
+
+class RiskItem(TimeStampedModel):
+    """A problem that has not happened yet: how likely, how bad, who watches it, and what is being done.
+    The **score** (likelihood × impact) and its **level** are derived — never columns — in
+    `queries.py`, beside the one definition of the bands. `owner_node` says whose process it belongs to
+    (its مسئول manages it); `owner` is the person who watches it, if anyone is named."""
+
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    #: PROTECT: a node that owns risks cannot be deleted (archive it), like one that owns records.
+    owner_node = models.ForeignKey(OrgNode, on_delete=models.PROTECT, related_name="risks")
+    #: SET_NULL: a person who leaves is deactivated, not deleted — but if one ever were, the risk
+    #: stays (its history keeps the name) and shows «بدون مسئول» until someone is named.
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="owned_risks"
+    )
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_risks")
+    likelihood = models.PositiveSmallIntegerField()
+    impact = models.PositiveSmallIntegerField()
+    status = models.CharField(max_length=12, choices=RiskStatus.choices, default=RiskStatus.IDENTIFIED)
+    mitigation_plan = models.TextField(blank=True)
+    #: When to look at it again; a reminder goes out as it nears (`notifications.check_risk_reviews`).
+    review_on = models.DateField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            CheckConstraint(
+                check=Q(likelihood__gte=1, likelihood__lte=5) & Q(impact__gte=1, impact__lte=5),
+                name="risk_scales_between_1_and_5",
+            ),
+        ]
+        indexes = [
+            Index(fields=["status", "owner_node"], name="risk_status_node_idx"),
+            Index(fields=["owner", "status"], name="risk_owner_status_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.code} {self.title}"
+
+    @property
+    def code(self) -> str:
+        """`RK-0013` — the id, zero-padded, the same device as `NC-` and `AU-`."""
+        return f"RK-{self.pk:04d}"
+
+
 class QualityEventKind(models.TextChoices):
     NC_REPORTED = "nc_reported", "عدم‌انطباق ثبت شد"
     NC_EDITED = "nc_edited", "عدم‌انطباق ویرایش شد"
@@ -244,6 +306,10 @@ class QualityEventKind(models.TextChoices):
     #: A finding is a non-conformance, so this is also *its* first line — raised in an audit it has no
     #: separate `nc_reported` (one line, not two for the same moment).
     FINDING_RAISED = "finding_raised", "یافتهٔ ممیزی ثبت شد"
+    RISK_CREATED = "risk_created", "ریسک ثبت شد"
+    RISK_EDITED = "risk_edited", "ریسک ویرایش شد"
+    RISK_ASSESSED = "risk_assessed", "ارزیابی ریسک تغییر کرد"
+    RISK_STATUS_CHANGED = "risk_status_changed", "وضعیت ریسک تغییر کرد"
 
 
 class QualityEvent(TimeStampedModel):
@@ -257,6 +323,8 @@ class QualityEvent(TimeStampedModel):
     #: The audit it is about, if any (a finding line carries both: it belongs to the audit's timeline
     #: and to the record's).
     audit = models.ForeignKey(InternalAudit, null=True, blank=True, on_delete=models.CASCADE, related_name="events")
+    #: The risk it is about, if any.
+    risk = models.ForeignKey(RiskItem, null=True, blank=True, on_delete=models.CASCADE, related_name="events")
     #: The action it is about, if any. SET_NULL: an action is never deleted, but if one ever were its
     #: history would still read correctly through `subject_title`.
     action = models.ForeignKey(
@@ -282,6 +350,7 @@ class QualityEvent(TimeStampedModel):
         indexes = [
             Index(fields=["nc", "created_at"], name="qevent_nc_time_idx"),
             Index(fields=["audit", "created_at"], name="qevent_audit_time_idx"),
+            Index(fields=["risk", "created_at"], name="qevent_risk_time_idx"),
         ]
 
     def __str__(self):

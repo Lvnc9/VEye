@@ -1,4 +1,6 @@
-from django.db.models import Exists, OuterRef, Q
+from django.conf import settings
+from django.db.models import Exists, F, OuterRef, Q
+from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
@@ -10,9 +12,18 @@ from apps.core.pagination import DefaultPagination
 from apps.organization.access import access_for
 
 from . import services
-from .access import can_manage, can_report, visible_audits, visible_nonconformances
-from .models import AuditStatus, CorrectiveAction, NcSeverity, NcSource, NcStatus, NonConformance
-from .queries import with_action_counts, with_finding_counts
+from .access import can_manage, can_report, visible_audits, visible_nonconformances, visible_risks
+from .models import (
+    RISK_SCALE,
+    AuditStatus,
+    CorrectiveAction,
+    NcSeverity,
+    NcSource,
+    NcStatus,
+    NonConformance,
+    RiskStatus,
+)
+from .queries import filter_by_level, risk_matrix, with_action_counts, with_finding_counts, with_risk_score
 from .serializers import (
     AcceptSerializer,
     ActionCreateSerializer,
@@ -28,6 +39,9 @@ from .serializers import (
     NonConformanceSerializer,
     NonConformanceUpdateSerializer,
     ReasonSerializer,
+    RiskCreateSerializer,
+    RiskSerializer,
+    RiskUpdateSerializer,
     VerifySerializer,
 )
 
@@ -339,3 +353,107 @@ class AuditViewSet(
             NonConformanceSerializer(fresh, context=self.get_serializer_context()).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+
+class RiskViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/quality/risks/` — the risk register.
+
+    **`get_queryset()` decides visibility** (`visible_risks`): a risk you may not read is a 404
+    everywhere. `manage_quality`, or a lead of the risk's node (or one above), creates and edits —
+    a named owner who is neither can read but not change it. Nothing is deleted: a risk that is gone is
+    moved to «بسته‌شده», and that move (like every other) is recorded.
+    Filters: `?status=`, `?level=low|medium|high|critical`, `?likelihood=1..5`, `?impact=1..5`,
+    `?node=<id>` (that node **and everything beneath it**), `?mine=owner|created|manage`,
+    `?review=due` (a review date that is near or past, on a risk still on the register), `?q=` (title,
+    description, or a code like `RK-0013` / `13`). Ordered by score, worst first.
+    `GET /quality/risks/matrix/` gives the derived 5×5 counts (`?node=`, `?status=`; by default the risks
+    still on the register).
+    """
+
+    serializer_class = RiskSerializer
+    pagination_class = DefaultPagination
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):
+        queryset = with_risk_score(visible_risks(self.request))
+        if self.action != "list":
+            return queryset
+        params = self.request.query_params
+        if value := params.get("status"):
+            queryset = queryset.filter(status=value) if value in RiskStatus.values else queryset.none()
+        if value := params.get("level"):
+            queryset = filter_by_level(queryset, value)
+        for param in ("likelihood", "impact"):
+            if value := params.get(param):
+                queryset = queryset.filter(**{param: int(value)}) if value in {str(n) for n in RISK_SCALE} else queryset.none()
+        if value := params.get("node"):
+            queryset = self._within_node(queryset, value)
+        mine = params.get("mine")
+        if mine == "owner":
+            queryset = queryset.filter(owner=self.request.user)
+        elif mine == "created":
+            queryset = queryset.filter(created_by=self.request.user)
+        elif mine == "manage":
+            org = access_for(self.request)
+            if not org.holds(Capability.MANAGE_QUALITY):
+                queryset = queryset.filter(org.led_subtree_q("owner_node__path"))
+        if params.get("review") == "due":
+            horizon = timezone.localdate() + timezone.timedelta(days=settings.INBOX_DUE_SOON_DAYS)
+            queryset = queryset.filter(review_on__lte=horizon).exclude(status=RiskStatus.CLOSED)
+        if term := (params.get("q") or "").strip():
+            queryset = queryset.filter(self._search(term))
+        return queryset.order_by("-score", F("review_on").asc(nulls_last=True), "-id")
+
+    @staticmethod
+    def _within_node(queryset, node: str):
+        from apps.organization.models import OrgNode
+
+        target = OrgNode.objects.filter(pk=node).first() if node.isdigit() else None
+        return queryset.filter(owner_node__path__startswith=target.path) if target else queryset.none()
+
+    @staticmethod
+    def _search(term: str) -> Q:
+        from apps.core.text import normalize_title
+
+        text = normalize_title(term)  # unified letterforms, like the stored titles; digits left as typed
+        query = Q(title__icontains=text) | Q(description__icontains=text)
+        # A code (`RK-0013`, `rk-13`, `13`) is matched on its digits. `isdigit()` and `int()` both accept
+        # Persian digits, so «رک-۱۳» typed on a Persian keyboard works with no translation step.
+        digits = text.upper().removeprefix("RK-")
+        if digits.isdigit():
+            query |= Q(pk=int(digits))
+        return query
+
+    def _one(self, risk):
+        fresh = with_risk_score(visible_risks(self.request)).get(pk=risk.pk)
+        return RiskSerializer(fresh, context=self.get_serializer_context()).data
+
+    def create(self, request, *args, **kwargs):
+        serializer = RiskCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        risk = services.create_risk(actor=request.user, **serializer.validated_data)
+        return Response(self._one(risk), status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        risk = self.get_object()
+        serializer = RiskUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        risk = services.edit_risk(risk, actor=request.user, changes=dict(serializer.validated_data))
+        return Response(self._one(risk))
+
+    @action(detail=False, methods=["get"])
+    def matrix(self, request):
+        queryset = visible_risks(request)
+        params = request.query_params
+        if value := params.get("node"):
+            queryset = self._within_node(queryset, value)
+        statuses = (params["status"],) if params.get("status") in RiskStatus.values else None
+        return Response(risk_matrix(queryset, statuses) if statuses else risk_matrix(queryset))

@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 from apps.core.exceptions import ConflictError
-from apps.core.text import normalize_title
+from apps.core.text import normalize_title, to_persian_digits
 from apps.documents.authority import approve_eligible_users
 from apps.notifications import services as notifications
 from apps.notifications.models import NotificationKind
@@ -33,6 +33,7 @@ from .models import (
     ActionStatus,
     AuditStatus,
     CorrectiveAction,
+    RISK_SCALE,
     InternalAudit,
     NcSeverity,
     NcSource,
@@ -40,6 +41,8 @@ from .models import (
     NonConformance,
     QualityEvent,
     QualityEventKind,
+    RiskItem,
+    RiskStatus,
 )
 
 TITLE_MAX = 255
@@ -374,9 +377,14 @@ def _require_future(due_on: datetime.date) -> None:
 
 def _tell(person, actor, kind, record, title: str, body: str = "") -> None:
     """Notify one person about a record — never the person who just acted. `record` is a
-    non-conformance or an audit; the link goes to its own page."""
+    non-conformance, an audit or a risk; the link goes to its own page."""
     if person.pk != actor.pk:
-        url = f"/quality/audits/{record.pk}" if isinstance(record, InternalAudit) else f"/quality/{record.pk}"
+        if isinstance(record, InternalAudit):
+            url = f"/quality/audits/{record.pk}"
+        elif isinstance(record, RiskItem):
+            url = f"/quality/risks/{record.pk}"
+        else:
+            url = f"/quality/{record.pk}"
         notifications.notify(person, kind=kind, title=title, body=body, url=url)
 
 
@@ -768,3 +776,171 @@ def raise_finding(
     )
     _announce(nc, actor, body=f"یافتهٔ {audit.code} · {nc.owner_node.name}")
     return nc
+
+
+# -- risks ---------------------------------------------------------------------
+
+RISK_EDITABLE = {
+    "title": "عنوان",
+    "description": "شرح",
+    "owner_node": "گرهٔ مربوط",
+    "owner": "مسئول ریسک",
+    "mitigation_plan": "برنامهٔ کاهش",
+    "review_on": "تاریخ بازنگری",
+}
+
+
+def _lock_risk(pk: int) -> RiskItem:
+    try:
+        return (
+            RiskItem.objects.select_for_update(of=("self",))
+            .select_related("owner_node", "owner", "created_by")
+            .get(pk=pk)
+        )
+    except RiskItem.DoesNotExist:
+        raise NotFound("ریسک یافت نشد.")
+
+
+def _scale(value, field: str) -> int:
+    """1-5, checked here as well as in the serializer and the database: the rule must hold whoever calls."""
+    if isinstance(value, bool) or not isinstance(value, int) or value not in RISK_SCALE:
+        raise ValidationError({field: ["مقدار باید عددی از ۱ تا ۵ باشد."]})
+    return value
+
+
+def _assessment(likelihood: int, impact: int) -> str:
+    """«۳×۴» — how an assessment reads in the history."""
+    return to_persian_digits(f"{likelihood}×{impact}")
+
+
+def _require_review_date(review_on: datetime.date) -> None:
+    if review_on < timezone.localdate():
+        raise ConflictError("تاریخ بازنگری نمی‌تواند در گذشته باشد.", code="review_in_past")
+
+
+def _tell_owner(risk: RiskItem, actor) -> None:
+    if risk.owner is not None:
+        _tell(risk.owner, actor, NotificationKind.RISK_ASSIGNED, risk, f"ریسک «{risk.code}» به شما سپرده شد", risk.title)
+
+
+@transaction.atomic
+def create_risk(
+    *, actor, title, description, owner_node, likelihood, impact, owner=None, mitigation_plan="", review_on=None
+) -> RiskItem:
+    """`manage_quality`, or a lead of the node (or one above it): unlike a non-conformance, nobody
+    «reports» a risk — it is a judgement about a process, made by whoever answers for it. It needs an
+    active node, a likelihood and an impact (1-5) and a description; an owner, a plan and a review date
+    are optional (an owner, if named, must be able to act)."""
+    node = lock_node(owner_node.pk)
+    require_manager(actor, node)
+    _require_active_node(node, "برای گرهٔ بایگانی‌شده نمی‌توان ریسک ثبت کرد.")
+    title = normalize_title(_clean_text(title, "title", max_length=TITLE_MAX))
+    description = _clean_text(description, "description", max_length=TEXT_MAX)
+    mitigation_plan = _clean_text(mitigation_plan, "mitigation_plan", max_length=TEXT_MAX, required=False)
+    likelihood, impact = _scale(likelihood, "likelihood"), _scale(impact, "impact")
+    if owner is not None:
+        _require_eligible(owner, "مسئول ریسک", "owner_not_eligible")
+    if review_on is not None:
+        _require_review_date(review_on)
+    risk = RiskItem.objects.create(
+        title=title, description=description, owner_node=node, owner=owner, created_by=actor,
+        likelihood=likelihood, impact=impact, mitigation_plan=mitigation_plan, review_on=review_on,
+    )
+    record_event(
+        QualityEventKind.RISK_CREATED, actor, risk=risk, subject_title=risk.title,
+        to_status=RiskStatus.IDENTIFIED, note=_assessment(likelihood, impact),
+    )
+    _tell_owner(risk, actor)
+    return risk
+
+
+@transaction.atomic
+def edit_risk(risk: RiskItem, *, actor, changes: dict) -> RiskItem:
+    """Everything about a risk can change, at any status — a risk is a living judgement, so this is
+    permissive like a project's status: every change is *recorded*, none is guarded. Three kinds of line
+    are written, only for what really changed: `risk_edited` (the plain fields, named), `risk_assessed`
+    («۳×۴ ← ۴×۴») and `risk_status_changed` (from → to). Moving it to another node needs authority there
+    too; a newly named owner is told."""
+    risk = _lock_risk(risk.pk)
+    require_manager(actor, risk.owner_node)
+
+    edited = []
+    if "title" in changes:
+        title = normalize_title(_clean_text(changes["title"], "title", max_length=TITLE_MAX))
+        if title != risk.title:
+            risk.title = title
+            edited.append("title")
+    if "description" in changes:
+        description = _clean_text(changes["description"], "description", max_length=TEXT_MAX)
+        if description != risk.description:
+            risk.description = description
+            edited.append("description")
+    if "mitigation_plan" in changes:
+        plan = _clean_text(changes["mitigation_plan"], "mitigation_plan", max_length=TEXT_MAX, required=False)
+        if plan != risk.mitigation_plan:
+            risk.mitigation_plan = plan
+            edited.append("mitigation_plan")
+    if "review_on" in changes and changes["review_on"] != risk.review_on:
+        if changes["review_on"] is not None:
+            _require_review_date(changes["review_on"])
+        risk.review_on = changes["review_on"]
+        edited.append("review_on")
+    if "owner_node" in changes and changes["owner_node"].pk != risk.owner_node_id:
+        node = lock_node(changes["owner_node"].pk)
+        _require_active_node(node, "برای گرهٔ بایگانی‌شده نمی‌توان ریسک ثبت کرد.")
+        if not can_manage(OrgAccess(actor), node):
+            raise PermissionDenied("برای انتقال باید مسئول گرهٔ مقصد (یا گره‌های بالادست آن) هم باشید.")
+        risk.owner_node = node
+        edited.append("owner_node")
+    new_owner = None
+    if "owner" in changes and (changes["owner"].pk if changes["owner"] else None) != risk.owner_id:
+        new_owner = changes["owner"]
+        if new_owner is not None:
+            _require_eligible(new_owner, "مسئول ریسک", "owner_not_eligible")
+        risk.owner = new_owner
+        edited.append("owner")
+
+    before = (risk.likelihood, risk.impact)
+    if "likelihood" in changes:
+        risk.likelihood = _scale(changes["likelihood"], "likelihood")
+    if "impact" in changes:
+        risk.impact = _scale(changes["impact"], "impact")
+    assessed = (risk.likelihood, risk.impact) != before
+
+    previous_status = risk.status
+    if "status" in changes and changes["status"] != risk.status:
+        if changes["status"] not in RiskStatus.values:
+            raise ValidationError({"status": ["وضعیت نامعتبر است."]})
+        risk.status = changes["status"]
+
+    moved = risk.status != previous_status
+    if not (edited or assessed or moved):
+        return risk
+    fields = [*edited, *(["likelihood", "impact"] if assessed else []), *(["status"] if moved else [])]
+    risk.save(update_fields=[*fields, "updated_at"])
+    if edited:
+        record_event(
+            QualityEventKind.RISK_EDITED, actor, risk=risk, subject_title=risk.title,
+            note="، ".join(RISK_EDITABLE[name] for name in edited),
+        )
+    if assessed:
+        record_event(
+            QualityEventKind.RISK_ASSESSED, actor, risk=risk, subject_title=risk.title,
+            note=f"{_assessment(*before)} ← {_assessment(risk.likelihood, risk.impact)}",
+        )
+    if moved:
+        record_event(
+            QualityEventKind.RISK_STATUS_CHANGED, actor, risk=risk, subject_title=risk.title,
+            from_status=previous_status, to_status=risk.status,
+        )
+    if "owner" in edited:
+        _tell_owner(risk, actor)
+    return risk
+
+
+def risk_review_recipients(risk: RiskItem):
+    """Whom a review reminder goes to: the named owner, or — with nobody named, or the owner since
+    deactivated — the leads of the risk's node chain (the مدیر عامل if nobody leads)."""
+    if risk.owner is not None and risk.owner.is_active:
+        return [risk.owner]
+    return _chain_leads(risk.owner_node)

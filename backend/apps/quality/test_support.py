@@ -25,6 +25,7 @@ from .models import (
     NonConformance,
     QualityEvent,
     QualityEventKind,
+    RiskItem,
 )
 
 LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "veye-quality-tests"}}
@@ -132,3 +133,33 @@ class AuditBase(QualityBase):
 
     def audit_kinds(self, audit):
         return list(QualityEvent.objects.filter(audit=audit).order_by("id").values_list("kind", flat=True))
+
+
+class RiskBase(QualityBase):
+    """Risks live in the بخش RAG, made by its مسئول. `owner` is a person with no place in the chart: they
+    can read what they are named on and change nothing — which is exactly the case worth testing."""
+
+    def setUp(self):
+        super().setUp()
+        self.owner = person(name="مسئول پیگیری")
+
+    def risk_body(self, **over):
+        data = {
+            "title": "قطع شدن سرویس مدل", "description": "وابستگی به یک تامین‌کنندهٔ واحد",
+            "owner_node": self.org.rag.pk, "likelihood": 3, "impact": 4,
+        }
+        return {**data, **over}
+
+    def make_risk(self, user=None, **over) -> RiskItem:
+        response = self.api(user or self.rag_lead).post(reverse("risk-list"), self.risk_body(**over), format="json")
+        assert response.status_code == 201, response.data
+        return RiskItem.objects.get(pk=response.data["id"])
+
+    def risk_url(self, risk, name="risk-detail"):
+        return reverse(name, args=[risk.pk])
+
+    def patch_risk(self, risk, user=None, **body):
+        return self.api(user or self.rag_lead).patch(self.risk_url(risk), body, format="json")
+
+    def risk_kinds(self, risk):
+        return list(QualityEvent.objects.filter(risk=risk).order_by("id").values_list("kind", flat=True))

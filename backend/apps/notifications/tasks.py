@@ -116,3 +116,34 @@ def check_due_actions() -> int:
         )
         sent += 1 if created else 0
     return sent
+
+
+@shared_task(name="notifications.check_risk_reviews")
+def check_risk_reviews() -> int:
+    """A risk's review date (Phase 18) that is near or past, **one reminder per review date** — the
+    `dedupe_key` carries the date, so a re-run is a no-op and a *new* date after a review is a new
+    reminder. It goes to the named owner, or to the node chain's leads when nobody is named. A closed
+    risk has nothing to review; an accepted one still does."""
+    from apps.quality import services as quality
+    from apps.quality.models import RiskItem, RiskStatus
+
+    today = timezone.localdate()
+    horizon = today + timezone.timedelta(days=settings.INBOX_DUE_SOON_DAYS)
+    due = (
+        RiskItem.objects.filter(review_on__isnull=False, review_on__lte=horizon)
+        .exclude(status=RiskStatus.CLOSED)
+        .select_related("owner", "owner_node")
+    )
+    sent = 0
+    for risk in due:
+        overdue = risk.review_on < today
+        created = services.notify_many(
+            quality.risk_review_recipients(risk),
+            kind=NotificationKind.RISK_REVIEW_DUE,
+            title=f"زمان بازنگری ریسک «{risk.title}» گذشته است" if overdue else f"زمان بازنگری ریسک «{risk.title}» نزدیک است",
+            body=f"{risk.code}: {risk.owner_node.name}",
+            url=f"/quality/risks/{risk.pk}",
+            dedupe_key=f"risk:{risk.pk}:review:{risk.review_on.isoformat()}",
+        )
+        sent += len(created)
+    return sent

@@ -275,6 +275,8 @@ def node_blockers(node: OrgNode) -> dict[str, int]:
         "nonconformances": node.nonconformances.count(),
         # Audits whose scope it is (Phase 18) — PROTECT too.
         "audits": node.audits.count(),
+        # Risks it owns (Phase 18) — PROTECT too.
+        "risks": node.risks.count(),
     }
 
 

@@ -20,7 +20,10 @@ from .models import (
     NonConformance,
     QualityEvent,
     QualityEventKind,
+    RiskItem,
+    RiskStatus,
 )
+from .queries import risk_level, risk_level_label
 
 User = get_user_model()
 
@@ -153,6 +156,8 @@ class QualityEventSerializer(serializers.ModelSerializer):
     nc_title = serializers.SerializerMethodField()
     audit_code = serializers.SerializerMethodField()
     audit_title = serializers.SerializerMethodField()
+    risk_code = serializers.SerializerMethodField()
+    risk_title = serializers.SerializerMethodField()
     from_status_label = serializers.SerializerMethodField()
     to_status_label = serializers.SerializerMethodField()
 
@@ -160,7 +165,7 @@ class QualityEventSerializer(serializers.ModelSerializer):
         model = QualityEvent
         fields = [
             "id", "kind", "kind_label", "nc", "nc_code", "nc_title", "audit", "audit_code", "audit_title",
-            "actor_name", "actor_title", "subject_title", "from_status", "to_status",
+            "risk", "risk_code", "risk_title", "actor_name", "actor_title", "subject_title", "from_status", "to_status",
             "from_status_label", "to_status_label", "note", "created_at",
         ]
         read_only_fields = fields
@@ -177,11 +182,17 @@ class QualityEventSerializer(serializers.ModelSerializer):
     def get_audit_title(self, obj):
         return obj.audit.title if obj.audit_id else None
 
+    def get_risk_code(self, obj):
+        return obj.risk.code if obj.risk_id else None
+
+    def get_risk_title(self, obj):
+        return obj.risk.title if obj.risk_id else None
+
     @staticmethod
     def _label(kind: str, value: str) -> str:
         """A status's Persian label — from the record's enum, the action's or the audit's, by the kind
         of event. `action_due_changed` carries ISO dates in these fields, and `action_assigned`,
-        `audit_edited` and `audit_auditor_changed` carry none."""
+        `audit_edited`, `audit_auditor_changed` and the risk kinds other than created / status carry none."""
         if not value:
             return ""
         enum = _STATUS_ENUM_BY_KIND.get(kind) or (NcStatus if kind.startswith("nc_") else None)
@@ -209,6 +220,8 @@ _STATUS_ENUM_BY_KIND = {
     QualityEventKind.AUDIT_COMPLETED: AuditStatus,
     QualityEventKind.AUDIT_CANCELLED: AuditStatus,
     QualityEventKind.FINDING_RAISED: NcStatus,
+    QualityEventKind.RISK_CREATED: RiskStatus,
+    QualityEventKind.RISK_STATUS_CHANGED: RiskStatus,
 }
 
 
@@ -383,3 +396,80 @@ class FindingCreateSerializer(serializers.Serializer):
     related_document = serializers.PrimaryKeyRelatedField(
         queryset=Document.objects.all(), required=False, allow_null=True, default=None
     )
+
+
+class RiskSerializer(serializers.ModelSerializer):
+    """A risk as the register and its page need it. `score` and `level` are derived from likelihood ×
+    impact (`queries.risk_level` is the one definition of the bands); `can_edit` is the very function the
+    write endpoints enforce. Needs `request` in the context; build the queryset with `visible_risks`."""
+
+    code = serializers.CharField(read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    owner_node_name = serializers.CharField(source="owner_node.name", read_only=True)
+    owner_name = serializers.SerializerMethodField()
+    owner_title = serializers.SerializerMethodField()
+    owner_is_active = serializers.SerializerMethodField()
+    created_by_name = serializers.CharField(source="created_by.full_name", read_only=True)
+    score = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
+    level_label = serializers.SerializerMethodField()
+    #: A risk still on the register whose review date has passed.
+    review_overdue = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RiskItem
+        fields = [
+            "id", "code", "title", "description", "owner_node", "owner_node_name", "owner", "owner_name",
+            "owner_title", "owner_is_active", "created_by", "created_by_name", "likelihood", "impact", "score",
+            "level", "level_label", "status", "status_label", "mitigation_plan", "review_on", "review_overdue",
+            "created_at", "updated_at", "can_edit",
+        ]
+        read_only_fields = fields
+
+    def get_owner_name(self, obj):
+        return obj.owner.full_name if obj.owner_id else None
+
+    def get_owner_title(self, obj):
+        return obj.owner.title if obj.owner_id else None
+
+    def get_owner_is_active(self, obj):
+        return obj.owner.is_active if obj.owner_id else None
+
+    def get_score(self, obj) -> int:
+        return obj.likelihood * obj.impact
+
+    def get_level(self, obj) -> str:
+        return risk_level(obj.likelihood * obj.impact)
+
+    def get_level_label(self, obj) -> str:
+        return risk_level_label(self.get_level(obj))
+
+    def get_review_overdue(self, obj) -> bool:
+        return bool(obj.review_on) and obj.status != RiskStatus.CLOSED and obj.review_on < timezone.localdate()
+
+    def get_can_edit(self, obj) -> bool:
+        return can_manage(access_for(self.context["request"]), obj.owner_node)
+
+
+class RiskCreateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255)
+    description = serializers.CharField(max_length=4000)
+    owner_node = serializers.PrimaryKeyRelatedField(queryset=OrgNode.objects.all())
+    likelihood = serializers.IntegerField(min_value=1, max_value=5)
+    impact = serializers.IntegerField(min_value=1, max_value=5)
+    owner = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True, default=None)
+    mitigation_plan = serializers.CharField(max_length=4000, required=False, allow_blank=True, default="")
+    review_on = serializers.DateField(required=False, allow_null=True, default=None)
+
+
+class RiskUpdateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=255, required=False)
+    description = serializers.CharField(max_length=4000, required=False)
+    owner_node = serializers.PrimaryKeyRelatedField(queryset=OrgNode.objects.all(), required=False)
+    owner = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
+    likelihood = serializers.IntegerField(min_value=1, max_value=5, required=False)
+    impact = serializers.IntegerField(min_value=1, max_value=5, required=False)
+    status = serializers.ChoiceField(choices=RiskStatus.choices, required=False)
+    mitigation_plan = serializers.CharField(max_length=4000, required=False, allow_blank=True)
+    review_on = serializers.DateField(required=False, allow_null=True)

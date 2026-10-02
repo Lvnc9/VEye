@@ -31,6 +31,8 @@ class NotificationKind(models.TextChoices):
     CAPA_OVERDUE = "capa_overdue", "اقدام اصلاحی از مهلت گذشته است"
     AUDIT_PLANNED = "audit_planned", "ممیزی داخلی برنامه‌ریزی شد"
     AUDIT_CANCELLED = "audit_cancelled", "ممیزی داخلی لغو شد"
+    RISK_ASSIGNED = "risk_assigned", "ریسکی به شما سپرده شد"
+    RISK_REVIEW_DUE = "risk_review_due", "زمان بازنگری یک ریسک رسیده است"
     OBJECTIVE_DUE_SOON = "objective_due_soon", "ریزهدف نزدیک به مهلت است"
     OBJECTIVE_OVERDUE = "objective_overdue", "ریزهدف از مهلت گذشته است"
 

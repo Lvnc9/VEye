@@ -14,7 +14,13 @@
   Read a finding              as any non-conformance, **plus** the lead auditor of the audit that raised it (so
                               the auditor keeps sight of what a quality manager raised on their behalf)
 
-Reading is decided by **queryset scoping** (`visible_nonconformances`, `visible_audits`), as for projects: a
+  Create / edit a risk        `manage_quality`, **or** a lead of the risk's node or any node above it — the
+                              same `can_manage` as for a non-conformance (a person who only *reads* a risk,
+                              even as its named owner, cannot change it)
+  Read a risk                 its creator; its named owner; a مسئول of its node or any node above it;
+                              `manage_quality` (so the مدیر عامل)
+
+Reading is decided by **queryset scoping** (`visible_nonconformances`, `visible_audits`, `visible_risks`), as for projects: a
 record you may not read is a 404 and no list route can forget the rule. `can_manage` is for writes on a record
 that is already visible, so the 403 can say why.
 """
@@ -24,7 +30,7 @@ from rest_framework.exceptions import PermissionDenied
 from apps.accounts.models import Capability
 from apps.organization.access import OrgAccess, access_for
 
-from .models import CorrectiveAction, InternalAudit, NonConformance
+from .models import CorrectiveAction, InternalAudit, NonConformance, RiskItem
 
 NOT_A_MANAGER = "شما مسئول گره این مورد (یا گره‌های بالادست آن) یا مسئول کیفیت نیستید."
 NOT_A_QUALITY_MANAGER = "فقط مسئول کیفیت می‌تواند ممیزی را برنامه‌ریزی، ویرایش یا لغو کند."
@@ -98,3 +104,14 @@ def visible_audits(request):
     if org.holds(Capability.MANAGE_QUALITY):
         return queryset
     return queryset.filter(Q(lead_auditor=request.user) | org.led_subtree_q("scope_node__path"))
+
+
+def visible_risks(request):
+    """The risks this person may read."""
+    queryset = RiskItem.objects.select_related("owner_node", "owner", "created_by")
+    org = access_for(request)
+    if org.holds(Capability.MANAGE_QUALITY):
+        return queryset
+    return queryset.filter(
+        Q(created_by=request.user) | Q(owner=request.user) | org.led_subtree_q("owner_node__path")
+    )

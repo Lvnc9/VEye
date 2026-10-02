@@ -279,6 +279,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "notifications.check_due_actions",
         "schedule": crontab(hour=7, minute=35),
     },
+    "notifications-check-risk-reviews": {
+        "task": "notifications.check_risk_reviews",
+        "schedule": crontab(hour=7, minute=40),
+    },
 }
 
 # ---------------------------------------------------------------------------
