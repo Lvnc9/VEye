@@ -13,6 +13,7 @@ import {
   jalaliWeekday,
   toGregorian,
   toJalali,
+  todayIso,
 } from "./jalali";
 
 // The platform's persian calendar with Latin digits, to compare numbers.
@@ -116,5 +117,14 @@ describe("display is day-month-year (owner, 2026-09-25)", () => {
   it("returns an empty string for nothing or garbage", () => {
     expect(formatJalali(null)).toBe("");
     expect(formatJalali("not a date")).toBe("");
+  });
+});
+
+describe("todayIso", () => {
+  it("is the browser's own calendar date as ISO, not the UTC one", () => {
+    const now = new Date();
+    const local = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    expect(todayIso()).toBe(local);
+    expect(todayIso()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

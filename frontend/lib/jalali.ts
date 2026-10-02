@@ -98,6 +98,12 @@ export function formatJalaliLong(value: string | Date | null | undefined): strin
 }
 
 /** Today, for display ("۲۵-۰۶-۱۴۰۵"). */
+/** Today as an ISO `YYYY-MM-DD` in the browser's own zone (what a date picker's `min`/`max` and a
+ *  "not in the future" check compare against — `toISOString()` alone would give the UTC date). */
+export function todayIso(): string {
+  return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 export function todayJalali(): string {
   return formatJalali(new Date());
 }

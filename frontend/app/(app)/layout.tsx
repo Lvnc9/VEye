@@ -15,6 +15,7 @@ import {
   Menu,
   PieChart,
   Settings,
+  ShieldAlert,
   UserPlus,
   X,
 } from "lucide-react";
@@ -69,6 +70,7 @@ function navItemsFor(user: User | null): NavItem[] {
       icon: PieChart,
       group: "مستندات",
     },
+    { href: "/quality", label: "عدم‌انطباق‌ها", ready: true, icon: ShieldAlert, group: "کیفیت" },
     {
       href: "/personnel/register",
       label: "ثبت پرسنل",
