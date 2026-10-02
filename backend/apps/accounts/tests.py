@@ -61,7 +61,10 @@ class CapabilityTests(TestCase):
 
     def test_headquarters_prints_and_creates_projects(self):
         user = User(access_roll=AccessRoll.HEADQUARTERS, access_level=AccessLevel.LEVEL_2)
-        self.assertEqual(user.capabilities, frozenset({Capability.PRINT_DOCUMENT, Capability.CREATE_PROJECT}))
+        self.assertEqual(
+            user.capabilities,
+            frozenset({Capability.PRINT_DOCUMENT, Capability.CREATE_PROJECT, Capability.VIEW_REPORTS}),
+        )
 
     def test_no_roll_below_the_managing_director_grants_a_document_step(self):
         steps = {Capability.CREATE_DOCUMENT, Capability.CONFIRM_DOCUMENT, Capability.APPROVE_DOCUMENT}
@@ -85,6 +88,7 @@ class CapabilityTests(TestCase):
                         Capability.MANAGE_ORGANIZATION,
                         Capability.MANAGE_MEMBERSHIP,
                         Capability.CREATE_PROJECT,
+                        Capability.VIEW_REPORTS,
                     }
                 ),
             )
@@ -415,6 +419,7 @@ class DeveloperAccountTests(TestCase):
             Capability.APPROVE_DOCUMENT,
             Capability.PRINT_DOCUMENT,
             Capability.CREATE_PROJECT,
+            Capability.VIEW_REPORTS,
         ):
             self.assertFalse(developer.has_capability(document_capability))
 

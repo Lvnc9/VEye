@@ -64,7 +64,8 @@ export type Capability =
   | "print_document"
   | "manage_organization"
   | "manage_membership"
-  | "create_project";
+  | "create_project"
+  | "view_reports";
 
 export const CAPABILITY_LABELS: Record<Capability, string> = {
   create_document: "تدوین مستند",
@@ -75,6 +76,7 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   manage_organization: "مدیریت ساختار سازمانی",
   manage_membership: "مدیریت عضویت افراد",
   create_project: "ایجاد پروژه",
+  view_reports: "مشاهدهٔ گزارش‌ها",
 };
 
 export interface User {

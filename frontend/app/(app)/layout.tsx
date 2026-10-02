@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PieChart,
   Settings,
   UserPlus,
   X,
@@ -60,6 +61,14 @@ function navItemsFor(user: User | null): NavItem[] {
     { href: "/projects", label: "پروژه‌ها", ready: true, icon: FolderKanban, group: "سازمان و پروژه‌ها" },
     { href: "/documents", label: "ساخت مستند", ready: true, icon: FilePlus2, group: "مستندات" },
     { href: "/documents/history", label: "سوابق مستندات", ready: true, icon: History, group: "مستندات" },
+    {
+      href: "/reports",
+      label: "گزارش‌ها",
+      ready: true,
+      capability: "view_reports",
+      icon: PieChart,
+      group: "مستندات",
+    },
     {
       href: "/personnel/register",
       label: "ثبت پرسنل",

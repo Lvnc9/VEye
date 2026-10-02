@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "apps.pdfgen",
     "apps.importer",
     "apps.notifications",
+    "apps.reports",
 ]
 
 MIDDLEWARE = [

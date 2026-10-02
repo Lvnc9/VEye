@@ -41,6 +41,10 @@ class Capability(models.TextChoices):
     MANAGE_ORGANIZATION = "manage_organization", "مدیریت ساختار سازمانی"
     MANAGE_MEMBERSHIP = "manage_membership", "مدیریت عضویت افراد"
     CREATE_PROJECT = "create_project", "ایجاد پروژه"
+    # Phase 17: the reports surface — CSV exports and the company KPI dashboard. Read-only, and it
+    # never widens who can *see* anything (every export is scoped like the screen it mirrors); this
+    # only decides who gets the surface, so ستادی managers can have it without any org-management right.
+    VIEW_REPORTS = "view_reports", "مشاهدهٔ گزارش‌ها"
 
 
 #: Access roll -> capabilities. See User.capabilities for the rationale.
@@ -54,7 +58,9 @@ class Capability(models.TextChoices):
 #: buttons on the dashboard of the مدیر عامل (Dashboard.py:241-246).
 ROLL_CAPABILITIES = {
     AccessRoll.GUILD: frozenset({Capability.PRINT_DOCUMENT}),
-    AccessRoll.HEADQUARTERS: frozenset({Capability.PRINT_DOCUMENT, Capability.CREATE_PROJECT}),
+    AccessRoll.HEADQUARTERS: frozenset(
+        {Capability.PRINT_DOCUMENT, Capability.CREATE_PROJECT, Capability.VIEW_REPORTS}
+    ),
     AccessRoll.EMPLOYER: frozenset(
         {
             Capability.MANAGE_PERSONNEL,
@@ -62,6 +68,7 @@ ROLL_CAPABILITIES = {
             Capability.MANAGE_ORGANIZATION,
             Capability.MANAGE_MEMBERSHIP,
             Capability.CREATE_PROJECT,
+            Capability.VIEW_REPORTS,
         }
     ),
 }
