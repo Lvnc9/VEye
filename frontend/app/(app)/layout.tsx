@@ -15,6 +15,7 @@ import {
   Inbox,
   LayoutDashboard,
   LogOut,
+  Megaphone,
   Menu,
   PieChart,
   Settings,
@@ -76,6 +77,7 @@ function navItemsFor(user: User | null): NavItem[] {
     { href: "/quality", label: "عدم‌انطباق‌ها", ready: true, icon: ShieldAlert, group: "کیفیت" },
     { href: "/quality/audits", label: "ممیزی‌ها", ready: true, icon: ClipboardCheck, group: "کیفیت" },
     { href: "/quality/risks", label: "ریسک‌ها", ready: true, icon: Gauge, group: "کیفیت" },
+    { href: "/announcements", label: "اطلاعیه‌ها", ready: true, icon: Megaphone, group: "کارکنان" },
     { href: "/leave", label: "مرخصی", ready: true, icon: CalendarDays, group: "کارکنان" },
     {
       href: "/personnel/register",

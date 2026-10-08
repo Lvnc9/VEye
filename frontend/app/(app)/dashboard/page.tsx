@@ -16,6 +16,7 @@ import {
 import { ErrorBanner, EmptyBanner } from "@/components/StatusBanner";
 import { useCurrentUser } from "@/lib/current-user";
 import { todayJalali } from "@/lib/jalali";
+import { AnnouncementsCard } from "@/components/dashboard/AnnouncementsCard";
 import { AwaitingCard } from "@/components/dashboard/AwaitingCard";
 import { RecentActivityCard } from "@/components/dashboard/RecentActivityCard";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -199,6 +200,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="veye-stagger space-y-6 xl:col-span-2" style={stagger(5)}>
+          <AnnouncementsCard />
           <Card aria-label="اطلاعات سامانه">
             <CardHeader
               title="اطلاعات سامانه"
