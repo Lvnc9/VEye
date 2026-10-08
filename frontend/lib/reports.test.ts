@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { documentsExportPath, formatDuration, formatPercent, kpiPath, projectsExportPath, workloadWidth } from "./reports";
+import {
+  documentsExportPath,
+  formatDuration,
+  formatPercent,
+  kpiPath,
+  projectsExportPath,
+  workloadWidth,
+  AGING_BUCKETS,
+  agingWidth,
+  qualityExportPath,
+} from "./reports";
 
 describe("documentsExportPath", () => {
   it("is the bare endpoint with no filters", () => {
@@ -64,5 +74,28 @@ describe("workloadWidth", () => {
     expect(workloadWidth(2, 4)).toBe(50);
     expect(workloadWidth(4, 4)).toBe(100);
     expect(workloadWidth(0, 0)).toBe(0);
+  });
+});
+
+
+describe("the quality figures (Phase 18)", () => {
+  it("exports the non-conformances with only the filters that are set", () => {
+    expect(qualityExportPath()).toBe("/reports/quality/export/");
+    expect(qualityExportPath({ status: "", severity: " ", source: "" })).toBe("/reports/quality/export/");
+    expect(qualityExportPath({ status: "OPEN", severity: "CRITICAL" })).toBe("/reports/quality/export/?status=OPEN&severity=CRITICAL");
+    expect(qualityExportPath({ source: "AUDIT" })).toBe("/reports/quality/export/?source=AUDIT");
+  });
+
+  it("names the server's four aging buckets, youngest first", () => {
+    expect(AGING_BUCKETS.map(([key]) => key)).toEqual(["0_30", "31_60", "61_90", "over_90"]);
+    expect(AGING_BUCKETS.map(([, label]) => label)).toEqual(["تا ۳۰ روز", "۳۱ تا ۶۰ روز", "۶۱ تا ۹۰ روز", "بیش از ۹۰ روز"]);
+  });
+
+  it("draws an aging bar against the fullest bucket", () => {
+    const aging = { "0_30": 4, "31_60": 2, "61_90": 0, over_90: 1 };
+    expect(agingWidth(aging, "0_30")).toBe(100);
+    expect(agingWidth(aging, "31_60")).toBe(50);
+    expect(agingWidth(aging, "61_90")).toBe(0);
+    expect(agingWidth({ "0_30": 0, "31_60": 0, "61_90": 0, over_90: 0 }, "0_30")).toBe(0);
   });
 });

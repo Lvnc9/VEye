@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { ApiError, apiDownload } from "@/lib/api-client";
 import { useCurrentUser } from "@/lib/current-user";
-import { documentsExportPath, projectsExportPath } from "@/lib/reports";
+import { documentsExportPath, projectsExportPath, qualityExportPath } from "@/lib/reports";
+import { NC_SEVERITY_LABELS, NC_SOURCE_LABELS, NC_STATUS_LABELS } from "@/lib/quality";
 import { DOCUMENT_CATEGORY_LABELS, DOCUMENT_GROUP_LABELS, DOCUMENT_STATUS_LABELS } from "@/lib/types";
 import { KpiPanel } from "@/components/reports/KpiPanel";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { controlClass } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Download, FileSpreadsheet, FolderKanban } from "lucide-react";
+import { Download, FileSpreadsheet, FolderKanban, ShieldAlert } from "lucide-react";
 
 const select = `${controlClass} h-10 px-2 text-sm`;
 
@@ -29,21 +30,24 @@ async function saveCsv(path: string, fallbackName: string) {
   URL.revokeObjectURL(url);
 }
 
-/** «گزارش‌ها» (Phase 17): spreadsheets of the document register and of the projects the viewer may
- *  read. Gated by `view_reports` (the server enforces it; this only hides the page). */
+/** «گزارش‌ها» (Phase 17): spreadsheets of the document register, of the projects and (Phase 18) of the
+ *  non-conformances the viewer may read. Gated by `view_reports` (the server enforces it; this only hides the page). */
 export default function ReportsPage() {
   const { can, loading } = useCurrentUser();
   const [group, setGroup] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("");
   const [archived, setArchived] = useState(false);
-  const [busy, setBusy] = useState<"documents" | "projects" | null>(null);
+  const [ncStatus, setNcStatus] = useState("");
+  const [ncSeverity, setNcSeverity] = useState("");
+  const [ncSource, setNcSource] = useState("");
+  const [busy, setBusy] = useState<"documents" | "projects" | "quality" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (loading) return <LoadingBanner />;
   if (!can("view_reports")) return <ErrorBanner message="شما به گزارش‌ها دسترسی ندارید." />;
 
-  async function run(kind: "documents" | "projects", path: string, name: string) {
+  async function run(kind: "documents" | "projects" | "quality", path: string, name: string) {
     setBusy(kind);
     setError(null);
     try {
@@ -109,6 +113,43 @@ export default function ReportsPage() {
               onClick={() => run("projects", projectsExportPath(archived), "projects.csv")}
             >
               دانلود CSV پروژه‌ها
+            </Button>
+          </div>
+        </Card>
+
+        <Card aria-label="خروجی عدم‌انطباق‌ها" className="lg:col-span-2">
+          <CardHeader
+            title="فهرست عدم‌انطباق‌ها"
+            icon={<ShieldAlert />}
+            description="مواردی که شما حق دیدنشان را دارید — با ممیزی مبدأ، ریشهٔ مشکل و شمار اقدام‌ها (کل، تاییدشده، دیرکرد)"
+          />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <select aria-label="وضعیت عدم‌انطباق" value={ncStatus} onChange={(e) => setNcStatus(e.target.value)} className={select}>
+              <option value="">همهٔ وضعیت‌ها</option>
+              {Object.entries(NC_STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <select aria-label="شدت" value={ncSeverity} onChange={(e) => setNcSeverity(e.target.value)} className={select}>
+              <option value="">همهٔ شدت‌ها</option>
+              {Object.entries(NC_SEVERITY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <select aria-label="منبع" value={ncSource} onChange={(e) => setNcSource(e.target.value)} className={select}>
+              <option value="">همهٔ منبع‌ها</option>
+              {Object.entries(NC_SOURCE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="mt-4">
+            <Button
+              loading={busy === "quality"}
+              icon={<Download />}
+              onClick={() => run("quality", qualityExportPath({ status: ncStatus, severity: ncSeverity, source: ncSource }), "nonconformances.csv")}
+            >
+              دانلود CSV عدم‌انطباق‌ها
             </Button>
           </div>
         </Card>

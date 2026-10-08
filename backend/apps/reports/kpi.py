@@ -16,11 +16,27 @@ The definitions are deliberate and shown on the screen, so nobody has to guess w
 
 A step is counted in the window its *end* event falls in, so a step that began before the window and
 finished inside it still counts.
+
+The quality figures (Phase 18) cover the records, audits and risks the viewer may read (`visible_*` —
+in practice everything, since everyone who may open Reports also holds `manage_quality`, but built that
+way so it stays true if those two capabilities ever part):
+
+  open record       a non-conformance OPEN or IN_PROGRESS
+  aging             an open record's age since it was reported, in four buckets: 0-30, 31-60, 61-90, 90+ days
+  time to close     reported → closed, over the records closed in the window (a reopened record counts its
+                    whole life, up to its last close)
+  on-time action    a corrective action verified in the window whose work was finished (`completed_at`) on
+                    or before its deadline; the rate is on-time ÷ verified in the window
+  overdue action    TODO / IN_PROGRESS past its deadline on a record still being worked — now
+  audits            completed in the window; planned, late (planned and past its date) and running — now;
+                    findings raised in the window
+  risks             the heat map's counts per level over the risks still on the register, review dates
+                    passed, and those with nobody named — now
 """
 from datetime import timedelta
 from statistics import median
 
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
 from apps.core.constants import DocumentEventKind, DocumentStatus
@@ -28,6 +44,17 @@ from apps.documents.models import Document, DocumentEvent
 from apps.projects.access import visible_projects
 from apps.projects.models import CLOSED_OBJECTIVE_STATUSES, ObjectiveAssignee, ProjectStatus
 from apps.projects.queries import progress_percent, with_progress
+from apps.quality.access import visible_audits, visible_nonconformances, visible_risks
+from apps.quality.models import (
+    LIVE_RISK_STATUSES,
+    OPEN_ACTION_STATUSES,
+    ActionStatus,
+    AuditStatus,
+    CorrectiveAction,
+    NcSeverity,
+    NcStatus,
+)
+from apps.quality.queries import risk_matrix
 
 DEFAULT_DAYS = 90
 MIN_DAYS, MAX_DAYS = 7, 730
@@ -172,6 +199,75 @@ def project_kpis(request) -> dict:
     }
 
 
+AGING_BUCKETS = (("0_30", 0, 30), ("31_60", 30, 60), ("61_90", 60, 90), ("over_90", 90, None))
+
+
+def quality_kpis(request, since) -> dict:
+    now, today = timezone.now(), timezone.localdate()
+    records = visible_nonconformances(request).order_by()
+    open_records = records.filter(status__in=[NcStatus.OPEN, NcStatus.IN_PROGRESS])
+
+    aging = {}
+    for key, younger, older in AGING_BUCKETS:
+        bucket = open_records.filter(created_at__lte=now - timedelta(days=younger))
+        if older is not None:
+            bucket = bucket.filter(created_at__gt=now - timedelta(days=older))
+        aging[key] = bucket.count()
+
+    closed = records.filter(status=NcStatus.CLOSED, closed_at__gte=since).values_list("created_at", "closed_at")
+    by_status = {row["status"]: row["n"] for row in records.values("status").annotate(n=Count("id"))}
+    by_severity = {row["severity"]: row["n"] for row in open_records.values("severity").annotate(n=Count("id"))}
+
+    actions = CorrectiveAction.objects.filter(nc__in=records.values("pk"))
+    verified = actions.filter(status=ActionStatus.VERIFIED, verified_at__gte=since)
+    verified_count = verified.count()
+    on_time = verified.filter(completed_at__isnull=False, completed_at__date__lte=F("due_on")).count()
+    live_actions = actions.filter(status__in=OPEN_ACTION_STATUSES, nc__status=NcStatus.IN_PROGRESS)
+
+    audits = visible_audits(request).order_by()
+    planned = audits.filter(status=AuditStatus.PLANNED)
+    risks = visible_risks(request).order_by()
+    live_risks = risks.filter(status__in=LIVE_RISK_STATUSES)
+    matrix = risk_matrix(risks)
+
+    return {
+        "scope_note": "مواردی که شما حق دیدنشان را دارید",
+        "nonconformances": {
+            "open": open_records.count(),
+            "by_status": {status: by_status.get(status, 0) for status in NcStatus.values},
+            "open_by_severity": {severity: by_severity.get(severity, 0) for severity in NcSeverity.values},
+            "aging": aging,
+            "reported_in_window": records.filter(created_at__gte=since).count(),
+            "time_to_close": summarize([(end, end - start) for start, end in closed], since),
+        },
+        "actions": {
+            "open": live_actions.count(),
+            "overdue": live_actions.filter(due_on__lt=today).count(),
+            "verified_in_window": verified_count,
+            "on_time": on_time,
+            "on_time_rate": round(100 * on_time / verified_count, 1) if verified_count else None,
+        },
+        "audits": {
+            "completed_in_window": audits.filter(status=AuditStatus.COMPLETED, completed_at__gte=since).count(),
+            "planned": planned.count(),
+            "late": planned.filter(planned_on__lt=today).count(),
+            "in_progress": audits.filter(status=AuditStatus.IN_PROGRESS).count(),
+            "findings_in_window": records.filter(audit__isnull=False, created_at__gte=since).count(),
+        },
+        "risks": {
+            "live": matrix["total"],
+            "levels": matrix["levels"],
+            "review_overdue": live_risks.filter(review_on__lt=today).count(),
+            "without_owner": live_risks.filter(owner__isnull=True).count(),
+        },
+    }
+
+
 def compute(request, days: int) -> dict:
     since = timezone.now() - timedelta(days=days)
-    return {"days": days, "documents": document_kpis(since), "projects": project_kpis(request)}
+    return {
+        "days": days,
+        "documents": document_kpis(since),
+        "projects": project_kpis(request),
+        "quality": quality_kpis(request, since),
+    }

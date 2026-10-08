@@ -1,5 +1,5 @@
-"""The reports surface (Phase 17): CSV exports of the document register and of the projects a person
-may read. Gated by `view_reports`; each export is exactly what the matching screen would show, so
+"""The reports surface (Phase 17): CSV exports of the document register, of the projects a person
+may read and (Phase 18) of the non-conformances they may read. Gated by `view_reports`; each export is exactly what the matching screen would show, so
 nothing here widens who can see what — the document register is open to everyone signed in, and the
 project export goes through `visible_projects`, the same scoping `/projects/` uses."""
 import jdatetime
@@ -13,6 +13,9 @@ from apps.documents.models import Document
 from apps.projects.access import visible_projects
 from apps.projects.models import ProjectMember, ProjectRole
 from apps.projects.queries import progress_percent, with_progress
+from apps.quality.access import visible_nonconformances
+from apps.quality.models import NcSeverity, NcSource, NcStatus
+from apps.quality.queries import with_action_counts
 from rest_framework.permissions import IsAuthenticated
 
 from rest_framework.response import Response
@@ -95,10 +98,39 @@ class ProjectsExportView(_ReportView):
         return csv_response("projects", PROJECT_HEADER, rows)
 
 
+QUALITY_HEADER = [
+    "کد", "عنوان", "منبع", "شدت", "وضعیت", "گرهٔ مربوط", "ثبت‌کننده", "تاریخ کشف", "ممیزی", "ریشهٔ مشکل",
+    "تعداد اقدام", "اقدام تاییدشده", "اقدام دیرکرد", "تاریخ ثبت", "تاریخ بستن",
+]
+
+
+class NonConformancesExportView(_ReportView):
+    """GET /reports/quality/export/ — the non-conformances this person may read (`visible_nonconformances`,
+    the same scoping as `/quality/`), one row each, newest first, with the derived action counts. Filters:
+    `?status= ?severity= ?source=` (an unknown value matches nothing, as on the list)."""
+
+    def get(self, request):
+        queryset = with_action_counts(visible_nonconformances(request)).order_by("-created_at", "-id")
+        for param, allowed in (("status", NcStatus.values), ("severity", NcSeverity.values), ("source", NcSource.values)):
+            value = request.query_params.get(param)
+            if value:
+                queryset = queryset.filter(**{param: value}) if value in allowed else queryset.none()
+        rows = (
+            [
+                nc.code, nc.title, nc.get_source_display(), nc.get_severity_display(), nc.get_status_display(),
+                nc.owner_node.name, nc.reported_by.full_name, jalali(nc.detected_on),
+                nc.audit.code if nc.audit_id else "", nc.root_cause, nc.actions_total, nc.actions_verified,
+                nc.actions_overdue, jalali(nc.created_at), jalali(nc.closed_at),
+            ]
+            for nc in queryset.iterator(chunk_size=500)
+        )
+        return csv_response("nonconformances", QUALITY_HEADER, rows)
+
+
 class KpiView(_ReportView):
     """GET /reports/kpi/ — the company numbers (definitions in `kpi.py`, shown beside each number on
-    the screen). `?days=` is the window the document figures look back over (7–730, default 90); the
-    project figures are about *now*. Not cached: the project half is scoped to the viewer, and the
+    the screen). `?days=` is the window the document figures, and the quality figures marked «in the
+    window», look back over (7–730, default 90); the project figures and the rest are about *now*. Not cached: the project half is scoped to the viewer, and the
     queries are aggregates over rows that already exist."""
 
     def get(self, request):
