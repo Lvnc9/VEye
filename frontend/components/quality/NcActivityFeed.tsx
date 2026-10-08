@@ -12,8 +12,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
  * A history rail — the same shape as `ProjectActivityFeed`: a `key = path:version` stale-guard so a fast
  * navigation never flashes the previous record's feed, errors swallowed into an empty list ("the trail is
  * a nicety; never block the page"), a coloured dot per kind. `version` lets the page force a refetch after
- * an action without changing the URL. One component for a non-conformance's rail and an audit's: only the
- * endpoint and the heading differ (`NcActivityFeed`, `AuditActivityFeed` below).
+ * an action without changing the URL. One component for the rail of a non-conformance, an audit and a
+ * risk: only the endpoint and the heading differ (`NcActivityFeed`, `AuditActivityFeed`, `RiskActivityFeed`).
  */
 function QualityActivityFeed({
   path,
@@ -86,4 +86,8 @@ export function NcActivityFeed({ ncId, version }: { ncId: number; version: numbe
 
 export function AuditActivityFeed({ auditId, version }: { auditId: number; version: number | string }) {
   return <QualityActivityFeed path={`/quality/audits/${auditId}/activity/`} label="تاریخچهٔ ممیزی" version={version} showFindingTitle />;
+}
+
+export function RiskActivityFeed({ riskId, version }: { riskId: number; version: number | string }) {
+  return <QualityActivityFeed path={`/quality/risks/${riskId}/activity/`} label="تاریخچهٔ ریسک" version={version} />;
 }

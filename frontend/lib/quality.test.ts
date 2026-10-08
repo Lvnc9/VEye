@@ -43,6 +43,27 @@ import {
   type InternalAudit,
   type NonConformance,
   type QualityEvent,
+  EMPTY_RISK_FILTERS,
+  IMPACT_LABELS,
+  LIKELIHOOD_LABELS,
+  RISK_LEVELS,
+  RISK_LEVEL_LABELS,
+  RISK_LEVEL_STYLE,
+  RISK_STATUS_LABELS,
+  RISK_STATUS_TONE,
+  assessmentText,
+  emptyRiskForm,
+  hasActiveRiskFilters,
+  manageableNodes,
+  matrixRows,
+  riskCreatePayload,
+  riskFormFrom,
+  riskLevel,
+  riskPatchPayload,
+  riskQueryParams,
+  validateRiskForm,
+  type MatrixCell,
+  type RiskItem,
 } from "./quality";
 
 const TODAY = "2026-10-02";
@@ -100,6 +121,9 @@ function event(over: Partial<QualityEvent> = {}): QualityEvent {
     audit: null,
     audit_code: null,
     audit_title: null,
+    risk: null,
+    risk_code: null,
+    risk_title: null,
     actor_name: "مسئول",
     actor_title: "",
     subject_title: "",
@@ -559,5 +583,198 @@ describe("audit history lines", () => {
       ),
     ).toBe("در حال انجام ← انجام‌شده — همه چیز بررسی شد");
     expect(qualityEventDetail(event({ kind: "finding_raised", note: "AU-0007: ممیزی داخلی" }))).toBe("AU-0007: ممیزی داخلی");
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// The risk register (slice 8)
+// ---------------------------------------------------------------------------
+
+function risk(over: Partial<RiskItem> = {}): RiskItem {
+  return {
+    id: 13,
+    code: "RK-0013",
+    title: "قطع شدن سرویس مدل",
+    description: "وابستگی به یک تامین‌کننده",
+    owner_node: 59,
+    owner_node_name: "RAG",
+    owner: 5,
+    owner_name: "مسئول پیگیری",
+    owner_title: "",
+    owner_is_active: true,
+    created_by: 3,
+    created_by_name: "مسئول RAG",
+    likelihood: 3,
+    impact: 4,
+    score: 12,
+    level: "high",
+    level_label: "زیاد",
+    status: "IDENTIFIED",
+    status_label: "شناسایی‌شده",
+    mitigation_plan: "",
+    review_on: "2026-10-20",
+    review_overdue: false,
+    created_at: "2026-10-01T06:00:00Z",
+    updated_at: "2026-10-01T06:00:00Z",
+    can_edit: true,
+    ...over,
+  };
+}
+
+describe("the risk vocabulary", () => {
+  it("covers every status and level the server can send, each styled", () => {
+    expect(Object.keys(RISK_STATUS_LABELS)).toEqual(["IDENTIFIED", "MITIGATING", "ACCEPTED", "CLOSED"]);
+    expect(Object.keys(RISK_STATUS_TONE)).toEqual(Object.keys(RISK_STATUS_LABELS));
+    expect(Object.keys(RISK_LEVEL_LABELS)).toEqual(["low", "medium", "high", "critical"]);
+    expect(Object.keys(RISK_LEVEL_STYLE)).toEqual(Object.keys(RISK_LEVEL_LABELS));
+    expect(Object.keys(LIKELIHOOD_LABELS)).toEqual(["1", "2", "3", "4", "5"]);
+    expect(Object.keys(IMPACT_LABELS)).toEqual(["1", "2", "3", "4", "5"]);
+    for (const kind of ["risk_created", "risk_edited", "risk_assessed", "risk_status_changed"]) {
+      expect(QUALITY_EVENT_TONE[kind], kind).toBeTruthy();
+    }
+  });
+});
+
+describe("riskLevel — the mirror of the server's bands (quality/queries.py)", () => {
+  it("has the server's four bands, covering 1-25 with no gap and no overlap", () => {
+    expect(RISK_LEVELS.map(({ level, low, high }) => [level, low, high])).toEqual([
+      ["low", 1, 4],
+      ["medium", 5, 9],
+      ["high", 10, 14],
+      ["critical", 15, 25],
+    ]);
+  });
+
+  it("puts every score that can occur in the right band (written out by hand)", () => {
+    const expected: Record<number, string> = {
+      1: "low", 2: "low", 3: "low", 4: "low", 5: "medium", 6: "medium", 8: "medium", 9: "medium",
+      10: "high", 12: "high", 15: "critical", 16: "critical", 20: "critical", 25: "critical",
+    };
+    for (let l = 1; l <= 5; l++) {
+      for (let i = 1; i <= 5; i++) expect(riskLevel(l * i), `${l}×${i}`).toBe(expected[l * i]);
+    }
+  });
+
+  it("reads an assessment the way the history does", () => {
+    expect(assessmentText(3, 4)).toBe("۳×۴ = ۱۲");
+  });
+});
+
+describe("the risk list's query", () => {
+  it("sends only the page when nothing is filtered", () => {
+    expect(riskQueryParams(EMPTY_RISK_FILTERS, 1, 20)).toEqual({ page: 1, page_size: 20 });
+  });
+
+  it("sends only what is set — including a heat-map cell — trimmed", () => {
+    expect(
+      riskQueryParams({ q: " RK-13 ", status: "MITIGATING", level: "high", mine: "owner", reviewDue: true, likelihood: 3, impact: 4 }, 2, 20),
+    ).toEqual({ page: 2, page_size: 20, q: "RK-13", status: "MITIGATING", level: "high", mine: "owner", review: "due", likelihood: 3, impact: 4 });
+  });
+
+  it("counts a picked cell as a filter, not a whitespace-only search", () => {
+    expect(hasActiveRiskFilters({ ...EMPTY_RISK_FILTERS, q: "   " })).toBe(false);
+    expect(hasActiveRiskFilters({ ...EMPTY_RISK_FILTERS, likelihood: 2, impact: 5 })).toBe(true);
+    expect(hasActiveRiskFilters({ ...EMPTY_RISK_FILTERS, reviewDue: true })).toBe(true);
+  });
+});
+
+describe("matrixRows", () => {
+  const cell = (likelihood: number, impact: number, count = 0): MatrixCell => ({
+    likelihood, impact, score: likelihood * impact, level: riskLevel(likelihood * impact), count,
+  });
+
+  it("lays the 25 cells out with the most likely row on top and impact growing along the row", () => {
+    const shuffled: MatrixCell[] = [];
+    for (let l = 1; l <= 5; l++) for (let i = 5; i >= 1; i--) shuffled.push(cell(l, i, l * 10 + i));
+    const rows = matrixRows(shuffled);
+    expect(rows.map((row) => row[0].likelihood)).toEqual([5, 4, 3, 2, 1]);
+    expect(rows[0].map((c) => c.impact)).toEqual([1, 2, 3, 4, 5]);
+    expect(rows[2][3].count).toBe(34);
+  });
+
+  it("fills a missing cell with zero rather than leaving a hole in the grid", () => {
+    const rows = matrixRows([cell(5, 5, 2)]);
+    expect(rows.flat()).toHaveLength(25);
+    expect(rows[0][4].count).toBe(2);
+    expect(rows[4][0]).toEqual(cell(1, 1, 0));
+  });
+});
+
+describe("manageableNodes — where this person may file a risk", () => {
+  const chart = [
+    { id: 1, depth: 0 },
+    { id: 2, depth: 1 },
+    { id: 3, depth: 2 },
+    { id: 4, depth: 3 },
+    { id: 5, depth: 3 },
+    { id: 6, depth: 2 },
+  ];
+
+  it("is the whole chart for a quality manager", () => {
+    expect(manageableNodes(chart, [], true).map((n) => n.id)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it("is each led node and everything beneath it, in chart order, without repeats", () => {
+    expect(manageableNodes(chart, [{ node: 3, is_lead: true }, { node: 4, is_lead: true }, { node: 6, is_lead: false }], false).map((n) => n.id)).toEqual([3, 4, 5]);
+  });
+
+  it("is nothing for someone who leads nothing", () => {
+    expect(manageableNodes(chart, [{ node: 3, is_lead: false }], false)).toEqual([]);
+    expect(manageableNodes(chart, undefined, false)).toEqual([]);
+  });
+});
+
+describe("the risk form", () => {
+  const TODAY_ = "2026-10-02";
+  const filled = {
+    title: "قطع سرویس", description: "شرح", owner_node: 59, owner: null, likelihood: 3, impact: 4,
+    mitigation_plan: "", review_on: "", status: "IDENTIFIED" as const,
+  };
+
+  it("starts on a node with a middling 3×3 assessment, and is filled from a risk", () => {
+    expect(emptyRiskForm(59)).toEqual({ ...filled, title: "", description: "", impact: 3 });
+    expect(riskFormFrom(risk())).toEqual({
+      title: "قطع شدن سرویس مدل", description: "وابستگی به یک تامین‌کننده", owner_node: 59, owner: 5,
+      likelihood: 3, impact: 4, mitigation_plan: "", review_on: "2026-10-20", status: "IDENTIFIED",
+    });
+  });
+
+  it("asks for what the server requires, in Persian", () => {
+    expect(validateRiskForm(filled, TODAY_)).toEqual({});
+    expect(Object.keys(validateRiskForm({ ...filled, title: " ", description: "", owner_node: null }, TODAY_)).sort()).toEqual(["description", "owner_node", "title"]);
+    expect(validateRiskForm({ ...filled, likelihood: 0 }, TODAY_).likelihood).toBeTruthy();
+    expect(validateRiskForm({ ...filled, impact: 6 }, TODAY_).impact).toBeTruthy();
+  });
+
+  it("refuses a past review date only when it is new or changed; an empty one is fine", () => {
+    expect(validateRiskForm({ ...filled, review_on: "2026-10-01" }, TODAY_).review_on).toBeTruthy();
+    expect(validateRiskForm({ ...filled, review_on: "2026-10-01" }, TODAY_, risk({ review_on: "2026-10-01" }))).toEqual({});
+    expect(validateRiskForm({ ...filled, review_on: "" }, TODAY_)).toEqual({});
+  });
+
+  it("creates without a status and with empty optionals as null, trimmed", () => {
+    expect(riskCreatePayload({ ...filled, title: " قطع سرویس ", mitigation_plan: "  " })).toEqual({
+      title: "قطع سرویس", description: "شرح", owner_node: 59, owner: null, likelihood: 3, impact: 4,
+      mitigation_plan: "", review_on: null,
+    });
+  });
+
+  it("patches only what changed — clearing the owner or the review date is a change", () => {
+    const original = risk();
+    expect(riskPatchPayload(original, riskFormFrom(original))).toEqual({});
+    expect(riskPatchPayload(original, { ...riskFormFrom(original), title: "  قطع شدن سرویس مدل " })).toEqual({});
+    expect(riskPatchPayload(original, { ...riskFormFrom(original), owner: null, review_on: "" })).toEqual({ owner: null, review_on: null });
+    expect(riskPatchPayload(original, { ...riskFormFrom(original), impact: 5, status: "CLOSED" })).toEqual({ impact: 5, status: "CLOSED" });
+  });
+});
+
+describe("risk history lines", () => {
+  it("show the first assessment and later re-assessments", () => {
+    expect(qualityEventDetail(event({ kind: "risk_created", note: "۳×۴", to_status: "IDENTIFIED", to_status_label: "شناسایی‌شده" }))).toBe("ارزیابی: ۳×۴");
+    expect(qualityEventDetail(event({ kind: "risk_assessed", note: "۳×۴ ← ۴×۴" }))).toBe("۳×۴ ← ۴×۴");
+    expect(
+      qualityEventDetail(event({ kind: "risk_status_changed", from_status_label: "شناسایی‌شده", to_status_label: "بسته‌شده", from_status: "IDENTIFIED", to_status: "CLOSED" })),
+    ).toBe("شناسایی‌شده ← بسته‌شده");
   });
 });

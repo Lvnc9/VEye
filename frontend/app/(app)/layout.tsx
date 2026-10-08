@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   FilePlus2,
   FolderKanban,
+  Gauge,
   History,
   Inbox,
   LayoutDashboard,
@@ -73,6 +74,7 @@ function navItemsFor(user: User | null): NavItem[] {
     },
     { href: "/quality", label: "عدم‌انطباق‌ها", ready: true, icon: ShieldAlert, group: "کیفیت" },
     { href: "/quality/audits", label: "ممیزی‌ها", ready: true, icon: ClipboardCheck, group: "کیفیت" },
+    { href: "/quality/risks", label: "ریسک‌ها", ready: true, icon: Gauge, group: "کیفیت" },
     {
       href: "/personnel/register",
       label: "ثبت پرسنل",
