@@ -318,6 +318,7 @@ const BLOCKER_LABELS: [key: string, label: string][] = [
   ["nonconformances", "عدم‌انطباق"],
   ["audits", "ممیزی"],
   ["risks", "ریسک"],
+  ["announcements", "اطلاعیه"],
 ];
 
 /**

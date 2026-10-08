@@ -322,6 +322,14 @@ class PersonnelViewSet(viewsets.ModelViewSet):
                 code="user_has_leave_requests",
                 requests=leave_count,
             )
+        # Announcements (Phase 19) keep their author with PROTECT.
+        announcement_count = person.announcements.count()
+        if announcement_count:
+            raise ConflictError(
+                "این شخص اطلاعیه منتشر کرده است و حذف نمی‌شود. به‌جای حذف، حساب او را غیرفعال کنید.",
+                code="user_has_announcements",
+                announcements=announcement_count,
+            )
         # Documents reference their author with on_delete=PROTECT, so removing
         # someone who ever authored one would otherwise be an unhandled 500. The
         # right way to retire a person is to deactivate them (is_active=false),

@@ -37,6 +37,7 @@ class NotificationKind(models.TextChoices):
     LEAVE_APPROVED = "leave_approved", "درخواست مرخصی شما تایید شد"
     LEAVE_REJECTED = "leave_rejected", "درخواست مرخصی شما رد شد"
     LEAVE_CANCELLED = "leave_cancelled", "مرخصی تاییدشده لغو شد"
+    ANNOUNCEMENT = "announcement", "اطلاعیهٔ تازه"
     OBJECTIVE_DUE_SOON = "objective_due_soon", "ریزهدف نزدیک به مهلت است"
     OBJECTIVE_OVERDUE = "objective_overdue", "ریزهدف از مهلت گذشته است"
 
