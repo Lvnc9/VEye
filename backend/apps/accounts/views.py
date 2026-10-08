@@ -314,6 +314,14 @@ class PersonnelViewSet(viewsets.ModelViewSet):
                 code="user_has_quality_records",
                 records=quality_count,
             )
+        # Leave requests (Phase 19) keep the requester with PROTECT: a person's leave history is a record.
+        leave_count = person.leave_requests.count()
+        if leave_count:
+            raise ConflictError(
+                "این شخص درخواست مرخصی ثبت کرده است و حذف نمی‌شود. به‌جای حذف، حساب او را غیرفعال کنید.",
+                code="user_has_leave_requests",
+                requests=leave_count,
+            )
         # Documents reference their author with on_delete=PROTECT, so removing
         # someone who ever authored one would otherwise be an unhandled 500. The
         # right way to retire a person is to deactivate them (is_active=false),

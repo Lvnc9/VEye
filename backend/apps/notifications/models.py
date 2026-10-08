@@ -33,6 +33,10 @@ class NotificationKind(models.TextChoices):
     AUDIT_CANCELLED = "audit_cancelled", "ممیزی داخلی لغو شد"
     RISK_ASSIGNED = "risk_assigned", "ریسکی به شما سپرده شد"
     RISK_REVIEW_DUE = "risk_review_due", "زمان بازنگری یک ریسک رسیده است"
+    LEAVE_REQUESTED = "leave_requested", "درخواست مرخصی منتظر تصمیم شماست"
+    LEAVE_APPROVED = "leave_approved", "درخواست مرخصی شما تایید شد"
+    LEAVE_REJECTED = "leave_rejected", "درخواست مرخصی شما رد شد"
+    LEAVE_CANCELLED = "leave_cancelled", "مرخصی تاییدشده لغو شد"
     OBJECTIVE_DUE_SOON = "objective_due_soon", "ریزهدف نزدیک به مهلت است"
     OBJECTIVE_OVERDUE = "objective_overdue", "ریزهدف از مهلت گذشته است"
 
