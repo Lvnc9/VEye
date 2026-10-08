@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Building2,
+  CalendarDays,
   CircleUserRound,
   ClipboardCheck,
   FilePlus2,
@@ -75,6 +76,7 @@ function navItemsFor(user: User | null): NavItem[] {
     { href: "/quality", label: "عدم‌انطباق‌ها", ready: true, icon: ShieldAlert, group: "کیفیت" },
     { href: "/quality/audits", label: "ممیزی‌ها", ready: true, icon: ClipboardCheck, group: "کیفیت" },
     { href: "/quality/risks", label: "ریسک‌ها", ready: true, icon: Gauge, group: "کیفیت" },
+    { href: "/leave", label: "مرخصی", ready: true, icon: CalendarDays, group: "کارکنان" },
     {
       href: "/personnel/register",
       label: "ثبت پرسنل",
