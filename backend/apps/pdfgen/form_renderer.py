@@ -118,9 +118,10 @@ class RTLParagraph(Flowable):
     """Wrapped right-to-left text with inline markers; splits across pages by
     line. `boxed` draws a frame around it (a callout)."""
 
-    def __init__(self, text: str, font: rtl.Font, *, align="right", bold=False, color=(0, 0, 0), boxed=False, _lines=None):
+    def __init__(self, text: str, font: rtl.Font, *, align="right", bold=False, color=(0, 0, 0), boxed=False, shift=0.0, _lines=None):
         super().__init__()
         self.text = text
+        self.shift = shift  # points the text is moved to the right of where `align` puts it
         self.font = font
         self.align = align
         self.bold = bold
@@ -144,7 +145,7 @@ class RTLParagraph(Flowable):
         if fits <= 0 or fits >= len(self._lines):
             return []
         make = lambda lines: RTLParagraph(  # noqa: E731
-            self.text, self.font, align=self.align, bold=self.bold, color=self.color, boxed=self.boxed, _lines=lines
+            self.text, self.font, align=self.align, bold=self.bold, color=self.color, boxed=self.boxed, shift=self.shift, _lines=lines
         )
         return [make(self._lines[:fits]), make(self._lines[fits:])]
 
@@ -169,7 +170,7 @@ class RTLParagraph(Flowable):
                 x_right = self.pad + width
             else:
                 x_right = right
-            rtl.draw_line(c, line, self.font, x_right=x_right, y=y)
+            rtl.draw_line(c, line, self.font, x_right=x_right + self.shift, y=y)
             y -= self.leading
 
 
@@ -992,8 +993,8 @@ SIZED_BUILDERS = {
 }
 
 
-def _cell(text: str, size: float, *, bold=False, align="center", color=(0, 0, 0)) -> RTLParagraph:
-    return RTLParagraph(text, _fonts(size), bold=bold, align=align, color=color)
+def _cell(text: str, size: float, *, bold=False, align="center", color=(0, 0, 0), shift=0.0) -> RTLParagraph:
+    return RTLParagraph(text, _fonts(size), bold=bold, align=align, color=color, shift=shift)
 
 
 class _Image(Flowable):
@@ -1072,6 +1073,10 @@ def _value_or_label(value: str, label: str, size: float) -> RTLParagraph:
     return _cell(label, size, bold=True)
 
 
+#: How far the role titles of the approval strip move right, in space characters.
+TITLE_SHIFT_SPACES = 4
+
+
 def _approval_strip(data: FormPdfInput, width: float) -> list:
     """Three columns, the first signer on the right — تهیه کننده | تایید کننده | تصویب کننده.
     Each is a stack: the role, the سمت, the name, the signature — the values alone once the step is done,
@@ -1081,11 +1086,14 @@ def _approval_strip(data: FormPdfInput, width: float) -> list:
     columns up, so the rows of the three signers stay level."""
     size = data.base_font_size - 1
     signers = list(data.signers)
+    # The role titles sit four spaces to the right of the centre; the سمت, name and signature stay put
+    # (owner's request, 2026-10-09).
+    title_shift = TITLE_SHIFT_SPACES * _fonts(size + 1).width(" ", rtl.BOLD)
     columns = []
     for signer in signers:
         columns.append(
             [
-                _cell(signer.role_label + ":", size + 1, bold=True),
+                _cell(signer.role_label + ":", size + 1, bold=True, shift=title_shift),
                 _value_or_label(_plain(signer.position), f"سمت {signer.role_label}:", size),
                 _value_or_label(_plain(signer.name), f"نام و نام خانوادگی {signer.role_label}:", size),
                 _SignatureCell(signer.image, size - 1, 16 * mm),

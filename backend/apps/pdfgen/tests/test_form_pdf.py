@@ -591,6 +591,15 @@ class ApprovalStripTests(SimpleTestCase):
         self.assertIsNotNone(rightmost[3].reader)
         self.assertIsNone(unwrap(self.table()._cellvalues[3][1]).reader, "an unsigned column keeps its «امضا:» placeholder")
 
+    def test_only_the_role_titles_sit_four_spaces_to_the_right(self):
+        table = self.table()
+        space = form_renderer._fonts(form_input().base_font_size).width(" ", form_renderer.rtl.BOLD)
+        for cell in table._cellvalues[0]:
+            self.assertAlmostEqual(unwrap(cell).shift, 4 * space, places=1)
+        for row in table._cellvalues[1:3]:
+            for cell in row:
+                self.assertEqual(unwrap(cell).shift, 0.0, "سمت and name stay where they were")
+
     def test_no_date_is_printed(self):
         table = self.table()
         texts = [getattr(unwrap(cell), "text", "") for row in table._cellvalues for cell in row]

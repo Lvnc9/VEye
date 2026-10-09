@@ -237,13 +237,16 @@ function LetterBox() {
  *  signature. No table, no lines (owner's correction, 2026-10-01). The designer has nobody signing yet, so it
  *  shows the placeholders; on paper a done step prints its values alone. */
 const STRIP_ROLES = ["تهیه کننده", "تایید کننده", "تصویب کننده"];
+/** The role titles sit four spaces right of the centre (backend `TITLE_SHIFT_SPACES`; a Vazir bold space is
+ *  0.273 em wide), the سمت, name and signature stay put (owner's request, 2026-10-09). */
+const TITLE_SHIFT = "1.09em";
 
 function ApprovalStrip({ size }: { size: number }) {
   return (
     <div className="grid grid-cols-3" style={{ marginTop: mm(6), fontSize: pt(size) }}>
       {STRIP_ROLES.map((role) => (
         <div key={role} className="px-1">
-          <div className="text-center font-bold" style={{ fontSize: pt(size + 1), height: mm(6) }}>
+          <div className="text-center font-bold" style={{ fontSize: pt(size + 1), height: mm(6), transform: `translateX(${TITLE_SHIFT})` }}>
             {role}:
           </div>
           {["سمت", "نام و نام خانوادگی"].map((label) => (
