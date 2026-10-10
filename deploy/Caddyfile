@@ -1,0 +1,29 @@
+# VEye behind Caddy: one domain, automatic HTTPS (Let's Encrypt) — set VEYE_DOMAIN in .env.
+# The browser talks to one origin, so the API's cookies stay first-party and no CORS is involved.
+{$VEYE_DOMAIN} {
+	encode zstd gzip
+
+	# Django: the API and its admin. Uploaded files are never served from here — every file
+	# (PDFs, signatures, attachments, logos) goes through an authenticated API view.
+	@django path /api/* /admin/*
+	handle @django {
+		reverse_proxy backend:8000
+	}
+
+	# The admin's CSS/JS, collected by the backend into the shared `static` volume.
+	handle /static/* {
+		root * /srv
+		file_server
+	}
+
+	# Everything else is the Next.js app (including the public /verify/<code> page).
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}

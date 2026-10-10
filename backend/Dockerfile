@@ -14,6 +14,13 @@ RUN apt-get update \
 COPY requirements/ requirements/
 RUN pip install --no-cache-dir --timeout=120 --retries=10 -r requirements/dev.txt
 
+# docker-compose.prod.yml builds with REQUIREMENTS=prod (adds gunicorn). A separate, later layer so the
+# dev image's cached install above is untouched; for dev builds this step does nothing.
+ARG REQUIREMENTS=dev
+RUN if [ "$REQUIREMENTS" != "dev" ]; then \
+        pip install --no-cache-dir --timeout=120 --retries=10 -r requirements/${REQUIREMENTS}.txt; \
+    fi
+
 COPY . .
 
 EXPOSE 8000

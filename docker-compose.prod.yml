@@ -1,0 +1,117 @@
+# Production stack for a single server: gunicorn + `next start` behind Caddy (automatic HTTPS).
+# Nothing is bind-mounted from the checkout and only Caddy publishes ports (80/443).
+#
+#   cp .env.example .env            # then fill in the production values — see README «Deployment»
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# This file is for a server. On a development machine keep using docker-compose.yml (project v_20).
+name: veye
+
+x-backend: &backend
+  build:
+    context: ./backend
+    args:
+      REQUIREMENTS: prod          # adds gunicorn on top of base.txt
+  image: veye-backend:latest
+  env_file: .env
+  environment:
+    DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    DJANGO_SETTINGS_MODULE: config.settings.prod
+    # Caddy replaces X-Forwarded-For with the real client address, so the per-IP rate limits
+    # (login, setup, the public verify page) see each client instead of one shared proxy address.
+    RATELIMIT_IP_META_KEY: HTTP_X_FORWARDED_FOR
+  volumes:
+    - media:/app/media
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    <<: *backend
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000
+             --workers ${GUNICORN_WORKERS:-3} --timeout 120 --access-logfile -"
+    volumes:
+      - media:/app/media
+      - static:/app/staticfiles
+
+  celery:
+    <<: *backend
+    command: celery -A config worker --loglevel=info
+
+  # One scheduler only — two would send every reminder twice.
+  celery-beat:
+    <<: *backend
+    command: celery -A config beat --loglevel=info --pidfile= --schedule=/tmp/celerybeat-schedule
+    volumes: []
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        # Baked into the browser bundle at build time: rebuild after changing it.
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+    image: veye-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2
+    environment:
+      VEYE_DOMAIN: ${VEYE_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - static:/srv/static:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  media:
+  static:
+  caddy_data:
+  caddy_config:

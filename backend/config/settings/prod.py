@@ -25,3 +25,9 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Behind a reverse proxy every request arrives from the proxy's address, so the per-IP rate limits
+# (login, setup, the public verify page) would put all clients in one bucket. Name the META key the
+# proxy fills with the real client address — docker-compose.prod.yml sets HTTP_X_FORWARDED_FOR, which
+# Caddy overwrites with the connecting client's IP. Unset: REMOTE_ADDR, as before.
+RATELIMIT_IP_META_KEY = env("RATELIMIT_IP_META_KEY", default=None) or None
