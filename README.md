@@ -24,8 +24,9 @@ and run projects, quality, leave and announcements in the same place.**
 ![Jalali](https://img.shields.io/badge/Calendar-Jalali_(شمسی)-38bdf8)
 ![Tests](https://img.shields.io/badge/tests-2%2C100%2B-2dd4bf)
 ![Self-hosted](https://img.shields.io/badge/data-100%25_on_your_server-6366f1)
+![License](https://img.shields.io/badge/license-proprietary-64748b)
 
-[Features](#-features) · [Screens](#-a-tour-in-gifs) · [Quick start](#-quick-start) · [Deployment](#-deploying-to-a-server) · [Architecture](#-architecture) · [فارسی](#-معرفی-به-فارسی)
+[Features](#-features) · [Screens](#-a-tour-in-gifs) · [Quick start](#-quick-start) · [Deployment](#-deploying-to-a-server) · [Architecture](#-architecture) · [License](#-license) · [فارسی](#-معرفی-به-فارسی)
 
 </div>
 
@@ -189,6 +190,8 @@ Document cycle times, return rate, weighted company progress, workload per perso
 ---
 
 ## 🚀 Quick start
+
+> VEye is proprietary ([License](#-license)): the steps below are for licensed installations and evaluations agreed with the author.
 
 You need **Docker** with **Docker Compose**. Nothing else is installed on the host.
 
@@ -433,6 +436,20 @@ docker-compose.prod.yml   production stack
 - **تمام فارسی، راست‌به‌چپ و با تاریخ شمسی**؛ همهٔ داده‌ها فقط روی سرور شما می‌ماند.
 
 برای نصب، بخش [Quick start](#-quick-start) و برای راه‌اندازی روی سرور، بخش [Deploying to a server](#-deploying-to-a-server) را ببینید.
+
+</div>
+
+---
+
+## 📜 License
+
+**Copyright © 2025–2026 Sam. All rights reserved.** VEye is proprietary software; the source is published for viewing only.
+Using, installing, hosting, copying or redistributing it needs written permission — see [`LICENSE`](LICENSE).
+For a commercial licence or an installation for your organisation, get in touch via [github.com/Lvnc9](https://github.com/Lvnc9).
+
+<div dir="rtl">
+
+تمام حقوق این نرم‌افزار محفوظ است. برای خرید لایسنس یا نصب در سازمان خود از طریق [github.com/Lvnc9](https://github.com/Lvnc9) تماس بگیرید.
 
 </div>
 
