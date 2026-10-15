@@ -199,6 +199,16 @@ def approve_eligible_users():
     return User.objects.filter(is_active=True, is_developer=False).filter(Q(is_superuser=True) | position_q)
 
 
+def author_eligible_users(document):
+    """Everyone who could write `document` right now: the مسئول of its owner node or of any node above it,
+    plus the مدیر عامل. Used for the periodic-review reminder (Phase 21)."""
+    if document.owner_node_id is None:
+        return approve_eligible_users()
+    from apps.organization.access import users_leading_at_or_above
+
+    return (users_leading_at_or_above(document.owner_node) | approve_eligible_users()).distinct()
+
+
 def confirm_eligible_users(document):
     """Everyone who could confirm `document` right now: the مسئول of a واحد / حوزه / شرکت at or
     above its owner node, plus the مدیر عامل (who may always act). A document predating the chart

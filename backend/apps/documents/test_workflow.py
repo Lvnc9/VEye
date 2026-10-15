@@ -940,3 +940,144 @@ class ManagingDirectorTests(WorkflowBase):
             "category": DocumentCategory.INSIDE, "title": "نباید", "group": DocumentGroup.FORM,
             "owner_node": self.org.root.pk}, format="json").status_code, 403)
         self.assertNotIn("approve_document", self.as_user(chair).get(reverse("auth-me")).data["capabilities"])
+
+
+class ReviewDateTests(TestCase):
+    """Phase 21: whole calendar months, clamped at the month's end."""
+
+    def test_add_months(self):
+        from apps.documents.review import add_months, due_date_from
+
+        self.assertEqual(add_months(date(2026, 10, 15), 12), date(2027, 10, 15))
+        self.assertEqual(add_months(date(2026, 1, 31), 1), date(2026, 2, 28))
+        self.assertEqual(add_months(date(2028, 1, 31), 1), date(2028, 2, 29))
+        self.assertEqual(add_months(date(2026, 12, 5), 1), date(2027, 1, 5))
+        self.assertEqual(add_months(date(2026, 11, 30), 27), date(2029, 2, 28))
+        self.assertIsNone(due_date_from(date(2026, 10, 15), 0))
+
+    def test_review_state(self):
+        from apps.documents.review import review_state
+
+        today = date(2026, 10, 15)
+        self.assertIsNone(review_state(None, today))
+        self.assertEqual(review_state(date(2026, 10, 14), today), "overdue")
+        self.assertEqual(review_state(date(2026, 10, 15), today), "due")
+        self.assertEqual(review_state(date(2026, 11, 14), today), "due")  # 30 days ahead
+        self.assertIsNone(review_state(date(2026, 11, 15), today))
+
+
+class PeriodicReviewTests(WorkflowBase):
+    """Phase 21 (owner's decision 2026-10-15): approving a revision or «بدون تغییر» restarts the clock."""
+
+    def mark(self, user, doc=None, **payload):
+        return self.as_user(user).post(
+            reverse("document-mark-reviewed", args=[(doc or self.doc).pk]), payload, format="json"
+        )
+
+    def test_approval_starts_the_clock_from_the_documents_interval(self):
+        from apps.documents.review import add_months
+
+        doc = self.run_chain()
+        self.assertEqual(doc.review_interval_months, 12)
+        self.assertEqual(doc.review_due_on, add_months(timezone.localdate(), 12))
+
+        other = make_doc(self.author, title="بدون بازنگری", review_interval_months=0)
+        self.assertIsNone(self.run_chain(other).review_due_on)
+
+    def test_a_new_revision_inherits_the_interval_and_the_old_one_stops_being_due(self):
+        Document.objects.filter(pk=self.doc.pk).update(review_interval_months=6)
+        first = self.run_chain()
+        response = self.as_user(self.author).post(reverse("document-revise", args=[first.pk]))
+        self.assertEqual(response.status_code, 201, response.data)
+        second = Document.objects.get(pk=response.data["id"])
+        self.assertEqual(second.review_interval_months, 6)
+        Document.objects.filter(pk=second.pk).update(content_saved_at=timezone.now())
+        second = self.run_chain(second)
+        first.refresh_from_db()
+        self.assertEqual(first.status, DocumentStatus.OBSOLETE)
+        self.assertIsNone(first.review_due_on)
+        self.assertIsNotNone(second.review_due_on)
+
+    def test_an_author_records_a_review_without_changes(self):
+        from apps.documents.review import add_months
+
+        self.run_chain()
+        Document.objects.filter(pk=self.doc.pk).update(review_due_on=date(2020, 1, 1))
+        response = self.mark(self.author, note="مطابق رویه فعلی است")
+        self.assertEqual(response.status_code, 200, response.data)
+        doc = Document.objects.get(pk=self.doc.pk)
+        self.assertEqual(doc.status, DocumentStatus.UNDER_CONTROL)
+        self.assertEqual(doc.review_due_on, add_months(timezone.localdate(), 12))
+        event = doc.events.last()
+        self.assertEqual(
+            (event.kind, event.from_status, event.to_status, event.reason, event.actor_id),
+            (DocumentEventKind.REVIEWED, DocumentStatus.UNDER_CONTROL, DocumentStatus.UNDER_CONTROL,
+             "مطابق رویه فعلی است", self.author.pk),
+        )
+
+    def test_only_an_author_and_only_a_document_in_force(self):
+        self.assertEqual(self.mark(self.author).status_code, 409)  # still a draft
+        self.run_chain()
+        elsewhere = make_user("8000000051", AccessRoll.GUILD)
+        test_support.lead_of(elsewhere, self.org.llm)
+        self.assertEqual(self.mark(elsewhere).status_code, 403)
+        self.assertEqual(self.mark(self.approver).status_code, 200)  # the مدیر عامل may write anything
+        self.assertEqual(self.mark(self.author, note="x" * 1001).status_code, 400)
+
+    def test_the_register_says_whats_due_and_who_may_record_it(self):
+        self.run_chain()
+        Document.objects.filter(pk=self.doc.pk).update(review_due_on=timezone.localdate() + timedelta(days=10))
+        rows = {r["id"]: r for r in self.as_user(self.author).get(reverse("document-list")).data["results"]}
+        self.assertEqual(rows[self.doc.pk]["review_state"], "due")
+        self.assertTrue(rows[self.doc.pk]["can_mark_reviewed"])
+        rows = {r["id"]: r for r in self.as_user(self.confirmer).get(reverse("document-list")).data["results"]}
+        self.assertTrue(rows[self.doc.pk]["can_mark_reviewed"])  # leads the واحد above: may write it too
+        outsider = make_user("8000000052", AccessRoll.GUILD)
+        rows = {r["id"]: r for r in self.as_user(outsider).get(reverse("document-list")).data["results"]}
+        self.assertFalse(rows[self.doc.pk]["can_mark_reviewed"])
+
+    def test_the_review_filter(self):
+        today = timezone.localdate()
+        soon = make_doc(self.author, title="نزدیک", status=DocumentStatus.UNDER_CONTROL, review_due_on=today + timedelta(days=5))
+        late = make_doc(self.author, title="گذشته", status=DocumentStatus.UNDER_CONTROL, review_due_on=today - timedelta(days=1))
+        make_doc(self.author, title="دور", status=DocumentStatus.UNDER_CONTROL, review_due_on=today + timedelta(days=200))
+        due_today = make_doc(self.author, title="امروز", status=DocumentStatus.UNDER_CONTROL, review_due_on=today)
+        client = self.as_user(self.author)
+
+        def ids(value):
+            return {r["id"] for r in client.get(reverse("document-list"), {"review": value}).data["results"]}
+
+        self.assertEqual(ids("due"), {soon.pk, late.pk, due_today.pk})  # due today is not yet overdue
+        self.assertEqual(ids("overdue"), {late.pk})
+        self.assertEqual(ids("whatever"), set())
+
+    def test_the_reminder_goes_to_the_people_who_may_write_it_once_per_phase(self):
+        from apps.notifications.models import Notification, NotificationKind
+        from apps.notifications.tasks import check_document_reviews
+
+        today = timezone.localdate()
+        doc = make_doc(self.author, title="یادآوری", status=DocumentStatus.UNDER_CONTROL, review_due_on=today + timedelta(days=20))
+        make_doc(self.author, title="دیر", status=DocumentStatus.UNDER_CONTROL, review_due_on=today + timedelta(days=60))
+        make_doc(self.author, title="منسوخ", status=DocumentStatus.OBSOLETE, review_due_on=today)
+        self.assertGreater(check_document_reviews(), 0)
+        told = set(
+            Notification.objects.filter(kind=NotificationKind.DOCUMENT_REVIEW_DUE).values_list("recipient_id", flat=True)
+        )
+        self.assertEqual(told, {self.author.pk, self.confirmer.pk, self.confirmer2.pk, self.approver.pk})
+        self.assertEqual(
+            set(Notification.objects.filter(kind=NotificationKind.DOCUMENT_REVIEW_DUE).values_list("url", flat=True)),
+            {f"/documents/{doc.pk}/edit"},
+        )
+        self.assertEqual(check_document_reviews(), 0)  # a re-run says nothing new
+
+        # The same due date, a few weeks later: now overdue, which is its own reminder.
+        with mock.patch("apps.notifications.tasks.timezone.localdate", return_value=today + timedelta(days=21)):
+            self.assertEqual(check_document_reviews(), 4)
+            self.assertEqual(check_document_reviews(), 0)
+
+    def test_a_new_document_starts_from_the_company_default(self):
+        from apps.organization.models import Company
+
+        Company.objects.filter(pk=1).update(doc_review_months=24)
+        doc = make_doc(self.author, title="پیش‌فرض")
+        self.assertEqual(doc.review_interval_months, 24)

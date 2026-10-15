@@ -187,6 +187,8 @@ class ContentInputSerializer(serializers.Serializer):
     form_settings = serializers.JSONField(required=False, default=dict)
     # A block body's header option; a client that does not send it leaves the stored value alone.
     show_company_name = serializers.BooleanField(required=False)
+    # Phase 21: months between periodic reviews (0 = none); a client that does not send it leaves it alone.
+    review_interval_months = serializers.IntegerField(required=False, min_value=0, max_value=60)
 
     @property
     def _is_form(self) -> bool:
@@ -374,6 +376,7 @@ def content_payload(document, request) -> dict:
         "footnote2": document.footnote2,
         "body_kind": document.body_kind,
         "show_company_name": document.show_company_name if document.body_kind == BodyKind.BLOCKS else None,
+        "review_interval_months": document.review_interval_months,
         "form_settings": (
             form_schema.normalize_stored_settings(document.form_settings) if document.body_kind == BodyKind.FORM else None
         ),

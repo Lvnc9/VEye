@@ -148,6 +148,12 @@ class DocumentViewSet(
         )
         return self._workflow_response(document, request)
 
+    @action(detail=True, methods=["post"], url_path="mark-reviewed", permission_classes=[IsAuthenticated])
+    def mark_reviewed(self, request, pk=None):
+        """«بازنگری شد — بدون تغییر» (Phase 21): an author of a document in force restarts its review clock."""
+        document = workflow.mark_reviewed(user=request.user, document_id=pk, note=request.data.get("note", ""))
+        return self._workflow_response(document, request)
+
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def withdraw(self, request, pk=None):
         """بازپس‌گیری: only the submitter, until تصویب — the service checks it."""

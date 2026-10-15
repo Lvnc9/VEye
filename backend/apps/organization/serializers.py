@@ -74,6 +74,7 @@ class DocumentDefaultsSerializer(serializers.Serializer):
     doc_footnote2 = serializers.CharField(max_length=255, required=False, allow_blank=True, trim_whitespace=False)
     form_subtitle = serializers.CharField(max_length=255, required=False, allow_blank=True, trim_whitespace=False)
     form_show_letter_box = serializers.BooleanField(required=False)
+    doc_review_months = serializers.IntegerField(required=False, min_value=0, max_value=60)
 
 
 def company_payload(company: Company, request) -> dict:
@@ -94,6 +95,7 @@ def company_payload(company: Company, request) -> dict:
             "doc_footnote2": company.doc_footnote2,
             "form_subtitle": company.form_subtitle,
             "form_show_letter_box": company.form_show_letter_box,
+            "doc_review_months": company.doc_review_months,
         },
         "setup_step": company.setup_step,
         "setup_step_label": company.get_setup_step_display(),

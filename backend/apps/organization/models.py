@@ -159,6 +159,8 @@ class Company(TimeStampedModel):
     doc_footnote2 = models.CharField(max_length=255, blank=True)
     form_subtitle = models.CharField(max_length=255, blank=True)
     form_show_letter_box = models.BooleanField(default=False)
+    # Phase 21: a new document's periodic-review interval in months (0 = no periodic review).
+    doc_review_months = models.PositiveSmallIntegerField(default=12)
     setup_step = models.CharField(max_length=16, choices=SetupStep.choices, default=SetupStep.COMPANY)
     setup_completed_at = models.DateTimeField(null=True, blank=True)
 

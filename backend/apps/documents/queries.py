@@ -101,4 +101,22 @@ def apply_filters(queryset, params):
         value = params.get(param)
         if value:
             queryset = queryset.filter(**{param: value}) if value in allowed else queryset.none()
+    queryset = filter_review(queryset, params.get("review"))
     return search(queryset, params.get("search", ""))
+
+
+def filter_review(queryset, value):
+    """Phase 21 `review`: "overdue" — the periodic review date has passed; "due" — it falls within the
+    notice window or has passed (what needs attention). Only documents in force carry a date."""
+    if not value:
+        return queryset
+    from django.utils import timezone
+
+    from .review import notice_days
+
+    today = timezone.localdate()
+    if value == "overdue":
+        return queryset.filter(review_due_on__lt=today)
+    if value == "due":
+        return queryset.filter(review_due_on__lte=today + timezone.timedelta(days=notice_days()))
+    return queryset.none()

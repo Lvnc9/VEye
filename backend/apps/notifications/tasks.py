@@ -147,3 +147,38 @@ def check_risk_reviews() -> int:
         )
         sent += len(created)
     return sent
+
+
+@shared_task(name="notifications.check_document_reviews")
+def check_document_reviews() -> int:
+    """Phase 21: a document in force whose periodic review falls within `DOCUMENT_REVIEW_NOTICE_DAYS`
+    (or has passed) — one reminder when it comes near and one when it is overdue, per due date (the
+    `dedupe_key` carries both), to everyone who may write it: the leads of its owner node and above, and
+    the مدیر عامل. Recording «بدون تغییر» or approving a new revision moves the date, so the next round is new."""
+    from apps.core.constants import DocumentStatus
+    from apps.documents.authority import author_eligible_users
+    from apps.documents.models import Document
+
+    today = timezone.localdate()
+    horizon = today + timezone.timedelta(days=settings.DOCUMENT_REVIEW_NOTICE_DAYS)
+    due = Document.objects.filter(
+        status=DocumentStatus.UNDER_CONTROL, review_due_on__isnull=False, review_due_on__lte=horizon
+    ).select_related("owner_node")
+    sent = 0
+    for document in due:
+        overdue = document.review_due_on < today
+        phase = "overdue" if overdue else "soon"
+        created = services.notify_many(
+            author_eligible_users(document),
+            kind=NotificationKind.DOCUMENT_REVIEW_DUE,
+            title=(
+                f"بازنگری دوره‌ای «{document.full_code}» عقب افتاده است"
+                if overdue
+                else f"زمان بازنگری دوره‌ای «{document.full_code}» نزدیک است"
+            ),
+            body=document.title,
+            url=f"/documents/{document.pk}/edit",
+            dedupe_key=f"document:{document.pk}:review:{document.review_due_on.isoformat()}:{phase}",
+        )
+        sent += len(created)
+    return sent

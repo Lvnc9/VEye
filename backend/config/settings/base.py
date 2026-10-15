@@ -239,6 +239,8 @@ CSRF_COOKIE_HTTPONLY = False  # must be readable by frontend JS to echo back in 
 RATELIMIT_USE_CACHE = "default"
 RATELIMIT_ENABLE = True
 LOGIN_RATELIMIT_RATE = env("LOGIN_RATELIMIT_RATE", default="10/m")
+# Phase 21: periodic review — remind the authors this many days before a document's review date.
+DOCUMENT_REVIEW_NOTICE_DAYS = env.int("DOCUMENT_REVIEW_NOTICE_DAYS", default=30)
 # Phase 20: how long «ورودهای اخیر» (accounts.LoginEvent) keeps a sign-in attempt.
 LOGIN_HISTORY_DAYS = env.int("LOGIN_HISTORY_DAYS", default=90)
 # The public /verify/ lookup (what a scanned QR code opens). Unauthenticated, so
@@ -287,6 +289,10 @@ CELERY_BEAT_SCHEDULE = {
     "notifications-check-risk-reviews": {
         "task": "notifications.check_risk_reviews",
         "schedule": crontab(hour=7, minute=40),
+    },
+    "notifications-check-document-reviews": {
+        "task": "notifications.check_document_reviews",
+        "schedule": crontab(hour=7, minute=50),
     },
     "accounts-purge-login-events": {
         "task": "accounts.purge_login_events",

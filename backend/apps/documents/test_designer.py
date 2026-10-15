@@ -968,3 +968,19 @@ class DesignerConcurrencyTests(TransactionTestCase):
         self.doc.refresh_from_db()
         self.assertEqual(self.doc.content_version, 1)
         self.assertEqual(Section.objects.filter(document=self.doc).count(), 1)
+
+
+class ReviewIntervalContentTests(DesignerTestCase):
+    """Phase 21: a draft's periodic-review interval is saved with its content (like the header options)."""
+
+    def test_the_interval_round_trips_and_is_bounded(self):
+        self.assertEqual(self.get_content()["review_interval_months"], 12)
+        self.save([], review_interval_months=6)
+        self.doc.refresh_from_db()
+        self.assertEqual(self.doc.review_interval_months, 6)
+        self.assertEqual(self.get_content()["review_interval_months"], 6)
+        self.save([])  # not sent: left alone
+        self.doc.refresh_from_db()
+        self.assertEqual(self.doc.review_interval_months, 6)
+        for bad in (-1, 61):
+            self.assertEqual(self.put([], review_interval_months=bad).status_code, 400, bad)

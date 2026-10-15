@@ -204,6 +204,9 @@ def save_content(*, user, document_id: int, data: dict) -> Document:
     elif "show_company_name" in data:
         document.show_company_name = data["show_company_name"]
         fields.append("show_company_name")
+    if "review_interval_months" in data:
+        document.review_interval_months = data["review_interval_months"]
+        fields.append("review_interval_months")
     document.content_version += 1
     document.content_saved_at = timezone.now()
     document.save(update_fields=fields)

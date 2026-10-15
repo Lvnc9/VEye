@@ -22,7 +22,8 @@ def apply_to_new_document(document) -> None:
         return
     document.footnote1 = company.doc_footnote1
     document.footnote2 = company.doc_footnote2
-    fields = ["footnote1", "footnote2", "updated_at"]
+    document.review_interval_months = company.doc_review_months  # Phase 21
+    fields = ["footnote1", "footnote2", "review_interval_months", "updated_at"]
     if document.body_kind == BodyKind.FORM:
         header = document.form_settings["header"]
         header["subtitle"] = company.form_subtitle

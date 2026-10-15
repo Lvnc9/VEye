@@ -60,10 +60,23 @@ class DocumentDefaultsTests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(
             response.data["document_defaults"],
-            {"doc_footnote1": "واحد منابع انسانی", "doc_footnote2": "", "form_subtitle": "فرم‌های استخدام", "form_show_letter_box": True},
+            {
+                "doc_footnote1": "واحد منابع انسانی",
+                "doc_footnote2": "",
+                "form_subtitle": "فرم‌های استخدام",
+                "form_show_letter_box": True,
+                "doc_review_months": 12,  # Phase 21
+            },
         )
         read = self.client.get(reverse("org-company")).data
         self.assertEqual(read["document_defaults"]["form_subtitle"], "فرم‌های استخدام")
+
+    def test_the_review_interval_default_is_bounded(self):
+        self.client.force_authenticate(self.manager)
+        response = self.client.patch(self.url, {"doc_review_months": 24}, format="json")
+        self.assertEqual(response.data["document_defaults"]["doc_review_months"], 24)
+        for bad in (-1, 61):
+            self.assertEqual(self.client.patch(self.url, {"doc_review_months": bad}, format="json").status_code, 400)
 
     def test_only_manage_organization_may_change_them(self):
         self.client.force_authenticate(self.author)

@@ -9,7 +9,7 @@ from apps.core.constants import (
 )
 from apps.core.text import normalize_title
 
-from . import authority, workflow
+from . import authority, review, workflow
 from .models import Document, DocumentEvent
 
 
@@ -34,6 +34,8 @@ class DocumentSerializer(serializers.ModelSerializer):
     pdf_status = serializers.SerializerMethodField()
     pdf_built_at = serializers.SerializerMethodField()
     workflow = serializers.SerializerMethodField()
+    review_state = serializers.SerializerMethodField()
+    can_mark_reviewed = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
@@ -60,6 +62,10 @@ class DocumentSerializer(serializers.ModelSerializer):
             "pdf_status",
             "pdf_built_at",
             "workflow",
+            "review_interval_months",
+            "review_due_on",
+            "review_state",
+            "can_mark_reviewed",
             "content_saved_at",
             "created_at",
         ]
@@ -92,6 +98,17 @@ class DocumentSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
         return workflow.next_step_for(obj, user, authority.for_request(request) if request is not None else None)
+
+    def get_review_state(self, obj: Document):
+        """Phase 21: "overdue" | "due" (within the notice window) | null."""
+        return review.review_state(obj.review_due_on)
+
+    def get_can_mark_reviewed(self, obj: Document) -> bool:
+        """«بازنگری شد — بدون تغییر»: a document in force, and this person may write it."""
+        if obj.status != DocumentStatus.UNDER_CONTROL:
+            return False
+        request = self.context.get("request")
+        return request is not None and authority.for_request(request).can_author(obj)
 
     def get_can_edit(self, obj: Document) -> bool:
         """The body can change (a draft) *and* this person may write it (their owner-node authority)."""

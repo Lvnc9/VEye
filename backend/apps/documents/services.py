@@ -132,6 +132,7 @@ def create_revision(*, user, document_id: int) -> Document:
         previous_revision=previous,
         body_kind=previous.body_kind,
         owner_node=previous.owner_node,
+        review_interval_months=previous.review_interval_months,  # Phase 21: the schedule outlives a revision
         created_by=user,
     )
     # V_1.0 opened a blank designer for every revision, so authors retyped the

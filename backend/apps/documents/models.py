@@ -142,6 +142,10 @@ class Document(TimeStampedModel):
     # document is created and inherited by its revisions. PROTECT: a node that owns documents cannot
     # be deleted (archive it). NULL only for documents that predate the chart (or were imported):
     # nobody but the مدیر عامل acts on one until it is given a node.
+    # Phase 21 — periodic review (documents/review.py). Months between reviews (0 = none), set while a
+    # draft, carried to the next revision; and the date the next review is due, only while UNDER_CONTROL.
+    review_interval_months = models.PositiveSmallIntegerField(default=12)
+    review_due_on = models.DateField(null=True, blank=True, db_index=True)
     owner_node = models.ForeignKey(
         "organization.OrgNode", null=True, blank=True, on_delete=models.PROTECT, related_name="documents"
     )

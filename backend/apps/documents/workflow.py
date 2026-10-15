@@ -32,6 +32,7 @@ from apps.notifications import services as notifications
 from apps.notifications.models import NotificationKind
 
 from . import authority as document_authority
+from . import review
 from .files import normalize_signature
 from .models import Document, DocumentEvent, SignOff
 
@@ -221,6 +222,7 @@ def approve(*, user, document_id: int, signature) -> Document:
 
     _sign(document, SignOffRole.APPROVER, user, signature)
     _record(document, kind=DocumentEventKind.APPROVED, to_status=DocumentStatus.UNDER_CONTROL, user=user)
+    _restart_review_clock(document)
     notifications.notify(
         document.created_by,
         kind=NotificationKind.DOCUMENT_APPROVED,
@@ -248,7 +250,15 @@ def _supersede_previous(document: Document, user) -> Document | None:
         user=user,
         reason=f"جایگزین شده با بازنگری {document.revision_display} ({document.full_code})",
     )
+    previous.review_due_on = None  # a document no longer in force has nothing to review
+    previous.save(update_fields=["review_due_on"])
     return previous
+
+
+def _restart_review_clock(document: Document) -> None:
+    """Phase 21: the next periodic review is due one interval from today (none when the interval is 0)."""
+    document.review_due_on = review.due_date_from(timezone.localdate(), document.review_interval_months)
+    document.save(update_fields=["review_due_on"])
 
 
 def _queue_pdf_builds(user, approved: Document, superseded: Document | None) -> None:
@@ -343,4 +353,24 @@ def withdraw(*, user, document_id: int, reason: str = "") -> Document:
         body=reason or document.title,
         url=f"/documents/{document.pk}/edit",
     )
+    return document
+
+
+@transaction.atomic
+def mark_reviewed(*, user, document_id: int, note: str = "") -> Document:
+    """«بازنگری شد — بدون تغییر» (Phase 21): someone who may write a document in force has looked at it and
+    found nothing to change. Recorded in the trail (with their note) and the review clock restarts; the
+    other way to restart it is approving a new revision."""
+    note = (note or "").strip()
+    if len(note) > REASON_MAX_LENGTH:
+        raise ValidationError({"note": [f"توضیح نباید بیش از {REASON_MAX_LENGTH} نویسه باشد."]})
+    document = _locked(document_id)
+    if not document_authority.DocumentAuthority(user).can_author(document):
+        raise PermissionDenied(document_authority.NOT_AN_AUTHOR)
+    if document.status != DocumentStatus.UNDER_CONTROL:
+        raise ConflictError(
+            "فقط مستندی که تحت کنترل است بازنگری دوره‌ای دارد.", code="wrong_status", status=document.status
+        )
+    _record(document, kind=DocumentEventKind.REVIEWED, to_status=DocumentStatus.UNDER_CONTROL, user=user, reason=note)
+    _restart_review_clock(document)
     return document

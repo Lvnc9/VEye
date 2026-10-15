@@ -39,7 +39,7 @@ def update_company(
     return _locked(company.pk)
 
 
-DOCUMENT_DEFAULT_FIELDS = ("doc_footnote1", "doc_footnote2", "form_subtitle", "form_show_letter_box")
+DOCUMENT_DEFAULT_FIELDS = ("doc_footnote1", "doc_footnote2", "form_subtitle", "form_show_letter_box", "doc_review_months")
 
 
 @transaction.atomic
