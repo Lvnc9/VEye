@@ -15,6 +15,7 @@ import { apiPost, ApiError } from "@/lib/api-client";
 import type { DesignerDocument } from "./useDesignerDocument";
 import { ArrowRight, CalendarClock, ClipboardCheck, Eye, Redo2, RotateCcw, Save, Undo2 } from "lucide-react";
 import { ReviewDialog } from "@/components/ReviewDialog";
+import { ReadingPanel } from "@/components/distribution/ReadingPanel";
 import {
   intervalChoices,
   markReviewed,
@@ -220,6 +221,8 @@ export function DesignerShell<S>({
           <p className="text-rose-700 dark:text-rose-300">پس از اصلاح، مستند را دوباره برای تایید ارسال کنید.</p>
         </Alert>
       )}
+
+      <ReadingPanel documentId={document.id} inForce={document.status === "UNDER_CONTROL"} />
 
       <WorkflowTimeline documentId={document.id} version={document.status} />
 
