@@ -226,3 +226,23 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def has_capability(self, capability: str) -> bool:
         return capability in self.capabilities
+
+
+class LoginEvent(models.Model):
+    """One sign-in attempt on an existing account (Phase 20): shown to the person on /account as
+    «ورودهای اخیر», failures included, so they can spot someone else trying. Attempts on a national
+    code that has no account are not recorded (nothing to attach them to). Purged after
+    `LOGIN_HISTORY_DAYS` by the beat task `accounts.purge_login_events`."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="login_events")
+    succeeded = models.BooleanField()
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["user", "-created_at"], name="login_event_user_recent")]
+
+    def __str__(self):
+        return f"{self.user_id} {'ok' if self.succeeded else 'failed'} {self.created_at:%Y-%m-%d %H:%M}"

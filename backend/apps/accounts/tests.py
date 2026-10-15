@@ -668,3 +668,97 @@ class PasswordChangeTests(TestCase):
         self.user.refresh_from_db()
         self.assertFalse(self.user.must_change_password)
         self.assertIsNone(self.user.sessions_valid_after)
+
+
+@override_settings(CACHES=LOCMEM_CACHE, RATELIMIT_ENABLE=False)
+class SignInHistoryTests(TestCase):
+    """Phase 20: «ورودهای اخیر» and «خروج از سایر دستگاه‌ها»."""
+
+    def setUp(self):
+        from .models import LoginEvent
+
+        self.LoginEvent = LoginEvent
+        self.password = "correct-horse-battery"
+        self.user = make_user("8200000001", AccessRoll.GUILD, AccessLevel.LEVEL_2, password=self.password)
+        self.client = APIClient(enforce_csrf_checks=False)
+
+    def attempt(self, client, password, national_code=None, **extra):
+        with _issued_earlier():
+            return client.post(
+                reverse("auth-login"),
+                {"national_code": national_code or self.user.national_code, "password": password},
+                format="json",
+                **extra,
+            )
+
+    def test_a_sign_in_is_recorded_with_address_and_browser(self):
+        self.attempt(self.client, self.password, REMOTE_ADDR="10.1.2.3", HTTP_USER_AGENT="Mozilla/5.0 Firefox/130.0")
+        event = self.LoginEvent.objects.get(user=self.user)
+        self.assertTrue(event.succeeded)
+        self.assertEqual(event.ip, "10.1.2.3")
+        self.assertIn("Firefox", event.user_agent)
+
+    def test_a_failed_attempt_on_a_real_account_is_recorded(self):
+        self.assertEqual(self.attempt(self.client, "wrong-password").status_code, 401)
+        event = self.LoginEvent.objects.get(user=self.user)
+        self.assertFalse(event.succeeded)
+
+    def test_an_unknown_national_code_records_nothing(self):
+        self.attempt(self.client, "whatever", national_code="0000000000")
+        self.assertFalse(self.LoginEvent.objects.exists())
+
+    def test_the_proxy_address_is_used_when_configured(self):
+        with self.settings(RATELIMIT_IP_META_KEY="HTTP_X_FORWARDED_FOR"):
+            self.attempt(self.client, self.password, HTTP_X_FORWARDED_FOR="203.0.113.9, 10.0.0.1")
+        self.assertEqual(self.LoginEvent.objects.get().ip, "203.0.113.9")
+
+    def test_a_garbled_address_is_stored_as_none(self):
+        with self.settings(RATELIMIT_IP_META_KEY="HTTP_X_FORWARDED_FOR"):
+            self.attempt(self.client, self.password, HTTP_X_FORWARDED_FOR="not-an-ip")
+        self.assertIsNone(self.LoginEvent.objects.get().ip)
+
+    def test_history_lists_only_my_own_last_ten_newest_first(self):
+        stranger = make_user("8200000002", AccessRoll.GUILD, AccessLevel.LEVEL_2)
+        for i in range(12):
+            self.LoginEvent.objects.create(user=self.user, succeeded=bool(i % 2), user_agent=f"agent-{i}")
+        # The newest attempt of all is somebody else's: it must not show.
+        self.LoginEvent.objects.create(user=stranger, succeeded=True, user_agent="stranger")
+        self.client.force_authenticate(user=self.user)
+        body = self.client.get(reverse("auth-sessions")).json()
+        self.assertEqual(len(body["events"]), 10)
+        self.assertEqual(body["events"][0]["user_agent"], "agent-11")
+        self.assertNotIn("stranger", [event["user_agent"] for event in body["events"]])
+        self.assertEqual(body["history_days"], 90)
+
+    def test_history_needs_a_signed_in_person(self):
+        self.assertEqual(self.client.get(reverse("auth-sessions")).status_code, 401)
+
+    def test_signing_out_other_devices_keeps_this_one(self):
+        other = APIClient(enforce_csrf_checks=False)
+        self.attempt(other, self.password)
+        self.attempt(self.client, self.password)
+        response = self.client.post(reverse("auth-logout-others"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get(reverse("auth-me")).status_code, 200)
+        self.assertEqual(other.get(reverse("auth-me")).status_code, 401)
+        self.assertEqual(other.post(reverse("auth-refresh")).status_code, 401)
+
+    def test_the_purge_keeps_only_the_configured_days(self):
+        from datetime import timedelta
+
+        from django.utils import timezone as dj_timezone
+
+        from .tasks import purge_login_events
+
+        old = self.LoginEvent.objects.create(user=self.user, succeeded=True)
+        recent = self.LoginEvent.objects.create(user=self.user, succeeded=True)
+        self.LoginEvent.objects.filter(pk=old.pk).update(created_at=dj_timezone.now() - timedelta(days=91))
+        self.LoginEvent.objects.filter(pk=recent.pk).update(created_at=dj_timezone.now() - timedelta(days=89))
+        self.assertEqual(purge_login_events(), 1)
+        self.assertEqual(list(self.LoginEvent.objects.values_list("pk", flat=True)), [recent.pk])
+
+    def test_a_person_with_only_a_history_can_still_be_deleted(self):
+        self.LoginEvent.objects.create(user=self.user, succeeded=True)
+        hr = APIClient(enforce_csrf_checks=False)
+        hr.force_authenticate(user=make_user("8200000003", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1))
+        self.assertEqual(hr.delete(reverse("personnel-detail", args=[self.user.pk])).status_code, 204)

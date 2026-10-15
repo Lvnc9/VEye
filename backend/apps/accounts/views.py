@@ -22,7 +22,7 @@ from apps.core.exceptions import ConflictError
 from apps.core.permissions import HasCapability
 
 from .authentication import blacklist_jti, is_blacklisted, token_predates_revocation
-from .models import Capability, User
+from .models import Capability, LoginEvent, User
 from .serializers import LoginSerializer, PasswordChangeSerializer, PlacementSerializer, UserSerializer
 
 # NOTE on CSRF (see also apps/accounts/authentication.py docstring):
@@ -56,6 +56,31 @@ def set_jwt_cookies(response: Response, access_token: str, refresh_token: str) -
     response.set_cookie(settings.JWT_REFRESH_COOKIE_NAME, refresh_token, **_cookie_kwargs(refresh_lifetime))
 
 
+def client_ip(request) -> str | None:
+    """The address the rate limiter trusts: `RATELIMIT_IP_META_KEY` behind the production proxy (Caddy
+    overwrites X-Forwarded-For with the client), else REMOTE_ADDR. Garbage becomes None."""
+    import ipaddress
+
+    raw = request.META.get(getattr(settings, "RATELIMIT_IP_META_KEY", None) or "REMOTE_ADDR", "") or ""
+    candidate = raw.split(",")[0].strip()
+    try:
+        return str(ipaddress.ip_address(candidate))
+    except ValueError:
+        return None
+
+
+def record_login(request, user, *, succeeded: bool) -> None:
+    """«ورودهای اخیر» (Phase 20). Nothing is recorded for a national code with no account."""
+    if user is None:
+        return
+    LoginEvent.objects.create(
+        user=user,
+        succeeded=succeeded,
+        ip=client_ip(request),
+        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:255],
+    )
+
+
 def issue_session(response: Response, user) -> None:
     """A fresh token pair for `user`, as this browser's cookies."""
     refresh = RefreshToken.for_user(user)
@@ -76,12 +101,10 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user = authenticate(
-            request,
-            national_code=serializer.validated_data["national_code"],
-            password=serializer.validated_data["password"],
-        )
+        national_code = serializer.validated_data["national_code"]
+        user = authenticate(request, national_code=national_code, password=serializer.validated_data["password"])
         if user is None or not user.is_active:
+            record_login(request, User.objects.filter(national_code=national_code).first(), succeeded=False)
             return Response(
                 {"detail": "کد ملی یا رمز عبور اشتباه است."},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -90,6 +113,7 @@ class LoginView(APIView):
         # SimpleJWT's UPDATE_LAST_LOGIN only acts inside its own login serializers, which this view
         # does not use — so `last_login` stayed empty until Phase 20.
         update_last_login(None, user)
+        record_login(request, user, succeeded=True)
         response = Response(session_user_data(user), status=status.HTTP_200_OK)
         issue_session(response, user)
         # Forces CsrfViewMiddleware to emit a fresh, readable csrftoken cookie
@@ -190,6 +214,45 @@ class PasswordChangeView(APIView):
         user.save(update_fields=["password", "must_change_password", "sessions_valid_after"])
 
         response = Response(session_user_data(user), status=status.HTTP_200_OK)
+        issue_session(response, user)
+        return response
+
+
+class SessionsView(APIView):
+    """«ورودهای اخیر»: the last 10 sign-in attempts on my account, failures included (Phase 20)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        events = LoginEvent.objects.filter(user=request.user)[:10]
+        return Response(
+            {
+                "events": [
+                    {
+                        "id": event.id,
+                        "succeeded": event.succeeded,
+                        "ip": event.ip,
+                        "user_agent": event.user_agent,
+                        "created_at": event.created_at,
+                    }
+                    for event in events
+                ],
+                "history_days": settings.LOGIN_HISTORY_DAYS,
+            }
+        )
+
+
+class LogoutOthersView(APIView):
+    """«خروج از سایر دستگاه‌ها» (Phase 20): every token issued so far stops working; this browser gets
+    a fresh pair, so only the other devices are signed out."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        user.revoke_sessions()
+        user.save(update_fields=["sessions_valid_after"])
+        response = Response({"detail": "از همهٔ دستگاه‌های دیگر خارج شدید."}, status=status.HTTP_200_OK)
         issue_session(response, user)
         return response
 

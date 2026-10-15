@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { cx } from "@/components/ui/cx";
 import { useToast } from "@/components/ui/Toast";
 import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
+import { SignInHistoryCard } from "@/components/account/SignInHistoryCard";
 
 export default function AccountPage() {
   const { user, loading, replaceUser } = useCurrentUser();
@@ -103,6 +104,8 @@ export default function AccountPage() {
               }}
             />
           </Card>
+
+          <SignInHistoryCard />
         </div>
 
         <div className="space-y-6">
