@@ -37,11 +37,11 @@ export function DocumentPicker({
 
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 flex items-center gap-1.5 text-xs text-slate-600">
+      <label htmlFor={id} className="mb-1.5 flex items-center gap-1.5 text-xs text-soft-foreground">
         {label}
       </label>
       <div className="relative">
-        <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
+        <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-subtle-foreground" />
         <input
           id={id}
           value={query}
@@ -81,16 +81,16 @@ function DocumentResults({
   onPick: (document: DocumentRow) => void;
 }) {
   const documents = useApiQuery<Paginated<DocumentRow>>(`/documents/?search=${encodeURIComponent(query)}&page_size=8`);
-  if (documents.loading) return <p className="mt-2 text-xs text-slate-500">در حال جستجو...</p>;
+  if (documents.loading) return <p className="mt-2 text-xs text-muted-foreground">در حال جستجو...</p>;
   if (documents.error) return <p className="mt-1 text-xs text-rose-600">{documents.error}</p>;
   const rows = documents.data?.results ?? [];
-  if (rows.length === 0) return <p className="mt-1 text-xs text-slate-500">مستندی پیدا نشد.</p>;
+  if (rows.length === 0) return <p className="mt-1 text-xs text-muted-foreground">مستندی پیدا نشد.</p>;
   return (
     <ul className="mt-2 space-y-1.5 animate-fade-in">
       {rows.map((document) => {
         const already = excludedIds?.has(document.id) ?? false;
         return (
-          <li key={document.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition-colors hover:border-slate-300">
+          <li key={document.id} className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm transition-colors hover:border-input">
             <span className="flex min-w-0 items-center gap-2">
               <Code>{document.full_code}</Code>
               <span className="truncate">{document.title}</span>

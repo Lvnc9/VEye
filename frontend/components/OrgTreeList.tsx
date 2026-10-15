@@ -41,10 +41,10 @@ function Row({ node, tone, selectedId, onSelect, renderExtra }: { node: OrgTreeN
     selected
       ? dark
         ? "bg-glow/15 ring-1 ring-glow/40"
-        : "bg-brand-50 ring-1 ring-brand-300"
+        : "bg-primary/10 ring-1 ring-primary/30"
       : dark
         ? "hover:bg-white/5"
-        : "hover:bg-slate-100"
+        : "hover:bg-accent"
   }`;
 
   return (
@@ -62,7 +62,7 @@ function Row({ node, tone, selectedId, onSelect, renderExtra }: { node: OrgTreeN
       {node.children.length > 0 && (
         <ul
           role="group"
-          className={`mt-1 ms-3 space-y-1 border-s ps-3 ${dark ? "border-navy-line" : "border-slate-200"}`}
+          className={`mt-1 ms-3 space-y-1 border-s ps-3 ${dark ? "border-navy-line" : "border-border"}`}
         >
           {node.children.map((child) => (
             <Row key={child.id} node={child} tone={tone} selectedId={selectedId} onSelect={onSelect} renderExtra={renderExtra} />

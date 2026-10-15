@@ -75,18 +75,18 @@ const EMPTY_FILTERS: Required<DocumentFilters> = {
 };
 
 function SignOffCell({ signoff }: { signoff: SignOffSummary | null }) {
-  if (!signoff?.name) return <span className="text-slate-300">—</span>;
+  if (!signoff?.name) return <span className="text-subtle-foreground">—</span>;
   return (
     <span title={signoff.position}>
       {signoff.name}
-      {signoff.signed_date && <span className="block text-xs text-slate-500">{formatJalali(signoff.signed_date)}</span>}
+      {signoff.signed_date && <span className="block text-xs text-muted-foreground">{formatJalali(signoff.signed_date)}</span>}
     </span>
   );
 }
 
 /** «واحدهای مسئول»: the واحد named in the document's Responsibilities block, one under another. */
 function ResponsibleUnitsCell({ units }: { units: string[] }) {
-  if (units.length === 0) return <span className="text-slate-300">—</span>;
+  if (units.length === 0) return <span className="text-subtle-foreground">—</span>;
   return (
     <span title={units.join("، ")} className="block max-w-48">
       {units.map((unit) => (
@@ -339,6 +339,54 @@ export default function DocumentRegisterPage() {
   const bulkSelection: BulkSelection = selectedIds.length > 0 ? { ids: selectedIds } : { filters };
   const selectClass = controlSelect;
 
+  /** A row's buttons — the same in the desktop table and the phone's card list. */
+  const renderActions = (row: DocumentRow) => (
+    <>
+              <Link
+                href={`/documents/${row.id}/edit`}
+                className={buttonClass({
+                  size: "xs",
+                  variant: row.can_edit && row.action === "complete" ? "primary" : "secondary",
+                })}
+              >
+                {row.can_edit ? <Pencil /> : <FileText />}
+                {row.can_edit
+                  ? row.action === "complete"
+                    ? DOCUMENT_ACTION_LABELS.complete
+                    : "ویرایش"
+                  : "مشاهده"}
+              </Link>
+              <WorkflowActions
+                row={row}
+                onDone={(message) => {
+                  setActionError(null);
+                  setNotice(message);
+                  setReloadToken((n) => n + 1);
+                }}
+              />
+              <PdfActions
+                row={row}
+                status={pdfStatus[row.id] ?? row.pdf_status}
+                canPrint={canPrint}
+                previewing={previewingId === row.id}
+                onPrint={() => handlePrint(row)}
+                onRebuild={() => void runOfficialBuild(row)}
+                onPreview={() => handlePreview(row)}
+              />
+              {row.can_revise && (
+                <Button
+                  size="xs"
+                  variant="subtle"
+                  icon={<FilePlus2 />}
+                  onClick={() => handleRevise(row)}
+                  loading={revisingId === row.id}
+                >
+                  بازنگری جدید
+                </Button>
+              )}
+    </>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -383,7 +431,7 @@ export default function DocumentRegisterPage() {
             )}
             <div className={`grid gap-4 ${ownerChoices.length > 0 ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"}`}>
               <label className="block text-sm">
-                <span className="mb-1.5 block text-slate-700">دسته بندی</span>
+                <span className="mb-1.5 block text-soft-foreground">دسته بندی</span>
                 <select
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value as DocumentCategory | "" })}
@@ -398,7 +446,7 @@ export default function DocumentRegisterPage() {
                 </select>
               </label>
               <label className="block text-sm">
-                <span className="mb-1.5 block text-slate-700">عنوان</span>
+                <span className="mb-1.5 block text-soft-foreground">عنوان</span>
                 <input
                   type="text"
                   value={form.title}
@@ -408,7 +456,7 @@ export default function DocumentRegisterPage() {
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1.5 block text-slate-700">گروه</span>
+                <span className="mb-1.5 block text-soft-foreground">گروه</span>
                 <select
                   value={form.group}
                   onChange={(e) => setForm({ ...form, group: e.target.value as DocumentGroup | "" })}
@@ -424,7 +472,7 @@ export default function DocumentRegisterPage() {
               </label>
               {ownerChoices.length > 0 && (
                 <label className="block text-sm">
-                  <span className="mb-1.5 block text-slate-700">گرهٔ مالک (واحد / بخش)</span>
+                  <span className="mb-1.5 block text-soft-foreground">گرهٔ مالک (واحد / بخش)</span>
                   <OwnerNodeSelect value={ownerNode} choices={ownerChoices} onChange={setPickedOwner} />
                 </label>
               )}
@@ -448,14 +496,14 @@ export default function DocumentRegisterPage() {
       <Card as="div" className="p-3 sm:p-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="relative w-full sm:w-72">
-            <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
+            <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-subtle-foreground" />
             <input
               type="search"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="جست و جو — مثال: برون سازمانی"
               aria-label="جست و جو در مستندات"
-              className={`${selectClass} w-full pr-9`}
+              className={`${selectClass} w-full ps-9`}
             />
           </div>
           <select
@@ -512,7 +560,7 @@ export default function DocumentRegisterPage() {
               پاک کردن فیلترها
             </Button>
           )}
-          <span className="ms-auto flex flex-wrap items-center gap-2 text-sm text-slate-500">
+          <span className="ms-auto flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             {selectedIds.length > 0 && (
               <Button variant="ghost" size="sm" onClick={() => setSelection({ sig: filterSig, ids: [] })}>
                 لغو انتخاب
@@ -526,10 +574,10 @@ export default function DocumentRegisterPage() {
               title="دانلود PDFهای ساخته‌شده به‌صورت فایل ZIP"
             >
               چاپ لیست
-              <span className="text-xs text-slate-500">({selectionLabel(selectedIds.length, filtersActive)})</span>
+              <span className="text-xs text-muted-foreground">({selectionLabel(selectedIds.length, filtersActive)})</span>
             </Button>
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 tabular-nums">
-              {count} مستند
+            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary tabular-nums">
+              {count.toLocaleString("fa-IR")} مستند
             </span>
           </span>
         </div>
@@ -552,10 +600,11 @@ export default function DocumentRegisterPage() {
           as="div"
           className={cx("overflow-hidden transition-opacity duration-200", loading && "opacity-60")}
         >
-          <div className="overflow-x-auto">
+          {/* From `md` up: the table, scrolling in its own box so its header can stick. */}
+          <div className="hidden max-h-[72dvh] overflow-auto overscroll-contain md:block">
             <table className="w-full min-w-[1150px] text-right text-sm">
-              <thead className="bg-slate-50/90 text-xs text-slate-500">
-                <tr className="border-b border-slate-200">
+              <thead className="sticky top-0 z-20 bg-muted text-xs text-muted-foreground shadow-[0_1px_0_var(--border)]">
+                <tr className="border-b border-border">
                   <th className="w-10 px-4 py-3">
                     <input
                       type="checkbox"
@@ -571,7 +620,7 @@ export default function DocumentRegisterPage() {
                       className={cx(
                         "whitespace-nowrap px-3 py-3 font-normal",
                         // The last column (status + actions) stays in view at the left edge while the table scrolls.
-                        i === COLUMNS.length - 1 && "bg-slate-50 md:sticky md:left-0 md:z-10 md:shadow-[8px_0_12px_-10px_rgb(15_23_42/0.25)]",
+                        i === COLUMNS.length - 1 && "bg-muted md:sticky md:left-0 md:z-30 md:shadow-[8px_0_12px_-10px_rgb(15_23_42/0.25)]",
                       )}
                     >
                       {column}
@@ -579,7 +628,7 @@ export default function DocumentRegisterPage() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-border">
                 {rows.map((row, index) => {
                   const selected = selectedIds.includes(row.id);
                   return (
@@ -587,7 +636,7 @@ export default function DocumentRegisterPage() {
                       key={row.id}
                       className={cx(
                         "group align-top transition-colors duration-150",
-                        selected ? "bg-brand-50" : "bg-white hover:bg-slate-50",
+                        selected ? "bg-[color-mix(in_oklch,var(--primary)_8%,var(--card))]" : "bg-card hover:bg-accent",
                       )}
                     >
                       <td className="px-4 py-3.5">
@@ -599,96 +648,55 @@ export default function DocumentRegisterPage() {
                           className="size-4 rounded"
                         />
                       </td>
-                      <td className="px-3 py-3.5 text-slate-500 tabular-nums">
-                        {(currentPage - 1) * PAGE_SIZE + index + 1}
+                      <td className="px-3 py-3.5 text-muted-foreground tabular-nums">
+                        {((currentPage - 1) * PAGE_SIZE + index + 1).toLocaleString("fa-IR")}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3.5 text-slate-600">{row.category_label}</td>
-                      <td className="max-w-[260px] truncate px-3 py-3.5 font-bold text-slate-900" title={row.title}>
+                      <td className="whitespace-nowrap px-3 py-3.5 text-soft-foreground">{row.category_label}</td>
+                      <td className="max-w-[260px] truncate px-3 py-3.5 font-bold text-foreground" title={row.title}>
                         <Link
                           href={`/documents/${row.id}/edit`}
-                          className="transition-colors hover:text-brand-700"
+                          className="transition-colors hover:text-primary-hover"
                         >
                           {row.title}
                         </Link>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3.5 text-slate-600">{row.group_label}</td>
+                      <td className="whitespace-nowrap px-3 py-3.5 text-soft-foreground">{row.group_label}</td>
                       <td className="px-3 py-3.5">
                         <Code>{row.revision_display}</Code>
                       </td>
                       <td className="px-3 py-3.5">
                         <Code>{row.code}</Code>
                       </td>
-                      <td className="px-3 py-3.5 text-slate-600">
+                      <td className="px-3 py-3.5 text-soft-foreground">
                         {row.owner_node ? (
                           <span title={row.owner_node.kind_label}>{row.owner_node.name}</span>
                         ) : (
-                          <span className="text-slate-300" title="این مستند گرهٔ مالک ندارد">
+                          <span className="text-subtle-foreground" title="این مستند گرهٔ مالک ندارد">
                             —
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-3.5 text-slate-600">
+                      <td className="px-3 py-3.5 text-soft-foreground">
                         <ResponsibleUnitsCell units={row.responsible_units} />
                       </td>
-                      <td className="px-3 py-3.5 text-slate-700">
+                      <td className="px-3 py-3.5 text-soft-foreground">
                         <SignOffCell signoff={row.signoffs.creater} />
                       </td>
-                      <td className="px-3 py-3.5 text-slate-700">
+                      <td className="px-3 py-3.5 text-soft-foreground">
                         <SignOffCell signoff={row.signoffs.confirmer} />
                       </td>
-                      <td className="px-3 py-3.5 text-slate-700">
+                      <td className="px-3 py-3.5 text-soft-foreground">
                         <SignOffCell signoff={row.signoffs.approver} />
                       </td>
                       <td
                         className={cx(
                           "px-3 py-3.5 transition-colors duration-150 md:sticky md:left-0 md:min-w-[16rem] md:shadow-[8px_0_12px_-10px_rgb(15_23_42/0.25)]",
-                          selected ? "bg-brand-50" : "bg-white group-hover:bg-slate-50",
+                          selected ? "bg-[color-mix(in_oklch,var(--primary)_8%,var(--card))]" : "bg-card group-hover:bg-accent",
                         )}
                       >
                         <div className="flex flex-wrap items-center gap-1.5">
                           <StatusBadge status={row.status} label={row.status_label} />
-                          <Link
-                            href={`/documents/${row.id}/edit`}
-                            className={buttonClass({
-                              size: "xs",
-                              variant: row.can_edit && row.action === "complete" ? "primary" : "secondary",
-                            })}
-                          >
-                            {row.can_edit ? <Pencil /> : <FileText />}
-                            {row.can_edit
-                              ? row.action === "complete"
-                                ? DOCUMENT_ACTION_LABELS.complete
-                                : "ویرایش"
-                              : "مشاهده"}
-                          </Link>
-                          <WorkflowActions
-                            row={row}
-                            onDone={(message) => {
-                              setActionError(null);
-                              setNotice(message);
-                              setReloadToken((n) => n + 1);
-                            }}
-                          />
-                          <PdfActions
-                            row={row}
-                            status={pdfStatus[row.id] ?? row.pdf_status}
-                            canPrint={canPrint}
-                            previewing={previewingId === row.id}
-                            onPrint={() => handlePrint(row)}
-                            onRebuild={() => void runOfficialBuild(row)}
-                            onPreview={() => handlePreview(row)}
-                          />
-                          {row.can_revise && (
-                            <Button
-                              size="xs"
-                              variant="subtle"
-                              icon={<FilePlus2 />}
-                              onClick={() => handleRevise(row)}
-                              loading={revisingId === row.id}
-                            >
-                              بازنگری جدید
-                            </Button>
-                          )}
+                          {renderActions(row)}
                         </div>
                       </td>
                     </tr>
@@ -697,6 +705,54 @@ export default function DocumentRegisterPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Below `md`: one card per document instead of a 1150px-wide table. */}
+          <ul className="divide-y divide-border md:hidden">
+            {rows.map((row) => {
+              const selected = selectedIds.includes(row.id);
+              return (
+                <li key={row.id} className={cx("space-y-3 p-4 transition-colors", selected && "bg-[color-mix(in_oklch,var(--primary)_8%,var(--card))]")}>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`انتخاب ${row.full_code}`}
+                      checked={selected}
+                      onChange={() => toggleSelected(row.id)}
+                      className="mt-1 size-4 shrink-0 rounded"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Code>{row.full_code}</Code>
+                        <StatusBadge status={row.status} label={row.status_label} />
+                      </div>
+                      <Link href={`/documents/${row.id}/edit`} className="mt-1.5 block font-bold leading-7 text-foreground hover:text-primary">
+                        {row.title}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">
+                        {row.category_label} · {row.group_label}
+                        {row.owner_node && <> · {row.owner_node.name}</>}
+                      </p>
+                    </div>
+                  </div>
+                  <dl className="grid grid-cols-3 gap-2 rounded-xl bg-muted/50 p-2.5 text-xs">
+                    {(
+                      [
+                        ["تدوین", row.signoffs.creater],
+                        ["تائید", row.signoffs.confirmer],
+                        ["تصویب", row.signoffs.approver],
+                      ] as const
+                    ).map(([label, signoff]) => (
+                      <div key={label} className="min-w-0">
+                        <dt className="text-muted-foreground">{label}</dt>
+                        <dd className="mt-0.5 truncate text-foreground">{signoff?.name || "—"}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <div className="flex flex-wrap items-center gap-1.5">{renderActions(row)}</div>
+                </li>
+              );
+            })}
+          </ul>
         </Card>
       )}
 

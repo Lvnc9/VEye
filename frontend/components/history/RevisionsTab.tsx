@@ -31,11 +31,11 @@ const PAGE_SIZE = 25;
 const select = cx(selectClass, "min-w-[8rem] flex-1 sm:flex-none");
 
 function Signer({ signoff }: { signoff: SignOffSummary | null }) {
-  if (!signoff?.name) return <span className="text-slate-300">—</span>;
+  if (!signoff?.name) return <span className="text-subtle-foreground">—</span>;
   return (
     <span title={signoff.position}>
       {signoff.name}
-      {signoff.signed_date && <span className="block text-xs text-slate-500">{formatJalali(signoff.signed_date)}</span>}
+      {signoff.signed_date && <span className="block text-xs text-muted-foreground">{formatJalali(signoff.signed_date)}</span>}
     </span>
   );
 }
@@ -115,7 +115,7 @@ export function RevisionsTab({
             پاک کردن فیلترها
           </Button>
         )}
-        <span className="ms-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 tabular-nums">
+        <span className="ms-auto rounded-full bg-muted px-2.5 py-0.5 text-xs text-soft-foreground tabular-nums">
           {count} بازنگری
         </span>
       </Card>
@@ -144,10 +144,10 @@ export function RevisionsTab({
 
       {rows.length > 0 && (
         <Card as="div" flush className={cx("overflow-hidden transition-opacity duration-200", loading && "opacity-60")}>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[980px] text-right text-sm">
-            <thead className="bg-slate-50/90 text-xs text-slate-500">
-              <tr className="border-b border-slate-200">
+            <thead className="bg-muted/50 text-xs text-muted-foreground">
+              <tr className="border-b border-border">
                 {["کد", "بازنگری", "عنوان", "گروه", "وضعیت", "تدوین", "تائید", "تصویب", "PDF"].map((column) => (
                   <th key={column} className="whitespace-nowrap px-3 py-3 font-normal">
                     {column}
@@ -155,9 +155,9 @@ export function RevisionsTab({
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {rows.map((row) => (
-                <tr key={row.id} className="transition-colors duration-150 hover:bg-slate-50/80">
+                <tr key={row.id} className="transition-colors duration-150 hover:bg-accent/60">
                   <td className="px-3 py-3">
                     <button
                       type="button"
@@ -171,10 +171,10 @@ export function RevisionsTab({
                   <td className="px-3 py-3">
                     <Code>{row.revision_display}</Code>
                   </td>
-                  <td className="max-w-[260px] truncate px-3 py-3 font-bold text-slate-900" title={row.title}>
+                  <td className="max-w-[260px] truncate px-3 py-3 font-bold text-foreground" title={row.title}>
                     {row.title}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-slate-600">{row.group_label}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-soft-foreground">{row.group_label}</td>
                   <td className="px-3 py-3">
                     <StatusBadge status={row.status} label={row.status_label} />
                   </td>
@@ -199,7 +199,7 @@ export function RevisionsTab({
                         باز کردن
                       </a>
                     ) : (
-                      <span className="text-slate-300">—</span>
+                      <span className="text-subtle-foreground">—</span>
                     )}
                   </td>
                 </tr>
@@ -207,6 +207,41 @@ export function RevisionsTab({
             </tbody>
           </table>
         </div>
+        {/* Below `md`: a card per revision instead of the wide table. */}
+        <ul className="divide-y divide-border md:hidden">
+          {rows.map((row) => (
+            <li key={row.id} className="space-y-2.5 p-4">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  title="نمایش همهٔ بازنگری‌های این مستند"
+                  onClick={() => update({ family: row.code })}
+                  className="rounded-md"
+                >
+                  <Code>{row.code}</Code>
+                </button>
+                <Code>{row.revision_display}</Code>
+                <StatusBadge status={row.status} label={row.status_label} />
+              </div>
+              <p className="font-bold leading-7 text-foreground">{row.title}</p>
+              <p className="text-xs text-muted-foreground">{row.group_label}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-soft-foreground">
+                <span>
+                  {[row.signoffs.creater, row.signoffs.confirmer, row.signoffs.approver]
+                    .map((signoff) => signoff?.name)
+                    .filter(Boolean)
+                    .join(" · ") || "—"}
+                </span>
+                {row.pdf_status === "ready" && (
+                  <a href={pdfDownloadUrl(row.id)} target="_blank" rel="noreferrer" className={buttonClass({ size: "xs" })}>
+                    <ExternalLink />
+                    باز کردن PDF
+                  </a>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
         </Card>
       )}
 

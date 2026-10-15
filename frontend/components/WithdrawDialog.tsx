@@ -44,13 +44,13 @@ export function WithdrawDialog({ code, onSubmit, onCancel }: Props) {
 
   return (
     <Dialog label="بازپس‌گیری مستند" title={`بازپس‌گیری مستند ${code}`} onClose={onCancel} busy={sending}>
-      <p className="text-sm leading-7 text-slate-600">
+      <p className="text-sm leading-7 text-soft-foreground">
         مستند به پیش‌نویس برمی‌گردد و همهٔ امضاها پاک می‌شوند. پس از اصلاح، دوباره آن را برای تایید ارسال کنید. کسانی
         که منتظر اقدام روی آن بودند باخبر می‌شوند.
       </p>
       <label className="block text-sm">
-        <span className="mb-1.5 block text-slate-700">
-          توضیح <span className="text-slate-400">(اختیاری)</span>
+        <span className="mb-1.5 block text-soft-foreground">
+          توضیح <span className="text-subtle-foreground">(اختیاری)</span>
         </span>
         <textarea
           ref={box}

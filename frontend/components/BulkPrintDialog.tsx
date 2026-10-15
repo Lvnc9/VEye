@@ -31,7 +31,7 @@ export function BulkPrintDialog({
     <Dialog label="چاپ لیست" title="چاپ لیست" description={label} onClose={onClose}>
       {loading && (
         <div role="status" className="space-y-3">
-          <p className="text-sm text-slate-500">در حال بررسی...</p>
+          <p className="text-sm text-muted-foreground">در حال بررسی...</p>
           <SkeletonLines rows={2} />
         </div>
       )}
@@ -39,12 +39,12 @@ export function BulkPrintDialog({
 
       {data && (
         <>
-          <p className="text-sm leading-7 text-slate-700">
-            <span className="font-bold text-emerald-700">{data.ready}</span> PDF آمادهٔ دانلود است
+          <p className="text-sm leading-7 text-soft-foreground">
+            <span className="font-bold text-emerald-700 dark:text-emerald-300">{data.ready}</span> PDF آمادهٔ دانلود است
             {data.missing.length > 0 && (
               <>
                 {" "}
-                و برای <span className="font-bold text-amber-700">{data.missing.length}</span> مستند PDF وجود ندارد
+                و برای <span className="font-bold text-amber-700 dark:text-amber-300">{data.missing.length}</span> مستند PDF وجود ندارد
               </>
             )}
             . فقط PDFهای ساخته‌شده در فایل ZIP قرار می‌گیرند؛ چیزی ساخته نمی‌شود.
@@ -57,13 +57,13 @@ export function BulkPrintDialog({
           )}
 
           {data.missing.length > 0 && (
-            <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200">
-              <ul className="divide-y divide-slate-100 text-sm">
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-border">
+              <ul className="divide-y divide-border text-sm">
                 {data.missing.map((item) => (
                   <li key={item.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
                     <Code>{item.full_code}</Code>
-                    <span className="min-w-[8rem] flex-1 text-slate-800">{item.title}</span>
-                    <span className="text-xs text-amber-700">{item.reason_label}</span>
+                    <span className="min-w-[8rem] flex-1 text-foreground">{item.title}</span>
+                    <span className="text-xs text-amber-700 dark:text-amber-300">{item.reason_label}</span>
                   </li>
                 ))}
               </ul>

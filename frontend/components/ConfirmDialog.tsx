@@ -40,7 +40,7 @@ export function ConfirmDialog({ title, message, confirmLabel, danger = false, on
 
   return (
     <Dialog label={title} title={title} onClose={onCancel} busy={busy} size="sm">
-      <p className="text-sm leading-7 text-slate-600">{message}</p>
+      <p className="text-sm leading-7 text-soft-foreground">{message}</p>
       {error && <ErrorBanner message={error} />}
       <DialogFooter>
         <Button ref={cancelRef} onClick={onCancel} disabled={busy}>

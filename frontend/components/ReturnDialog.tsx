@@ -44,12 +44,12 @@ export function ReturnDialog({ code, onSubmit, onCancel }: Props) {
 
   return (
     <Dialog label="مرجوع کردن مستند" title={`مرجوع کردن مستند ${code}`} onClose={onCancel} busy={sending}>
-      <p className="text-sm leading-7 text-slate-600">
+      <p className="text-sm leading-7 text-soft-foreground">
         مستند به پیش‌نویس بازمی‌گردد، همهٔ امضاها پاک می‌شوند و تدوین‌کننده باید پس از اصلاح، آن را دوباره برای تایید
         ارسال کند. دلیل شما در سوابق مستند ثبت می‌شود.
       </p>
       <label className="block text-sm">
-        <span className="mb-1.5 block text-slate-700">دلیل مرجوع کردن</span>
+        <span className="mb-1.5 block text-soft-foreground">دلیل مرجوع کردن</span>
         <textarea
           ref={box}
           value={reason}

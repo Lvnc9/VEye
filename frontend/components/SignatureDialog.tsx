@@ -117,27 +117,27 @@ export function SignatureDialog({ title, prompt, confirmLabel, onSubmit, onCance
 
   return (
     <Dialog label={title} title={title} onClose={onCancel} busy={sending}>
-      <p className="text-sm leading-7 text-slate-600">{prompt}</p>
+      <p className="text-sm leading-7 text-soft-foreground">{prompt}</p>
 
-      <dl className="grid grid-cols-3 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+      <dl className="grid grid-cols-3 gap-3 rounded-xl border border-border bg-muted/50 p-3 text-sm">
         <div className="min-w-0">
-          <dt className="text-xs text-slate-500">نام و نام خانوادگی</dt>
-          <dd className="truncate font-bold text-slate-900">{user?.full_name ?? "—"}</dd>
+          <dt className="text-xs text-muted-foreground">نام و نام خانوادگی</dt>
+          <dd className="truncate font-bold text-foreground">{user?.full_name ?? "—"}</dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-xs text-slate-500">سمت</dt>
-          <dd className="truncate font-bold text-slate-900">{user?.title ?? "—"}</dd>
+          <dt className="text-xs text-muted-foreground">سمت</dt>
+          <dd className="truncate font-bold text-foreground">{user?.title ?? "—"}</dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-xs text-slate-500">تاریخ</dt>
-          <dd className="font-bold text-slate-900">{todayJalali()}</dd>
+          <dt className="text-xs text-muted-foreground">تاریخ</dt>
+          <dd className="font-bold text-foreground">{todayJalali()}</dd>
         </div>
       </dl>
 
       <div>
         <div className="mb-1.5 flex items-center justify-between text-sm">
-          <span className="flex items-center gap-1.5 text-slate-700">
-            <PenLine className="size-4 text-slate-400" />
+          <span className="flex items-center gap-1.5 text-soft-foreground">
+            <PenLine className="size-4 text-subtle-foreground" />
             امضا
           </span>
           <Button variant="ghost" size="xs" icon={<Eraser />} onClick={clear} disabled={!hasInk || sending}>
@@ -148,15 +148,15 @@ export function SignatureDialog({ title, prompt, confirmLabel, onSubmit, onCance
           ref={canvasRef}
           aria-label="محل امضا"
           style={{ width: "100%", maxWidth: PAD_WIDTH, aspectRatio: `${PAD_WIDTH} / ${PAD_HEIGHT}`, touchAction: "none" }}
-          className={`cursor-crosshair rounded-xl border border-dashed bg-white transition-colors duration-200 ${
-            hasInk ? "border-brand-300" : "border-slate-300 hover:border-slate-400"
+          className={`light cursor-crosshair rounded-xl border border-dashed bg-white transition-colors duration-200 ${
+            hasInk ? "border-primary/30" : "border-input hover:border-slate-400"
           }`}
           onPointerDown={start}
           onPointerMove={move}
           onPointerUp={stop}
           onPointerCancel={stop}
         />
-        {!hasInk && <p className="mt-1.5 text-xs text-slate-500">با ماوس یا انگشت در کادر بالا امضا کنید.</p>}
+        {!hasInk && <p className="mt-1.5 text-xs text-muted-foreground">با ماوس یا انگشت در کادر بالا امضا کنید.</p>}
       </div>
 
       {error && <ErrorBanner message={error} />}

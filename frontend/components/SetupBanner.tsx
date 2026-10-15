@@ -40,7 +40,7 @@ export function SetupBanner() {
           <StartSetupButton
             onStarted={() => router.push("/setup")}
             className={BUTTON}
-            errorClassName="w-full text-xs text-rose-700"
+            errorClassName="w-full text-xs text-rose-700 dark:text-rose-300"
           />
         ) : (
           <Link href="/setup" className={BUTTON}>

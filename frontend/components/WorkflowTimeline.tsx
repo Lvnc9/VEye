@@ -13,6 +13,7 @@ const TONE: Record<string, string> = {
   approved: "bg-emerald-500",
   returned: "bg-rose-500",
   withdrawn: "bg-orange-400",
+  reviewed: "bg-teal-500",
   superseded: "bg-slate-400",
   imported: "bg-violet-400",
 };
@@ -39,23 +40,23 @@ export function WorkflowTimeline({ documentId, version }: { documentId: number; 
   return (
     <Card aria-label="سوابق گردش کار" className="p-5">
       <CardHeader title="سوابق گردش کار" icon={<GitCommitVertical />} className="mb-3" />
-      <ol className="relative space-y-3.5 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-slate-200">
+      <ol className="relative space-y-3.5 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-muted">
         {events.map((event) => (
           <li key={event.id} className="relative flex gap-3 text-sm">
             <span
               aria-hidden
-              className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-white ${TONE[event.kind] ?? "bg-slate-400"}`}
+              className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-card ${TONE[event.kind] ?? "bg-slate-400"}`}
             />
             <div className="min-w-0">
-              <p className="text-slate-900">
+              <p className="text-foreground">
                 <span className="font-bold">{event.kind_label}</span>
-                <span className="text-slate-500">
+                <span className="text-muted-foreground">
                   {" "}
                   — {event.actor_name}
                   {event.actor_title ? ` (${event.actor_title})` : ""} · {formatJalali(event.created_at)}
                 </span>
               </p>
-              {event.reason && <p className="mt-1 rounded-lg bg-slate-50 px-2.5 py-1 text-slate-600">{event.reason}</p>}
+              {event.reason && <p className="mt-1 rounded-lg bg-muted/50 px-2.5 py-1 text-soft-foreground">{event.reason}</p>}
             </div>
           </li>
         ))}

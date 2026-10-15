@@ -44,12 +44,12 @@ export function PersonPicker({
   return (
     <div>
       {label && (
-        <label htmlFor={id} className="mb-1.5 block text-xs text-slate-500">
+        <label htmlFor={id} className="mb-1.5 block text-xs text-muted-foreground">
           {label}
         </label>
       )}
       <div className="relative">
-        <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
+        <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-subtle-foreground" />
         <input
           id={id}
           aria-label={label ? undefined : ariaLabel}
@@ -90,10 +90,10 @@ function PersonResults({
   onPick: (person: Person) => void;
 }) {
   const people = useApiQuery<Paginated<Person>>(`/org/people/?q=${encodeURIComponent(query)}&page_size=8`);
-  if (people.loading) return <p className="mt-2 text-xs text-slate-500">در حال جستجو...</p>;
+  if (people.loading) return <p className="mt-2 text-xs text-muted-foreground">در حال جستجو...</p>;
   if (people.error) return <p className="mt-1 text-xs text-rose-600">{people.error}</p>;
   const rows = people.data?.results ?? [];
-  if (rows.length === 0) return <p className="mt-1 text-xs text-slate-500">کسی با این نام پیدا نشد.</p>;
+  if (rows.length === 0) return <p className="mt-1 text-xs text-muted-foreground">کسی با این نام پیدا نشد.</p>;
   return (
     <ul className="mt-2 space-y-1.5 animate-fade-in">
       {rows.map((person) => {
@@ -101,12 +101,12 @@ function PersonResults({
         return (
           <li
             key={person.id}
-            className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition-colors hover:border-slate-300"
+            className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm transition-colors hover:border-input"
           >
             <span className="flex min-w-0 items-center gap-2">
               <Avatar name={person.full_name} size="sm" />
               <span className="min-w-0 truncate">
-                {person.full_name} <span className="text-xs text-slate-500">{person.title}</span>
+                {person.full_name} <span className="text-xs text-muted-foreground">{person.title}</span>
               </span>
             </span>
             <button

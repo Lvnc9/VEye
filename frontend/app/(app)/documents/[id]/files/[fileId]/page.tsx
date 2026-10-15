@@ -60,10 +60,10 @@ export default function AttachedFilePage() {
       {state.status === "error" && <ErrorBanner message={state.message} />}
       {state.status === "done" && (
         <Card className="space-y-4 p-6 text-center">
-          <FileDown className="mx-auto size-10 text-brand-600" />
+          <FileDown className="mx-auto size-10 text-primary" />
           <div className="space-y-1">
-            <p className="font-bold text-slate-900">فایل دریافت شد</p>
-            <p className="text-sm text-slate-600">
+            <p className="font-bold text-foreground">فایل دریافت شد</p>
+            <p className="text-sm text-soft-foreground">
               <bdi>{state.name}</bdi>
             </p>
           </div>
@@ -74,7 +74,7 @@ export default function AttachedFilePage() {
         </Card>
       )}
       <p className="text-center text-sm">
-        <Link href={`/documents/${id}/edit`} className="text-brand-700 hover:underline">
+        <Link href={`/documents/${id}/edit`} className="text-primary hover:underline">
           بازگشت به مستند
         </Link>
       </p>

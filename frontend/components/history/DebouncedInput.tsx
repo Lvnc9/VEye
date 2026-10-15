@@ -30,7 +30,7 @@ export function DebouncedInput({
 
   return (
     <div className={cx("relative", className ?? "w-full sm:w-72")}>
-      <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
+      <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-subtle-foreground" />
       <input
         type="search"
         value={text}

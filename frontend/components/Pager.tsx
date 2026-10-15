@@ -19,7 +19,7 @@ export function Pager({
       <Button size="sm" onClick={() => onChange(page - 1)} disabled={page <= 1} icon={<ChevronRight />}>
         قبلی
       </Button>
-      <span className="min-w-24 text-center text-slate-600 tabular-nums">
+      <span className="min-w-24 text-center text-soft-foreground tabular-nums">
         صفحه {page} از {totalPages}
       </span>
       <Button size="sm" onClick={() => onChange(page + 1)} disabled={page >= totalPages}>

@@ -111,7 +111,7 @@ export function ActivityTab({
             پاک کردن فیلترها
           </Button>
         )}
-        <span className="ms-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 tabular-nums">
+        <span className="ms-auto rounded-full bg-muted px-2.5 py-0.5 text-xs text-soft-foreground tabular-nums">
           {count} رویداد
         </span>
       </Card>
@@ -131,23 +131,23 @@ export function ActivityTab({
           flush
           className={cx("overflow-hidden transition-opacity duration-200", loading && "opacity-60")}
         >
-        <ol className="divide-y divide-slate-100">
+        <ol className="divide-y divide-border">
           {rows.map((event) => (
-            <li key={event.id} className="flex gap-3 px-4 py-3.5 text-sm transition-colors hover:bg-slate-50/70 sm:px-5">
+            <li key={event.id} className="flex gap-3 px-4 py-3.5 text-sm transition-colors hover:bg-accent/60 sm:px-5">
               <span
                 aria-hidden
-                className={`mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-slate-100 ${EVENT_KIND_TONE[event.kind]}`}
+                className={`mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-border ${EVENT_KIND_TONE[event.kind]}`}
               />
               <div className="min-w-0 flex-1">
-                <p className="text-slate-900">
+                <p className="text-foreground">
                   <span className="font-bold">{event.kind_label}</span>
-                  <span className="text-slate-500">
+                  <span className="text-muted-foreground">
                     {" "}
                     — {event.actor_name}
                     {event.actor_title ? ` (${event.actor_title})` : ""}
                   </span>
                 </p>
-                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-600">
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-soft-foreground">
                   <button
                     type="button"
                     title="نمایش همهٔ بازنگری‌های این مستند"
@@ -158,21 +158,21 @@ export function ActivityTab({
                   </button>
                   <Link
                     href={`/documents/${event.document.id}/edit`}
-                    className="truncate transition-colors hover:text-brand-700"
+                    className="truncate transition-colors hover:text-primary-hover"
                   >
                     {event.document.title}
                   </Link>
-                  <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                     {event.from_status_label}
                     <ArrowLeft className="size-3" aria-label="به" />
                     {event.to_status_label}
                   </span>
                 </p>
                 {event.reason && (
-                  <p className="mt-1.5 whitespace-pre-wrap rounded-lg bg-slate-50 px-3 py-1.5 text-slate-700">{event.reason}</p>
+                  <p className="mt-1.5 whitespace-pre-wrap rounded-lg bg-muted/50 px-3 py-1.5 text-soft-foreground">{event.reason}</p>
                 )}
               </div>
-              <time className="shrink-0 text-xs text-slate-500" dateTime={event.created_at}>
+              <time className="shrink-0 text-xs text-muted-foreground" dateTime={event.created_at}>
                 {formatJalaliDateTime(event.created_at)}
               </time>
             </li>
