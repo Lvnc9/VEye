@@ -12,6 +12,7 @@ const TONE: Record<string, string> = {
   confirmed: "bg-amber-500",
   approved: "bg-emerald-500",
   returned: "bg-rose-500",
+  withdrawn: "bg-orange-400",
   superseded: "bg-slate-400",
   imported: "bg-violet-400",
 };

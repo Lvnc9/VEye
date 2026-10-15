@@ -1,11 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { returnDocument, signStep, STEP_DONE, STEP_LABELS, STEP_PROMPTS, workflowControls } from "@/lib/workflow";
+import {
+  returnDocument,
+  signStep,
+  STEP_DONE,
+  STEP_LABELS,
+  STEP_PROMPTS,
+  withdrawDocument,
+  workflowControls,
+} from "@/lib/workflow";
 import type { DocumentRow } from "@/lib/types";
 import { SignatureDialog } from "@/components/SignatureDialog";
 import { ReturnDialog } from "@/components/ReturnDialog";
-import { Undo2, PenLine } from "lucide-react";
+import { WithdrawDialog } from "@/components/WithdrawDialog";
+import { Undo2, PenLine, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface Props {
@@ -24,24 +33,26 @@ interface Props {
  * and call the API.
  */
 export function WorkflowActions({ row, onDone, hold }: Props) {
-  const [dialog, setDialog] = useState<"sign" | "return" | null>(null);
+  const [dialog, setDialog] = useState<"sign" | "return" | "withdraw" | null>(null);
   const controls = workflowControls(row.workflow);
   const step = controls.primary?.step;
 
-  if (!controls.primary) return null;
+  if (!controls.primary && !controls.canWithdraw) return null;
 
   return (
     <>
-      <Button
-        size="xs"
-        variant="primary"
-        icon={<PenLine />}
-        disabled={controls.primary.disabled || Boolean(hold)}
-        title={hold}
-        onClick={() => setDialog("sign")}
-      >
-        {controls.primary.label}
-      </Button>
+      {controls.primary && (
+        <Button
+          size="xs"
+          variant="primary"
+          icon={<PenLine />}
+          disabled={controls.primary.disabled || Boolean(hold)}
+          title={hold}
+          onClick={() => setDialog("sign")}
+        >
+          {controls.primary.label}
+        </Button>
+      )}
       {controls.canReturn && (
         <Button
           size="xs"
@@ -51,6 +62,17 @@ export function WorkflowActions({ row, onDone, hold }: Props) {
           className="ring-1 ring-inset ring-rose-200"
         >
           مرجوع
+        </Button>
+      )}
+      {controls.canWithdraw && (
+        <Button
+          size="xs"
+          variant="secondary"
+          icon={<RotateCcw />}
+          onClick={() => setDialog("withdraw")}
+          title="مستندی را که برای تایید فرستاده‌اید به پیش‌نویس برگردانید"
+        >
+          بازپس‌گیری
         </Button>
       )}
 
@@ -64,6 +86,17 @@ export function WorkflowActions({ row, onDone, hold }: Props) {
             const updated = await signStep(row.id, step, image);
             setDialog(null);
             onDone(STEP_DONE[step](row.full_code), updated);
+          }}
+        />
+      )}
+      {dialog === "withdraw" && (
+        <WithdrawDialog
+          code={row.full_code}
+          onCancel={() => setDialog(null)}
+          onSubmit={async (note) => {
+            const updated = await withdrawDocument(row.id, note);
+            setDialog(null);
+            onDone(`مستند ${row.full_code} بازپس گرفته شد و به پیش‌نویس بازگشت.`, updated);
           }}
         />
       )}

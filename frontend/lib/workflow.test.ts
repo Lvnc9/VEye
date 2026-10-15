@@ -4,6 +4,7 @@ import {
   STEP_LABELS,
   signatureFormData,
   validateReason,
+  validateWithdrawNote,
   workflowControls,
 } from "./workflow";
 import type { WorkflowState } from "./types";
@@ -12,6 +13,7 @@ const flow = (over: Partial<WorkflowState>): WorkflowState => ({
   step: "confirm",
   can_act: true,
   can_return: true,
+  can_withdraw: false,
   ...over,
 });
 
@@ -20,6 +22,7 @@ describe("workflowControls", () => {
     expect(workflowControls(flow({}))).toEqual({
       primary: { step: "confirm", label: "تایید", disabled: false },
       canReturn: true,
+      canWithdraw: false,
     });
     expect(workflowControls(flow({ step: "submit", can_return: false })).canReturn).toBe(false);
   });
@@ -32,6 +35,7 @@ describe("workflowControls", () => {
     expect(workflowControls(flow({ step: null, can_act: false, can_return: false }))).toEqual({
       primary: null,
       canReturn: false,
+      canWithdraw: false,
     });
     expect(workflowControls(flow({ can_act: false, can_return: false })).primary).toBeNull();
   });
@@ -42,6 +46,28 @@ describe("workflowControls", () => {
       label: "تایید",
       disabled: false,
     });
+  });
+});
+
+describe("withdrawing (Phase 20)", () => {
+  it("offers «بازپس‌گیری» to the submitter even with no step of their own to take", () => {
+    expect(workflowControls(flow({ can_act: false, can_return: false, can_withdraw: true }))).toEqual({
+      primary: null,
+      canReturn: false,
+      canWithdraw: true,
+    });
+  });
+
+  it("keeps it beside the step when the submitter may also confirm", () => {
+    const controls = workflowControls(flow({ can_withdraw: true }));
+    expect(controls.primary?.step).toBe("confirm");
+    expect(controls.canWithdraw).toBe(true);
+  });
+
+  it("takes an empty note but caps a long one", () => {
+    expect(validateWithdrawNote("")).toBeNull();
+    expect(validateWithdrawNote("x".repeat(REASON_MAX_LENGTH))).toBeNull();
+    expect(validateWithdrawNote("x".repeat(REASON_MAX_LENGTH + 1))).not.toBeNull();
   });
 });
 

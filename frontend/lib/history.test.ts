@@ -49,6 +49,15 @@ describe("hasActiveFilters", () => {
 describe("EVENT_KIND_LABELS", () => {
   it("matches the server's Persian labels", () => {
     expect(EVENT_KIND_LABELS.returned).toBe("مرجوع شد");
-    expect(Object.keys(EVENT_KIND_LABELS)).toEqual(["submitted", "confirmed", "approved", "returned", "superseded", "imported"]);
+    expect(EVENT_KIND_LABELS.withdrawn).toBe("بازپس گرفته شد"); // DocumentEventKind.WITHDRAWN (Phase 20)
+    expect(Object.keys(EVENT_KIND_LABELS)).toEqual([
+      "submitted",
+      "confirmed",
+      "approved",
+      "returned",
+      "withdrawn",
+      "superseded",
+      "imported",
+    ]);
   });
 });

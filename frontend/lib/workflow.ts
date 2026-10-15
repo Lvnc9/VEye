@@ -33,17 +33,21 @@ export const STEP_DONE: Record<WorkflowStep, (code: string) => string> = {
 export interface WorkflowControls {
   primary: { step: WorkflowStep; label: string; disabled: boolean } | null;
   canReturn: boolean;
+  /** «بازپس‌گیری» (Phase 20) — independent of the step: the submitter usually has no step to take. */
+  canWithdraw: boolean;
 }
 
 /** Buttons for one row: nothing when there is no step or the org chart gives this person no part in it
  *  (the server decides per document — authority.py; «one person per step» was retired on 2026-09-30). */
 export function workflowControls(flow: WorkflowState): WorkflowControls {
+  const canWithdraw = Boolean(flow.can_withdraw);
   if (flow.step === null || !flow.can_act) {
-    return { primary: null, canReturn: false };
+    return { primary: null, canReturn: false, canWithdraw };
   }
   return {
     primary: { step: flow.step, label: STEP_LABELS[flow.step], disabled: false },
     canReturn: flow.can_return,
+    canWithdraw,
   };
 }
 
@@ -64,6 +68,15 @@ export function signatureFormData(image: Blob): FormData {
 /** Sign a step. Name, post and date are never sent: the server takes them from the session. */
 export function signStep(documentId: number, step: WorkflowStep, image: Blob): Promise<DocumentRow> {
   return apiUpload<DocumentRow>(`/documents/${documentId}/${step}/`, signatureFormData(image));
+}
+
+/** «بازپس‌گیری»'s note is optional (it is the submitter's own document); only its length is checked. */
+export function validateWithdrawNote(text: string): string | null {
+  return text.trim().length > REASON_MAX_LENGTH ? `توضیح نباید بیش از ${REASON_MAX_LENGTH} نویسه باشد.` : null;
+}
+
+export function withdrawDocument(documentId: number, reason: string): Promise<DocumentRow> {
+  return apiPost<DocumentRow>(`/documents/${documentId}/withdraw/`, { reason: reason.trim() });
 }
 
 export function returnDocument(documentId: number, reason: string): Promise<DocumentRow> {

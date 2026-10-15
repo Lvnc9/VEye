@@ -272,6 +272,8 @@ export interface WorkflowState {
   step: WorkflowStep | null;
   can_act: boolean;
   can_return: boolean;
+  /** Phase 20: this person sent it for confirmation and it is not approved yet — they may take it back. */
+  can_withdraw: boolean;
 }
 
 export interface ReturnNote {
@@ -281,7 +283,14 @@ export interface ReturnNote {
   at: string;
 }
 
-export type DocumentEventKind = "submitted" | "confirmed" | "approved" | "returned" | "superseded" | "imported";
+export type DocumentEventKind =
+  | "submitted"
+  | "confirmed"
+  | "approved"
+  | "returned"
+  | "withdrawn"
+  | "superseded"
+  | "imported";
 
 export interface DocumentEvent {
   id: number;
