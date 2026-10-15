@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     "apps.announcements",
     "apps.ops",
     "apps.distribution",
+    "apps.search",
 ]
 
 MIDDLEWARE = [
@@ -240,6 +241,8 @@ CSRF_COOKIE_HTTPONLY = False  # must be readable by frontend JS to echo back in 
 RATELIMIT_USE_CACHE = "default"
 RATELIMIT_ENABLE = True
 LOGIN_RATELIMIT_RATE = env("LOGIN_RATELIMIT_RATE", default="10/m")
+# Phase 22: the ⌘K palette types as you go — a generous per-person limit.
+SEARCH_RATELIMIT_RATE = env("SEARCH_RATELIMIT_RATE", default="120/m")
 # Phase 21: periodic review — remind the authors this many days before a document's review date.
 DOCUMENT_REVIEW_NOTICE_DAYS = env.int("DOCUMENT_REVIEW_NOTICE_DAYS", default=30)
 # Phase 20: how long «ورودهای اخیر» (accounts.LoginEvent) keeps a sign-in attempt.

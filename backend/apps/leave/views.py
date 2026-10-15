@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.accounts.models import User
 from apps.core.pagination import DefaultPagination
 from apps.organization.access import access_for
 
@@ -44,7 +45,10 @@ class LeaveRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
             if not is_top(user):
                 queryset = queryset.filter(access_for(self.request).led_subtree_q("node__path"))
         if term := (params.get("q") or "").strip():
-            queryset = queryset.filter(Q(requester__full_name__icontains=term))
+            # Phase 22: names are stored as typed (Arabic ي/ك too), so compare them normalised.
+            from apps.organization.queries import search_people
+
+            queryset = queryset.filter(requester__in=search_people(User.objects.all(), term))
         return queryset.order_by("-starts_on", "-id")
 
     def _one(self, leave):

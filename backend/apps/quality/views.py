@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import Capability
 from apps.core.pagination import DefaultPagination
+from apps.core.text import normalize_letters
 from apps.organization.access import access_for
 
 from . import services
@@ -117,7 +118,11 @@ class NonConformanceViewSet(
 
     @staticmethod
     def _search(term: str) -> Q:
-        query = Q(title__icontains=term) | Q(description__icontains=term)
+        # Phase 22: Arabic ي/ك typed into the box now find the Persian letters titles are stored with.
+        letters = normalize_letters(term)
+        query = Q(title__icontains=term) | Q(title__icontains=letters) | Q(description__icontains=term) | Q(
+            description__icontains=letters
+        )
         digits = term.upper().removeprefix("NC-").lstrip("0")
         if digits.isdigit():
             query |= Q(pk=int(digits))
@@ -296,7 +301,7 @@ class AuditViewSet(
             if not org.holds(Capability.MANAGE_QUALITY):
                 queryset = queryset.filter(org.led_subtree_q("scope_node__path"))
         if term := (params.get("q") or "").strip():
-            query = Q(title__icontains=term)
+            query = Q(title__icontains=term) | Q(title__icontains=normalize_letters(term))  # Phase 22
             digits = term.upper().removeprefix("AU-").lstrip("0")
             if digits.isdigit():
                 query |= Q(pk=int(digits))
