@@ -54,3 +54,9 @@ def jalali_year_bounds(year: int) -> tuple[date, date]:
     first = jdatetime.date(year, 1, 1).togregorian()
     last = jdatetime.date(year + 1, 1, 1).togregorian() - timedelta(days=1)
     return first, last
+
+
+def jalali_year_of(day: date) -> int:
+    import jdatetime
+
+    return jdatetime.date.fromgregorian(date=day).year

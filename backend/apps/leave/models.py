@@ -103,3 +103,41 @@ class Holiday(models.Model):
 
     def __str__(self):
         return f"{self.date} {self.title}"
+
+
+class LeavePolicy(models.Model):
+    """The company's annual-leave rule (Phase 22, owner's decision 2026-10-15) — one row (pk=1), kept by HR.
+    Only استحقاقی leave has a balance: `annual_days` working days per Jalali year, of which at most
+    `carry_max` unused days move to the next year. Balances are counted from `start_year` (the year the app
+    started keeping them); HR enters each person's opening balance for that year as an entitlement."""
+
+    annual_days = models.PositiveSmallIntegerField(default=26)
+    carry_max = models.PositiveSmallIntegerField(default=9)
+    start_year = models.PositiveSmallIntegerField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def current(cls) -> "LeavePolicy":
+        from .workdays import jalali_year_of
+
+        from django.utils import timezone
+
+        policy = cls.objects.filter(pk=1).first()
+        if policy is None:
+            policy, _ = cls.objects.get_or_create(pk=1, defaults={"start_year": jalali_year_of(timezone.localdate())})
+        return policy
+
+
+class LeaveEntitlement(models.Model):
+    """HR's figure for one person and one Jalali year, replacing the policy's `annual_days` — a different
+    contract, or (in the start year) the opening balance carried over from before the app."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="leave_entitlements")
+    year = models.PositiveSmallIntegerField()
+    days = models.PositiveSmallIntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "year"], name="uniq_leave_entitlement_user_year")]
+
+    def __str__(self):
+        return f"{self.user_id} {self.year}: {self.days}"

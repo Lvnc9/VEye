@@ -18,6 +18,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     requester_title = serializers.CharField(source="requester.title", read_only=True)
     days = serializers.SerializerMethodField()
     calendar_days = serializers.IntegerField(read_only=True)
+    balance_warning = serializers.SerializerMethodField()
     can_decide = serializers.SerializerMethodField()
     can_cancel = serializers.SerializerMethodField()
 
@@ -26,7 +27,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         fields = [
             "id", "requester", "requester_name", "requester_title", "node", "node_name", "leave_type",
             "leave_type_label", "starts_on", "ends_on", "days", "calendar_days", "reason", "status", "status_label",
-            "decided_by_name", "decided_at", "decision_note", "cancelled_at", "created_at",
+            "decided_by_name", "decided_at", "decision_note", "cancelled_at", "created_at", "balance_warning",
             "can_decide", "can_cancel",
         ]
         read_only_fields = fields
@@ -35,6 +36,21 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         """Working days (Phase 22); the holidays are read once per response, not once per row."""
         cache = self.context.setdefault("holidays", HolidayCache())
         return cache.working_days(obj.starts_on, obj.ends_on)
+
+    def get_balance_warning(self, obj):
+        """Phase 22: a pending استحقاقی request that would take more days than the requester has left —
+        {year, requested, remaining} — so the decider sees it before approving (it is a warning, not a bar)."""
+        if obj.leave_type != LeaveType.ANNUAL or obj.status != LeaveStatus.PENDING:
+            return None
+        from .balances import Ledger
+        from .models import LeavePolicy
+
+        policy = self.context.get("leave_policy") or self.context.setdefault("leave_policy", LeavePolicy.current())
+        holidays = self.context.setdefault("holidays", HolidayCache())
+        ledgers = self.context.setdefault("ledgers", {})
+        if obj.requester_id not in ledgers:
+            ledgers[obj.requester_id] = Ledger(obj.requester, policy=policy, holidays=holidays)
+        return ledgers[obj.requester_id].warning_for(obj)
 
     def get_can_decide(self, obj) -> bool:
         return obj.status == LeaveStatus.PENDING and can_decide(access_for(self.context["request"]), obj)
@@ -84,3 +100,16 @@ class SpanSerializer(serializers.Serializer):
         if (attrs["ends_on"] - attrs["starts_on"]).days > 366:
             raise serializers.ValidationError({"ends_on": ["بازه نباید بیش از یک سال باشد."]})
         return attrs
+
+
+class LeavePolicySerializer(serializers.Serializer):
+    annual_days = serializers.IntegerField(min_value=0, max_value=60, required=False)
+    carry_max = serializers.IntegerField(min_value=0, max_value=60, required=False)
+    start_year = serializers.IntegerField(min_value=1390, max_value=1500, required=False)
+
+
+class EntitlementSerializer(serializers.Serializer):
+    user = serializers.IntegerField()
+    year = serializers.IntegerField(min_value=1390, max_value=1500)
+    #: null removes HR's figure (the policy's applies again).
+    days = serializers.IntegerField(min_value=0, max_value=120, allow_null=True)

@@ -1,8 +1,10 @@
 from django.db.models import Q
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.accounts.models import Capability, User
 from apps.core.pagination import DefaultPagination
@@ -11,8 +13,16 @@ from apps.organization.access import access_for
 
 from . import services
 from .access import is_top, visible_leave
-from .models import Holiday, LeaveStatus, LeaveType
-from .serializers import HolidaySerializer, LeaveCreateSerializer, LeaveRequestSerializer, NoteSerializer, SpanSerializer
+from .models import Holiday, LeaveEntitlement, LeaveStatus, LeaveType
+from .serializers import (
+    EntitlementSerializer,
+    HolidaySerializer,
+    LeaveCreateSerializer,
+    LeavePolicySerializer,
+    LeaveRequestSerializer,
+    NoteSerializer,
+    SpanSerializer,
+)
 from .workdays import jalali_year_bounds, working_days
 
 
@@ -82,6 +92,18 @@ class LeaveRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
         serializer.is_valid(raise_exception=True)
         start, end = serializer.validated_data["starts_on"], serializer.validated_data["ends_on"]
         holidays = Holiday.objects.filter(date__range=(start, end))
+        balance = []
+        if request.query_params.get("leave_type", LeaveType.ANNUAL) == LeaveType.ANNUAL:
+            # Phase 22: what this span would leave of my annual balance, year by year.
+            from .balances import Ledger, days_by_year
+
+            ledger = Ledger(request.user)
+            for year, days in sorted(days_by_year(start, end, ledger.holidays).items()):
+                current = ledger.balance(year)
+                if current is not None:
+                    balance.append(
+                        {"year": year, "requested": days, "remaining": current.remaining, "exceeds": days > current.remaining}
+                    )
         return Response(
             {
                 "starts_on": start,
@@ -89,6 +111,7 @@ class LeaveRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
                 "calendar_days": (end - start).days + 1,
                 "days": working_days(start, end, {h.date for h in holidays}),
                 "holidays": HolidaySerializer(holidays, many=True).data,
+                "balance": balance,
             }
         )
 
@@ -127,3 +150,134 @@ class HolidayViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Dest
                 serializer.save()
         except IntegrityError:
             raise ConflictError("برای این روز تعطیلی ثبت شده است.", code="holiday_exists")
+
+
+def _sees_balances_of_everyone(request) -> bool:
+    return is_top(request.user) or access_for(request).holds(Capability.MANAGE_PERSONNEL)
+
+
+def _may_see_balance(request, person) -> bool:
+    """Your own; HR's and the مدیر عامل's for anyone; a مسئول's for the people placed beneath them."""
+    if person.pk == request.user.pk or _sees_balances_of_everyone(request):
+        return True
+    from apps.organization.models import Membership
+
+    org = access_for(request)
+    return any(org.leads(m.node) for m in Membership.objects.filter(user=person, node__is_active=True).select_related("node"))
+
+
+def _year_param(request) -> int:
+    from .balances import current_year
+
+    raw = request.query_params.get("year", "")
+    return int(raw) if raw.isdigit() else current_year()
+
+
+class BalanceView(APIView):
+    """GET /leave/balance/?year=&user= — one person's annual-leave balance (Phase 22); mine by default."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .balances import Ledger
+        from .models import LeavePolicy
+
+        person = request.user
+        if raw := request.query_params.get("user", ""):
+            person = User.objects.filter(pk=raw).first() if raw.isdigit() else None
+            if person is None or not _may_see_balance(request, person):
+                raise NotFound("یافت نشد.")
+        year = _year_param(request)
+        policy = LeavePolicy.current()
+        balance = Ledger(person, policy=policy).balance(year)
+        return Response(
+            {
+                "user": {"id": person.pk, "full_name": person.full_name},
+                "year": year,
+                "tracked": balance is not None,
+                "balance": balance.as_dict() if balance else None,
+                "policy": {"annual_days": policy.annual_days, "carry_max": policy.carry_max, "start_year": policy.start_year},
+            }
+        )
+
+
+class BalancesView(APIView):
+    """GET /leave/balances/?year=&q= — everyone's annual-leave balance for HR and the مدیر عامل («مانده مرخصی»)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.organization.queries import search_people
+
+        from .balances import Ledger
+        from .models import LeavePolicy
+        from .workdays import HolidayCache
+
+        if not _sees_balances_of_everyone(request):
+            raise PermissionDenied("فقط منابع انسانی و مدیر عامل ماندهٔ مرخصی همه را می‌بینند.")
+        year = _year_param(request)
+        people = search_people(User.objects.filter(is_active=True, is_developer=False), request.query_params.get("q", ""))
+        paginator = DefaultPagination()
+        page = paginator.paginate_queryset(people.order_by("full_name", "id"), request, view=self)
+        policy, holidays = LeavePolicy.current(), HolidayCache()
+        rows = []
+        for person in page:
+            balance = Ledger(person, policy=policy, holidays=holidays).balance(year)
+            rows.append(
+                {
+                    "user": {"id": person.pk, "full_name": person.full_name, "title": person.title},
+                    "has_override": LeaveEntitlement.objects.filter(user=person, year=year).exists(),
+                    "balance": balance.as_dict() if balance else None,
+                }
+            )
+        return paginator.get_paginated_response(rows)
+
+
+class EntitlementView(APIView):
+    """PUT /leave/entitlements/ {user, year, days|null} — HR sets (or, with null, clears) one person's
+    entitlement for a year: a different contract, or the opening balance in the start year."""
+
+    permission_classes = [IsAuthenticated, HasCapability]
+    required_capability = Capability.MANAGE_PERSONNEL
+
+    def put(self, request):
+        serializer = EntitlementSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        person = User.objects.filter(pk=data["user"], is_developer=False).first()
+        if person is None:
+            raise NotFound("شخص یافت نشد.")
+        if data["days"] is None:
+            LeaveEntitlement.objects.filter(user=person, year=data["year"]).delete()
+        else:
+            LeaveEntitlement.objects.update_or_create(user=person, year=data["year"], defaults={"days": data["days"]})
+        from .balances import Ledger
+
+        balance = Ledger(person).balance(data["year"])
+        return Response({"user": person.pk, "year": data["year"], "balance": balance.as_dict() if balance else None})
+
+
+class PolicyView(APIView):
+    """GET/PATCH /leave/policy/ — the annual-leave rule: anyone reads it, HR changes it."""
+
+    permission_classes = [IsAuthenticated, HasCapability]
+    write_capability = Capability.MANAGE_PERSONNEL
+
+    def _payload(self, policy):
+        return {"annual_days": policy.annual_days, "carry_max": policy.carry_max, "start_year": policy.start_year}
+
+    def get(self, request):
+        from .models import LeavePolicy
+
+        return Response(self._payload(LeavePolicy.current()))
+
+    def patch(self, request):
+        from .models import LeavePolicy
+
+        serializer = LeavePolicySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        policy = LeavePolicy.current()
+        for field, value in serializer.validated_data.items():
+            setattr(policy, field, value)
+        policy.save()
+        return Response(self._payload(policy))
