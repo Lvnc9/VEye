@@ -103,6 +103,8 @@ class WorkflowBase(TestCase):
         client = self.as_user(user)
         if verb == "return":
             return client.post(reverse("document-return-to-draft", args=[doc.pk]), payload, format="json")
+        if verb == "withdraw":
+            return client.post(reverse("document-withdraw", args=[doc.pk]), payload, format="json")
         body = payload or upload()
         return client.post(reverse(f"document-{verb}", args=[doc.pk]), body, format="multipart")
 
@@ -460,6 +462,121 @@ class ReturnTests(WorkflowBase):
         self.assertNotIn("actor", data[1])
 
 
+class WithdrawTests(WorkflowBase):
+    """Phase 20: the submitter takes a document back to DRAFT until تصویب (owner's decision 2026-10-15)."""
+
+    def submit(self, user=None):
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.assertEqual(self.act(user or self.author, "submit").status_code, 200)
+
+    def confirm(self):
+        with mock.patch("apps.pdfgen.services.build_pdf.delay"):
+            self.assertEqual(self.act(self.confirmer, "confirm").status_code, 200)
+
+    def test_the_submitter_withdraws_while_awaiting_confirmation(self):
+        self.submit()
+        path = self.doc.signoffs.get().signature.path
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.act(self.author, "withdraw", reason="بند ۳ را جا انداختم")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["status"], DocumentStatus.DRAFT)
+        self.assertEqual(self.doc.signoffs.count(), 0)
+        import os
+
+        self.assertFalse(os.path.exists(path), "the cleared signature file is removed")
+        event = self.doc.events.last()
+        self.assertEqual(
+            (event.kind, event.from_status, event.to_status, event.reason, event.actor_id),
+            (
+                DocumentEventKind.WITHDRAWN,
+                DocumentStatus.AWAITING_CONFIRMATION,
+                DocumentStatus.DRAFT,
+                "بند ۳ را جا انداختم",
+                self.author.pk,
+            ),
+        )
+        # Not a مرجوع: no «returned» banner on the designer.
+        self.assertIsNone(response.data.get("return_note"))
+
+    def test_the_submitter_withdraws_while_awaiting_approval_and_both_signatures_go(self):
+        self.submit()
+        self.confirm()
+        response = self.act(self.author, "withdraw")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(self.doc.signoffs.count(), 0)
+        self.assertEqual(self.doc.events.last().from_status, DocumentStatus.AWAITING_APPROVAL)
+        self.assertEqual(self.doc.events.last().reason, "")
+
+    def test_nobody_else_may_withdraw(self):
+        self.submit()
+        other_author = make_user("8000000041", AccessRoll.GUILD)
+        test_support.lead_of(other_author, self.org.rag)  # may write this document, but did not send it
+        for user in (self.confirmer, self.approver, other_author):
+            response = self.act(user, "withdraw")
+            self.assertEqual(response.status_code, 403, user)
+            self.assertIn("فرستاده", str(response.data["detail"]))
+        self.assertEqual(Document.objects.get(pk=self.doc.pk).status, DocumentStatus.AWAITING_CONFIRMATION)
+
+    def test_not_from_draft_or_after_approval(self):
+        self.assertEqual(self.act(self.author, "withdraw").status_code, 409)
+        self.run_chain()
+        response = self.act(self.author, "withdraw")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["code"], "wrong_status")
+        self.assertEqual(Document.objects.get(pk=self.doc.pk).status, DocumentStatus.UNDER_CONTROL)
+
+    def test_an_overlong_note_is_refused(self):
+        self.submit()
+        self.assertEqual(self.act(self.author, "withdraw", reason="x" * 1001).status_code, 400)
+
+    def test_the_people_it_was_waiting_for_are_told(self):
+        from apps.notifications.models import Notification, NotificationKind
+
+        self.submit()
+        Notification.objects.all().delete()
+        self.act(self.author, "withdraw")
+        told = set(
+            Notification.objects.filter(kind=NotificationKind.DOCUMENT_WITHDRAWN).values_list("recipient_id", flat=True)
+        )
+        self.assertIn(self.confirmer.pk, told)
+        self.assertNotIn(self.author.pk, told)
+
+        self.submit()
+        self.confirm()
+        Notification.objects.all().delete()
+        self.act(self.author, "withdraw")
+        told = set(
+            Notification.objects.filter(kind=NotificationKind.DOCUMENT_WITHDRAWN).values_list("recipient_id", flat=True)
+        )
+        self.assertEqual(told, {self.approver.pk})
+
+    def test_the_submitter_who_also_confirms_is_not_told_about_their_own_withdrawal(self):
+        # The same مسئول may write and confirm (Phase 14): they are one of «the people waiting».
+        test_support.lead_of(self.author, self.org.ai)
+        from apps.notifications.models import Notification, NotificationKind
+
+        self.submit()
+        Notification.objects.all().delete()
+        self.act(self.author, "withdraw")
+        self.assertFalse(
+            Notification.objects.filter(kind=NotificationKind.DOCUMENT_WITHDRAWN, recipient=self.author).exists()
+        )
+
+    def test_after_withdrawing_the_document_can_be_edited_and_sent_again(self):
+        self.submit()
+        self.act(self.author, "withdraw")
+        self.assertTrue(Document.objects.get(pk=self.doc.pk).is_editable)
+        self.submit()
+        self.assertEqual(Document.objects.get(pk=self.doc.pk).status, DocumentStatus.AWAITING_CONFIRMATION)
+
+    def test_the_submitter_keeps_the_right_after_leaving_the_node(self):
+        self.submit()
+        from apps.organization.models import Membership
+
+        Membership.objects.filter(user=self.author).delete()
+        self.assertEqual(self.act(self.author, "withdraw").status_code, 200)
+
+
 class SupersedeTests(WorkflowBase):
     def revise_and_approve(self, first):
         second = services.create_revision(user=self.author, document_id=first.pk)
@@ -533,12 +650,17 @@ class RegisterWorkflowFlagsTests(WorkflowBase):
 
     def test_flags_follow_status_and_the_chart(self):
         chair = make_user("8000000026", AccessRoll.EMPLOYER, AccessLevel.LEVEL_2)
-        self.assertEqual(self.flags(self.author), {"step": "submit", "can_act": True, "can_return": False})
+        self.assertEqual(
+            self.flags(self.author), {"step": "submit", "can_act": True, "can_return": False, "can_withdraw": False}
+        )
         self.assertFalse(self.flags(chair)["can_act"])  # leads nothing
 
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
             self.act(self.author, "submit")
-        self.assertEqual(self.flags(self.confirmer), {"step": "confirm", "can_act": True, "can_return": True})
+        self.assertEqual(
+            self.flags(self.confirmer), {"step": "confirm", "can_act": True, "can_return": True, "can_withdraw": False}
+        )
+        self.assertTrue(self.flags(self.author)["can_withdraw"])  # the submitter may take it back
         self.assertFalse(self.flags(self.author)["can_act"])   # a بخش's lead does not confirm
         self.assertFalse(self.flags(chair)["can_act"])
         self.assertTrue(self.flags(self.approver)["can_act"])  # the مدیر عامل may take any step
@@ -786,11 +908,12 @@ class ManagingDirectorTests(WorkflowBase):
     def test_the_register_offers_him_the_right_buttons(self):
         draft = make_doc(self.ceo, title="پیش‌نویس او")
         rows = {r["id"]: r["workflow"] for r in self.as_user(self.ceo).get(reverse("document-list")).data["results"]}
-        self.assertEqual(rows[draft.pk], {"step": "submit", "can_act": True, "can_return": False})
+        self.assertEqual(rows[draft.pk], {"step": "submit", "can_act": True, "can_return": False, "can_withdraw": False})
         with mock.patch("apps.pdfgen.services.build_pdf.delay"):
             self.act(self.author, "submit", self.doc)
         rows = {r["id"]: r["workflow"] for r in self.as_user(self.ceo).get(reverse("document-list")).data["results"]}
-        self.assertEqual(rows[self.doc.pk], {"step": "confirm", "can_act": True, "can_return": True})
+        # He did not send it, so he may not withdraw it — the مدیر عامل's reach is the chart's, not the submitter's.
+        self.assertEqual(rows[self.doc.pk], {"step": "confirm", "can_act": True, "can_return": True, "can_withdraw": False})
 
     def test_can_manage_personnel_print_and_create_a_document_anywhere(self):
         client = self.as_user(self.ceo)

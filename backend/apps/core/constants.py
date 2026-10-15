@@ -88,6 +88,8 @@ class DocumentEventKind(models.TextChoices):
     CONFIRMED = "confirmed", "تایید شد"
     APPROVED = "approved", "تصویب شد"
     RETURNED = "returned", "مرجوع شد"
+    #: The submitter took it back to DRAFT before تصویب (Phase 20).
+    WITHDRAWN = "withdrawn", "بازپس گرفته شد"
     SUPERSEDED = "superseded", "منسوخ شد (جایگزین شد)"
     #: A document brought over from V_1.0 by `manage.py import_v1` (Phase 6).
     IMPORTED = "imported", "وارد شده از نسخهٔ ۱"

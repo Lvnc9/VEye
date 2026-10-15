@@ -148,6 +148,12 @@ class DocumentViewSet(
         )
         return self._workflow_response(document, request)
 
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
+    def withdraw(self, request, pk=None):
+        """بازپس‌گیری: only the submitter, until تصویب — the service checks it."""
+        document = workflow.withdraw(user=request.user, document_id=pk, reason=request.data.get("reason", ""))
+        return self._workflow_response(document, request)
+
     @action(detail=True, methods=["get"])
     def history(self, request, pk=None):
         """The audit trail: who submitted, confirmed, approved, returned (and why)."""

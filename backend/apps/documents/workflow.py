@@ -3,6 +3,7 @@
     DRAFT --submit--> AWAITING_CONFIRMATION --confirm--> AWAITING_APPROVAL --approve--> UNDER_CONTROL
        ^                       |                                  |
        +-------- return -------+----------------------------------+      (reason required, sign-offs cleared)
+       +------- withdraw ------+----------------------------------+      (the submitter; reason optional; Phase 20)
 
 V_1.0 had none of this: one person filled every panel, typing any name and post into
 a dialog; `status` was never written; مرجوع was wired to the ویرایش handler and did
@@ -57,13 +58,27 @@ def _may_take(authority, step: str, document: Document) -> bool:
     }[step](document)
 
 
+#: Where the submitter may still take a document back (Phase 20: «until تصویب», the owner's decision).
+WITHDRAWABLE_STATUSES = (DocumentStatus.AWAITING_CONFIRMATION, DocumentStatus.AWAITING_APPROVAL)
+
+
+def submitter_id(document: Document) -> int | None:
+    """Who signed as تهیه‌کننده. Reads `signoffs.all()`, which the register prefetches."""
+    for signoff in document.signoffs.all():
+        if signoff.role == SignOffRole.CREATER:
+            return signoff.signed_by_id
+    return None
+
+
 def next_step_for(document: Document, user, authority=None) -> dict:
     """What `user` can do with `document` right now — the register's buttons. `authority` is the
     request's `DocumentAuthority` (built once per request); it is made here when omitted."""
-    result = {"step": STEP_FOR_STATUS.get(document.status), "can_act": False, "can_return": False}
+    result = {"step": STEP_FOR_STATUS.get(document.status), "can_act": False, "can_return": False, "can_withdraw": False}
     step = result["step"]
     if step is None or user is None or not getattr(user, "is_authenticated", False):
         return result
+    # Not a matter of the chart: whoever sent it may take it back, even after moving elsewhere.
+    result["can_withdraw"] = document.status in WITHDRAWABLE_STATUSES and submitter_id(document) == user.pk
     if step == "submit" and document.content_saved_at is None:
         result["step"] = None  # nothing to submit yet: the row still says تکمیل
         return result
@@ -287,6 +302,45 @@ def return_document(*, user, document_id: int, reason: str) -> Document:
         kind=NotificationKind.DOCUMENT_RETURNED,
         title=f"«{document.full_code}» مرجوع شد",
         body=reason,
+        url=f"/documents/{document.pk}/edit",
+    )
+    return document
+
+
+@transaction.atomic
+def withdraw(*, user, document_id: int, reason: str = "") -> Document:
+    """بازپس‌گیری (Phase 20): the person who sent the document for confirmation takes it back to DRAFT
+    before تصویب — to fix something they noticed — instead of asking a reviewer to return it. Like
+    مرجوع, every sign-off is cleared and the chain starts again; the people it was waiting for are told
+    it has left their queue. The reason is optional (it is their own document)."""
+    reason = (reason or "").strip()
+    if len(reason) > REASON_MAX_LENGTH:
+        raise ValidationError({"reason": [f"توضیح نباید بیش از {REASON_MAX_LENGTH} نویسه باشد."]})
+
+    document = _locked(document_id)
+    if document.status not in WITHDRAWABLE_STATUSES:
+        raise ConflictError(
+            f"این مستند در وضعیت «{document.get_status_display()}» است و نمی‌توان آن را بازپس گرفت.",
+            code="wrong_status",
+            status=document.status,
+        )
+    if submitter_id(document) != user.pk:
+        raise PermissionDenied("فقط کسی که این مستند را برای تایید فرستاده است می‌تواند آن را بازپس بگیرد.")
+
+    waiting = (
+        document_authority.confirm_eligible_users(document)
+        if document.status == DocumentStatus.AWAITING_CONFIRMATION
+        else document_authority.approve_eligible_users()
+    )
+    for signoff in document.signoffs.all():
+        _delete_storage_on_commit(signoff.signature)
+        signoff.delete()
+    _record(document, kind=DocumentEventKind.WITHDRAWN, to_status=DocumentStatus.DRAFT, user=user, reason=reason)
+    notifications.notify_many(
+        [person for person in waiting if person.pk != user.pk],
+        kind=NotificationKind.DOCUMENT_WITHDRAWN,
+        title=f"«{document.full_code}» بازپس گرفته شد",
+        body=reason or document.title,
         url=f"/documents/{document.pk}/edit",
     )
     return document

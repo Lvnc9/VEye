@@ -13,6 +13,7 @@ class NotificationKind(models.TextChoices):
     DOCUMENT_AWAITING_APPROVAL = "document_awaiting_approval", "مستند منتظر تصویب شماست"
     DOCUMENT_APPROVED = "document_approved", "مستند تصویب و ابلاغ شد"
     DOCUMENT_RETURNED = "document_returned", "مستند مرجوع شد"
+    DOCUMENT_WITHDRAWN = "document_withdrawn", "مستند بازپس گرفته شد"
     DOCUMENT_STALLED = "document_stalled", "مستند مدتی است منتظر مانده"
     MEMBERSHIP_ADDED = "membership_added", "عضویت جدید در ساختار سازمانی"
     MEMBERSHIP_REMOVED = "membership_removed", "پایان عضویت در ساختار سازمانی"
