@@ -135,6 +135,26 @@ def users_leading_at_or_above(node: OrgNode, kinds=None):
     return User.objects.filter(pk__in=memberships.values("user_id"), is_active=True)
 
 
+def members_of_subtrees(nodes) -> dict:
+    """{user: node name} for every active person placed in one of `nodes` or beneath it (active nodes only),
+    never the developer account — the readers of a distributed document (Phase 21). Someone placed several
+    times is listed under their primary placement when it is one of these, else the first by path."""
+    if not nodes:
+        return {}
+    query = Q()
+    for node in nodes:
+        query |= Q(node__path__startswith=node.path)
+    placements = (
+        Membership.objects.filter(query, node__is_active=True, user__is_active=True, user__is_developer=False)
+        .select_related("user", "node")
+        .order_by("-is_primary", "node__path", "id")
+    )
+    result: dict = {}
+    for placement in placements:
+        result.setdefault(placement.user, placement.node.name)
+    return result
+
+
 def access_for(request) -> OrgAccess:
     """The request's OrgAccess, built once (so a list of 200 nodes costs one query, not 200)."""
     access = getattr(request, "_org_access", None)

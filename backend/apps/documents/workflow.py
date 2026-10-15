@@ -223,6 +223,11 @@ def approve(*, user, document_id: int, signature) -> Document:
     _sign(document, SignOffRole.APPROVER, user, signature)
     _record(document, kind=DocumentEventKind.APPROVED, to_status=DocumentStatus.UNDER_CONTROL, user=user)
     _restart_review_clock(document)
+    # Phase 21: ask the owner node and the responsible units to read it («تصویب و ابلاغ»). The audience comes
+    # from the chart, which this app may not read, so apps.distribution resolves it.
+    from apps.distribution import services as distribution
+
+    distribution.distribute(document)
     notifications.notify(
         document.created_by,
         kind=NotificationKind.DOCUMENT_APPROVED,

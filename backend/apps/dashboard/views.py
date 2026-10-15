@@ -155,7 +155,8 @@ class DashboardInboxView(APIView):
                            INBOX_DUE_SOON_DAYS days or already overdue
       unread_notifications unread rows in the «اعلان‌ها» tab (Phase 15) — a persisted feed someone
                            can read through and mark read, unlike the other three numbers here
-      total                the four added — the badge
+      to_read              approved documents I was asked to read and have not acknowledged (Phase 21)
+      total                the five added — the badge
 
     Chat and projects are imported inside the view (deferred): the dashboard must not become a hub
     that every app's import graph passes through.
@@ -163,6 +164,7 @@ class DashboardInboxView(APIView):
 
     def get(self, request):
         from apps.chat.access import chat_access_for
+        from apps.distribution.services import pending_for
         from apps.chat.queries import unread_total
         from apps.notifications.services import unread_count as unread_notifications
         from apps.projects.models import CLOSED_OBJECTIVE_STATUSES, Objective
@@ -171,6 +173,7 @@ class DashboardInboxView(APIView):
         unread = unread_total(chat_access_for(request).listed_conversations(), user)
         documents, _, _ = awaiting_documents(user)
         notifications = unread_notifications(user)
+        to_read = pending_for(user).count()
 
         today = timezone.localdate()
         horizon = today + timedelta(days=settings.INBOX_DUE_SOON_DAYS)
@@ -202,7 +205,8 @@ class DashboardInboxView(APIView):
                 "awaiting_documents": documents,
                 "due_objectives": due_count,
                 "unread_notifications": notifications,
-                "total": unread + documents + due_count + notifications,
+                "to_read": to_read,
+                "total": unread + documents + due_count + notifications + to_read,
                 "objectives": objectives,
             }
         )

@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "apps.leave",
     "apps.announcements",
     "apps.ops",
+    "apps.distribution",
 ]
 
 MIDDLEWARE = [
