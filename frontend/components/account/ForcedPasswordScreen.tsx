@@ -37,13 +37,13 @@ export function ForcedPasswordScreen() {
         <div className="mb-6 flex items-center gap-3">
           <BrandMark />
           <div className="min-w-0">
-            <h1 id="forced-password-title" className="text-lg font-bold text-slate-900">
+            <h1 id="forced-password-title" className="text-lg font-bold text-foreground">
               رمز عبور خود را انتخاب کنید
             </h1>
-            {user && <p className="truncate text-sm text-slate-500">{user.full_name}</p>}
+            {user && <p className="truncate text-sm text-muted-foreground">{user.full_name}</p>}
           </div>
         </div>
-        <p className="mb-5 flex gap-2 rounded-xl bg-amber-50/80 px-3 py-2.5 text-sm leading-7 text-amber-900 ring-1 ring-inset ring-amber-600/20">
+        <p className="mb-5 flex gap-2 rounded-xl bg-amber-50/80 dark:bg-amber-400/10 px-3 py-2.5 text-sm leading-7 text-amber-900 dark:text-amber-300 ring-1 ring-inset ring-amber-600/20">
           <ShieldAlert className="mt-1.5 size-4 shrink-0 text-amber-600" />
           رمز فعلی را شخص دیگری برای شما گذاشته است. پیش از ادامه، رمزی بگذارید که فقط خودتان بدانید.
         </p>
@@ -53,7 +53,7 @@ export function ForcedPasswordScreen() {
             toast({ tone: "success", title: "رمز عبور شما تغییر کرد." });
           }}
         />
-        <div className="mt-6 border-t border-slate-100 pt-4">
+        <div className="mt-6 border-t border-border pt-4">
           <Button variant="ghost" size="sm" icon={<LogOut />} onClick={logout}>
             خروج
           </Button>

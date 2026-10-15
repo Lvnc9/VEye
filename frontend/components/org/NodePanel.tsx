@@ -63,7 +63,7 @@ export function NodePanel({
     <aside
       key={node.id}
       aria-label={`جزئیات ${node.name}`}
-      className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card animate-fade-in lg:sticky lg:top-4"
+      className="overflow-hidden rounded-2xl border border-border bg-card shadow-card animate-fade-in lg:sticky lg:top-4"
     >
       {/* A band in the node kind's colour. */}
       <div aria-hidden className={cx("h-1.5", KIND_BAND[node.kind])} />
@@ -71,11 +71,11 @@ export function NodePanel({
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <span className={`rounded-full px-2 py-0.5 text-[10px] ${ORG_KIND_TONE[node.kind]}`}>{ORG_KIND_LABELS[node.kind]}</span>
-          <h2 className="mt-1.5 truncate text-lg font-bold text-slate-900">
+          <h2 className="mt-1.5 truncate text-lg font-bold text-foreground">
             {node.name}
-            {!node.is_active && <span className="ms-2 text-xs font-normal text-amber-700">(بایگانی‌شده)</span>}
+            {!node.is_active && <span className="ms-2 text-xs font-normal text-amber-700 dark:text-amber-300">(بایگانی‌شده)</span>}
           </h2>
-          <p className="mt-0.5 text-xs text-slate-500">{pathLabel(nodes, node.id)}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{pathLabel(nodes, node.id)}</p>
         </div>
         <IconButton label="بستن" onClick={onClose} size="sm" className="-me-1">
           <X />
@@ -133,7 +133,7 @@ function GroupChat({ node, nodes }: { node: OrgNode; nodes: OrgNode[] }) {
         {node.kind === "COMPANY" ? "گفتگوی همهٔ شرکت" : `گفتگوی گروه ${node.name}`}
       </button>
       {node.kind !== "COMPANY" && (
-        <p className="text-[11px] text-slate-500">این گفتگو برای مسئولان گره‌های بالادستی نیز قابل مشاهده است.</p>
+        <p className="text-[11px] text-muted-foreground">این گفتگو برای مسئولان گره‌های بالادستی نیز قابل مشاهده است.</p>
       )}
       {error && <ErrorBanner message={error} />}
     </div>
@@ -165,11 +165,11 @@ function Members({ node }: { node: OrgNode }) {
   const rows = members.data?.results ?? [];
   return (
     <section aria-label="افراد" className="space-y-3">
-      <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-        <Users className="size-4 text-brand-600" />
+      <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+        <Users className="size-4 text-primary" />
         افراد
         {members.data && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-600 tabular-nums">{members.data.count}</span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-soft-foreground tabular-nums">{members.data.count}</span>
         )}
       </h3>
       {error && <ErrorBanner message={error} />}
@@ -178,26 +178,26 @@ function Members({ node }: { node: OrgNode }) {
       ) : members.error ? (
         <ErrorBanner message={members.error} />
       ) : rows.length === 0 ? (
-        <p className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-5 text-center text-xs text-slate-500">
-          <Users className="size-5 text-slate-300" />
+        <p className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-input px-3 py-5 text-center text-xs text-muted-foreground">
+          <Users className="size-5 text-subtle-foreground" />
           هنوز کسی در این گره نیست.
         </p>
       ) : (
         <ul className="space-y-2">
           {rows.map((m) => (
-            <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white px-3 py-2 transition-colors hover:border-slate-300">
+            <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-card px-3 py-2 transition-colors hover:border-input">
               <Avatar name={m.user_name} />
               <div className="min-w-[9rem] flex-1 text-sm">
-                <p className="truncate font-bold text-slate-900">
+                <p className="truncate font-bold text-foreground">
                   {m.user_name}
                   {m.is_lead && (
-                    <span className="ms-2 inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-800 ring-1 ring-inset ring-amber-600/25">
+                    <span className="ms-2 inline-flex items-center gap-0.5 rounded-full bg-amber-50 dark:bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-800 dark:text-amber-300 ring-1 ring-inset ring-amber-600/25">
                       <Crown className="size-3" />
                       مسئول
                     </span>
                   )}
                 </p>
-                <p className="truncate text-xs text-slate-500">{[m.user_title, memberCaption(m, node.name)].filter(Boolean).join(" · ")}</p>
+                <p className="truncate text-xs text-muted-foreground">{[m.user_title, memberCaption(m, node.name)].filter(Boolean).join(" · ")}</p>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
                 {user && m.user !== user.id && m.user_is_active && (
@@ -219,7 +219,7 @@ function Members({ node }: { node: OrgNode }) {
                       label={m.is_lead ? "برداشتن مسئولیت" : "مسئول کن"}
                       size="sm"
                       aria-pressed={m.is_lead}
-                      className={m.is_lead ? "text-amber-500 hover:bg-amber-50 hover:text-amber-600" : undefined}
+                      className={m.is_lead ? "text-amber-500 hover:bg-amber-50 hover:dark:bg-amber-400/10 hover:text-amber-600" : undefined}
                       onClick={() => act(() => apiPatch(`/org/memberships/${m.id}/`, { is_lead: !m.is_lead }), "تغییر مسئولیت ممکن نشد.")}
                     >
                       <Crown />
@@ -251,13 +251,13 @@ function AddMember({ node, memberIds, onAdded, onError }: { node: OrgNode; membe
   const query = term.trim();
 
   return (
-    <div className="space-y-2 border-t border-slate-100 pt-3">
-      <label className="flex items-center gap-1.5 text-xs text-slate-600" htmlFor={`add-member-${node.id}`}>
+    <div className="space-y-2 border-t border-border pt-3">
+      <label className="flex items-center gap-1.5 text-xs text-soft-foreground" htmlFor={`add-member-${node.id}`}>
         <UserPlus className="size-3.5" />
         افزودن فرد به {node.name}
       </label>
       <div className="relative">
-        <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
+        <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-subtle-foreground" />
         <input
           id={`add-member-${node.id}`}
           value={term}
@@ -290,10 +290,10 @@ function PeopleResults({ query, node, memberIds, onAdded, onError }: { query: st
     }
   }
 
-  if (people.loading) return <p className="text-xs text-slate-500">در حال جستجو...</p>;
+  if (people.loading) return <p className="text-xs text-muted-foreground">در حال جستجو...</p>;
   if (people.error) return <p className="text-xs text-rose-600">{people.error}</p>;
   const rows = people.data?.results ?? [];
-  if (rows.length === 0) return <p className="text-xs text-slate-500">کسی با این نام پیدا نشد.</p>;
+  if (rows.length === 0) return <p className="text-xs text-muted-foreground">کسی با این نام پیدا نشد.</p>;
 
   return (
     <ul className="space-y-1.5 animate-fade-in">
@@ -301,12 +301,12 @@ function PeopleResults({ query, node, memberIds, onAdded, onError }: { query: st
         const already = memberIds.has(person.id);
         const places = person.memberships.map((m) => m.node_name).join("، ");
         return (
-          <li key={person.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition-colors hover:border-slate-300">
+          <li key={person.id} className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm transition-colors hover:border-input">
             <span className="flex min-w-0 items-center gap-2">
               <Avatar name={person.full_name} size="sm" />
               <span className="min-w-0">
               <span className="block truncate">{person.full_name}</span>
-              <span className="block truncate text-[11px] text-slate-500">{[person.title, places].filter(Boolean).join(" · ") || "بدون جایگاه سازمانی"}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{[person.title, places].filter(Boolean).join(" · ") || "بدون جایگاه سازمانی"}</span>
               </span>
             </span>
             <button type="button" disabled={already || busy === person.id} onClick={() => add(person)} className={primary}>
@@ -379,16 +379,16 @@ function StructureActions({
   }
 
   return (
-    <section aria-label="ساختار" className="space-y-4 border-t border-slate-100 pt-4">
-      <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-        <Network className="size-4 text-brand-600" />
+    <section aria-label="ساختار" className="space-y-4 border-t border-border pt-4">
+      <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+        <Network className="size-4 text-primary" />
         ساختار
       </h3>
       {error && <ErrorBanner message={error} />}
 
       {node.can_add_child && node.is_active && childKinds.length > 0 && (
         <form onSubmit={addChild} className="space-y-2">
-          <label className="block text-xs font-medium text-slate-600" htmlFor={`child-name-${node.id}`}>
+          <label className="block text-xs font-medium text-soft-foreground" htmlFor={`child-name-${node.id}`}>
             افزودن به {node.name}
           </label>
           <div className="flex gap-2">

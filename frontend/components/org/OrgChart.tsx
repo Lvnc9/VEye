@@ -88,12 +88,12 @@ export function OrgChart({ nodes, company, showArchived, selectedId, onSelect }:
   }
 
   const button =
-    "flex size-9 items-center justify-center rounded-lg text-slate-600 transition-[background-color,color,transform] duration-150 hover:bg-slate-100 hover:text-slate-900 active:scale-90";
+    "flex size-9 items-center justify-center rounded-lg text-soft-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-90";
 
   return (
     <div className="relative">
       <div
-        className="absolute end-3 top-3 z-10 flex gap-0.5 rounded-xl border border-slate-200 bg-white/90 p-1 shadow-raised backdrop-blur"
+        className="absolute end-3 top-3 z-10 flex gap-0.5 rounded-xl border border-border bg-card/90 p-1 shadow-raised backdrop-blur"
         role="group"
         aria-label="بزرگ‌نمایی"
       >
@@ -121,7 +121,7 @@ export function OrgChart({ nodes, company, showArchived, selectedId, onSelect }:
         onPointerUp={() => (drag.current = null)}
         onPointerCancel={() => (drag.current = null)}
         onWheel={onWheel}
-        className="relative h-[70vh] min-h-[28rem] cursor-grab touch-none overflow-hidden rounded-2xl border border-slate-200/80 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.45)_1px,transparent_0)] bg-[length:22px_22px] bg-slate-50 shadow-card active:cursor-grabbing"
+        className="relative h-[70vh] min-h-[28rem] cursor-grab touch-none overflow-hidden rounded-2xl border border-border bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.45)_1px,transparent_0)] bg-[length:22px_22px] bg-muted/50 shadow-card active:cursor-grabbing"
       >
         <div
           ref={attachContent}
@@ -130,7 +130,7 @@ export function OrgChart({ nodes, company, showArchived, selectedId, onSelect }:
         >
           <Building name={layout.company.name} logo={company?.logo_url ?? null} archivedShown={showArchived}>
             {layout.floors.length === 0 && (
-              <p className="px-6 py-8 text-center text-sm text-slate-500">هنوز حوزه یا واحدی ساخته نشده است.</p>
+              <p className="px-6 py-8 text-center text-sm text-muted-foreground">هنوز حوزه یا واحدی ساخته نشده است.</p>
             )}
             {layout.floors.map((floor) => (
               <Floor
@@ -140,7 +140,7 @@ export function OrgChart({ nodes, company, showArchived, selectedId, onSelect }:
                 selectedId={selectedId}
                 onSelect={onSelect}
               >
-                {floor.rooms.length === 0 && <span className="text-xs text-slate-500">بدون واحد</span>}
+                {floor.rooms.length === 0 && <span className="text-xs text-muted-foreground">بدون واحد</span>}
                 {floor.rooms.map((room) => (
                   <Room key={room.node.id} node={room.node} selected={room.node.id === selectedId} onSelect={onSelect}>
                     {room.desks.map((desk) => (
@@ -154,7 +154,7 @@ export function OrgChart({ nodes, company, showArchived, selectedId, onSelect }:
           </Building>
         </div>
       </div>
-      <p className="mt-2 text-xs text-slate-500">برای جابه‌جایی نما بکشید؛ برای بزرگ‌نمایی از دکمه‌ها یا Ctrl + چرخ ماوس استفاده کنید.</p>
+      <p className="mt-2 text-xs text-muted-foreground">برای جابه‌جایی نما بکشید؛ برای بزرگ‌نمایی از دکمه‌ها یا Ctrl + چرخ ماوس استفاده کنید.</p>
     </div>
   );
 }
@@ -163,18 +163,18 @@ function Building({ name, logo, archivedShown, children }: { name: string; logo:
   return (
     <section
       aria-label={`ساختمان ${name}`}
-      className="w-max min-w-[36rem] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-overlay"
+      className="w-max min-w-[36rem] overflow-hidden rounded-3xl border border-border bg-card shadow-overlay"
     >
       <header className="relative flex items-center justify-center gap-3 overflow-hidden bg-gradient-to-l from-navy to-navy-raised px-8 py-5 text-white">
         <span aria-hidden className="pointer-events-none absolute -top-16 left-1/2 size-48 -translate-x-1/2 rounded-full bg-glow/15 blur-3xl" />
         {logo && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logo} alt="" className="relative size-10 rounded-lg bg-white object-contain p-0.5 shadow" />
+          <img src={logo} alt="" className="relative size-10 rounded-lg bg-card object-contain p-0.5 shadow" />
         )}
         <h2 className="relative text-lg font-bold">{name}</h2>
         {archivedShown && <span className="relative rounded-full bg-amber-400 px-2 py-0.5 text-[10px] text-amber-950">با بایگانی‌شده‌ها</span>}
       </header>
-      <div className="divide-y divide-slate-200">{children}</div>
+      <div className="divide-y divide-border">{children}</div>
     </section>
   );
 }
@@ -195,19 +195,19 @@ function Floor({
   const selected = floorNode !== null && floorNode.id === selectedId;
   return (
     <div className={`flex items-stretch ${floorNode && !floorNode.is_active ? "opacity-60" : ""}`}>
-      <div className="flex w-28 shrink-0 items-center justify-center border-e border-slate-200 bg-slate-50/80 p-3 text-center">
+      <div className="flex w-28 shrink-0 items-center justify-center border-e border-border bg-muted/50 p-3 text-center">
         {floorNode ? (
           <button
             type="button"
             onClick={() => onSelect(floorNode)}
             aria-label={`${ORG_KIND_LABELS.DOMAIN} ${title}`}
             aria-pressed={selected}
-            className={`rounded-lg px-2 py-1.5 text-sm font-bold text-indigo-900 transition-colors hover:bg-indigo-100 ${selected ? "bg-indigo-100 ring-2 ring-indigo-400" : ""}`}
+            className={`rounded-lg px-2 py-1.5 text-sm font-bold text-indigo-900 dark:text-indigo-300 transition-colors hover:bg-indigo-100 hover:dark:bg-indigo-400/15 ${selected ? "bg-indigo-100 dark:bg-indigo-400/15 ring-2 ring-indigo-400" : ""}`}
           >
             {title}
           </button>
         ) : (
-          <span className="text-sm font-bold text-slate-500">{title}</span>
+          <span className="text-sm font-bold text-muted-foreground">{title}</span>
         )}
       </div>
       <div className="flex flex-1 flex-wrap items-start gap-4 p-4">{children}</div>
@@ -218,14 +218,14 @@ function Floor({
 function Room({ node, selected, onSelect, children }: { node: OrgTreeNode; selected: boolean; onSelect: (node: OrgNode) => void; children: ReactNode }) {
   return (
     <div
-      className={`min-w-44 rounded-2xl border bg-brand-50/50 p-3 shadow-xs transition-[border-color,box-shadow] duration-200 ${selected ? "border-brand-500 ring-4 ring-brand-500/15" : "border-brand-200 hover:border-brand-300"} ${node.is_active ? "" : "opacity-60"}`}
+      className={`min-w-44 rounded-2xl border bg-brand-50/50 p-3 shadow-xs transition-[border-color,box-shadow] duration-200 ${selected ? "border-primary ring-4 ring-primary/15" : "border-primary/30 hover:border-primary/30"} ${node.is_active ? "" : "opacity-60"}`}
     >
       <button
         type="button"
         onClick={() => onSelect(node)}
         aria-label={`${ORG_KIND_LABELS.UNIT} ${node.name}`}
         aria-pressed={selected}
-        className="mb-2 block w-full rounded-lg px-2 py-1 text-start text-sm font-bold text-brand-900 transition-colors hover:bg-brand-100"
+        className="mb-2 block w-full rounded-lg px-2 py-1 text-start text-sm font-bold text-brand-900 transition-colors hover:bg-primary/15"
       >
         {node.name}
         {!node.is_active && <span className="ms-1 text-[10px] font-normal">(بایگانی‌شده)</span>}
@@ -244,8 +244,8 @@ function Desk({ node, selected, onSelect }: { node: OrgTreeNode; selected: boole
       aria-pressed={selected}
       className={`rounded-lg border px-2.5 py-1.5 text-xs shadow-xs transition-[background-color,border-color,box-shadow,transform] duration-150 active:scale-95 ${
         selected
-          ? "border-emerald-500 bg-emerald-100 text-emerald-900 ring-4 ring-emerald-500/15"
-          : "border-emerald-200 bg-white text-emerald-900 hover:border-emerald-300 hover:bg-emerald-50"
+          ? "border-emerald-500 bg-emerald-100 dark:bg-emerald-400/15 text-emerald-900 dark:text-emerald-300 ring-4 ring-emerald-500/15"
+          : "border-emerald-200 dark:border-emerald-400/25 bg-card text-emerald-900 dark:text-emerald-300 hover:border-emerald-300 hover:dark:border-emerald-400/25 hover:bg-emerald-50 hover:dark:bg-emerald-400/10"
       } ${node.is_active ? "" : "opacity-60"}`}
     >
       {node.name}
@@ -256,13 +256,13 @@ function Desk({ node, selected, onSelect }: { node: OrgTreeNode; selected: boole
 /** The company row, so the building itself can be selected (its people, its top-level structure). */
 function RootSelect({ node, selected, onSelect }: { node: OrgTreeNode; selected: boolean; onSelect: (node: OrgNode) => void }) {
   return (
-    <div className="flex justify-center bg-slate-50/80 p-3">
+    <div className="flex justify-center bg-muted/50 p-3">
       <button
         type="button"
         onClick={() => onSelect(node)}
         aria-label={`${ORG_KIND_LABELS.COMPANY} ${node.name}`}
         aria-pressed={selected}
-        className={`rounded-lg px-3 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-200 ${selected ? "bg-slate-200 ring-2 ring-slate-400" : ""}`}
+        className={`rounded-lg px-3 py-1.5 text-xs text-soft-foreground transition-colors hover:bg-muted ${selected ? "bg-muted ring-2 ring-slate-400" : ""}`}
       >
         افراد و ساختار سطح شرکت
       </button>

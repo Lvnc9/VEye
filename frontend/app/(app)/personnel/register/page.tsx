@@ -17,23 +17,23 @@ import { useApiQuery } from "@/lib/use-api-query";
 function ProfilePreview({ draft }: { draft: { fullName: string; title: string; placement: string | null } }) {
   const empty = !draft.fullName && !draft.title && !draft.placement;
   return (
-    <aside aria-label="پیش‌نمایش پروفایل" className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
+    <aside aria-label="پیش‌نمایش پروفایل" className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
       {/* A navy header with the brand glow, like the sidebar the person will see. */}
       <div className="relative h-20 overflow-hidden bg-gradient-to-l from-navy to-navy-raised">
         <span aria-hidden className="absolute -top-10 left-1/2 size-40 -translate-x-1/2 rounded-full bg-glow/20 blur-2xl" />
       </div>
       <div className="-mt-9 px-5 pb-5 text-center">
-        <span className="inline-flex rounded-full bg-white p-1 shadow-card">
+        <span className="inline-flex rounded-full bg-card p-1 shadow-card">
           {draft.fullName ? (
             <Avatar key={draft.fullName.slice(0, 1)} name={draft.fullName} size="lg" className="size-16 text-lg animate-pop" />
           ) : (
-            <span className="flex size-16 items-center justify-center rounded-full bg-slate-100 text-slate-300">
+            <span className="flex size-16 items-center justify-center rounded-full bg-muted text-subtle-foreground">
               <UserPlus className="size-7" />
             </span>
           )}
         </span>
-        <p className="mt-3 truncate text-lg font-bold text-slate-900">{draft.fullName || "نام شخص"}</p>
-        <p className="mt-0.5 flex min-h-6 items-center justify-center gap-1.5 text-sm text-slate-500">
+        <p className="mt-3 truncate text-lg font-bold text-foreground">{draft.fullName || "نام شخص"}</p>
+        <p className="mt-0.5 flex min-h-6 items-center justify-center gap-1.5 text-sm text-muted-foreground">
           {draft.title ? (
             <>
               <ShieldCheck className="size-4 text-emerald-500" />
@@ -43,14 +43,14 @@ function ProfilePreview({ draft }: { draft: { fullName: string; title: string; p
             "سمت پس از انتخاب دسترسی"
           )}
         </p>
-        <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2.5 text-sm ring-1 ring-inset ring-slate-200/70">
-          <span className="flex items-center justify-center gap-1.5 text-slate-600">
+        <div className="mt-4 rounded-xl bg-muted/50 px-3 py-2.5 text-sm ring-1 ring-inset ring-border">
+          <span className="flex items-center justify-center gap-1.5 text-soft-foreground">
             <Building2 className="size-4 text-brand-500" />
             {draft.placement ?? "هنوز جایی در ساختار ندارد"}
           </span>
         </div>
         {empty && (
-          <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-slate-500">
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
             <Sparkles className="size-3.5 text-amber-500" />
             با پر کردن فرم، این کارت کامل می‌شود.
           </p>
@@ -90,7 +90,7 @@ export default function PersonnelRegisterPage() {
         actions={
           <Link
             href="/organization"
-            className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-brand-700 transition-colors hover:bg-brand-50"
+            className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-primary transition-colors hover:bg-primary/10"
           >
             <Building2 className="size-4" />
             ساختار سازمان

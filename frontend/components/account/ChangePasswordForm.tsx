@@ -118,7 +118,7 @@ export function ChangePasswordForm({ onChanged }: { onChanged: (user: User) => v
           تغییر رمز عبور
         </Button>
       </div>
-      <p className="text-xs leading-6 text-slate-500">با تغییر رمز، از همهٔ دستگاه‌های دیگر خارج می‌شوید.</p>
+      <p className="text-xs leading-6 text-muted-foreground">با تغییر رمز، از همهٔ دستگاه‌های دیگر خارج می‌شوید.</p>
     </form>
   );
 }

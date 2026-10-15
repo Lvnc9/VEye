@@ -7,15 +7,15 @@ import { cx } from "@/components/ui/cx";
 
 const THEME = {
   light: {
-    fieldset: "space-y-4 rounded-2xl border border-slate-200 bg-slate-50/50 p-4",
-    legend: "px-2 text-sm font-bold text-slate-700",
-    stepLabel: "text-slate-500",
+    fieldset: "space-y-4 rounded-2xl border border-border bg-muted/50 p-4",
+    legend: "px-2 text-sm font-bold text-soft-foreground",
+    stepLabel: "text-muted-foreground",
     field:
-      "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-xs transition-[border-color,box-shadow] duration-150 " +
-      "hover:border-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15",
-    chevron: "text-slate-300",
-    lead: "border-slate-200 bg-white text-slate-700 hover:border-slate-300 has-[:checked]:border-amber-300 has-[:checked]:bg-amber-50/70",
-    leadText: "text-slate-500",
+      "h-11 w-full rounded-xl border border-input bg-card px-3 text-sm text-foreground shadow-xs transition-[border-color,box-shadow] duration-150 " +
+      "hover:border-slate-400 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15",
+    chevron: "text-subtle-foreground",
+    lead: "border-border bg-card text-soft-foreground hover:border-input has-[:checked]:border-amber-300 has-[:checked]:bg-amber-50/70 dark:has-[:checked]:border-amber-400/25 dark:has-[:checked]:bg-amber-400/10",
+    leadText: "text-muted-foreground",
   },
   dark: {
     fieldset: "space-y-4 rounded-2xl border border-navy-line bg-navy p-4",

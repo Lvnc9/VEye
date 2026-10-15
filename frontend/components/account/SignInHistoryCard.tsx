@@ -36,18 +36,18 @@ export function SignInHistoryCard() {
         icon={<History />}
       />
       {sessions.loading ? (
-        <p className="text-sm text-slate-500">در حال بارگذاری...</p>
+        <p className="text-sm text-muted-foreground">در حال بارگذاری...</p>
       ) : sessions.error ? (
-        <p className="text-sm text-rose-700">{sessions.error}</p>
+        <p className="text-sm text-rose-700 dark:text-rose-300">{sessions.error}</p>
       ) : events.length === 0 ? (
         <EmptyState compact icon={<MonitorSmartphone />} message="هنوز ورودی ثبت نشده است." />
       ) : (
-        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+        <ul className="divide-y divide-border rounded-xl border border-border">
           {events.map((event) => (
             <li key={event.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
               <span className="min-w-0">
-                <span className="block truncate text-slate-900">{describeDevice(event.user_agent)}</span>
-                <span className="block text-xs text-slate-500">
+                <span className="block truncate text-foreground">{describeDevice(event.user_agent)}</span>
+                <span className="block text-xs text-muted-foreground">
                   {formatJalaliDateTime(event.created_at)}
                   {event.ip && (
                     <>
@@ -63,8 +63,8 @@ export function SignInHistoryCard() {
                 className={cx(
                   "shrink-0 rounded-full px-2 py-0.5 text-xs ring-1 ring-inset",
                   event.succeeded
-                    ? "bg-emerald-50 text-emerald-800 ring-emerald-600/20"
-                    : "bg-rose-50 text-rose-800 ring-rose-600/20",
+                    ? "bg-emerald-50 dark:bg-emerald-400/10 text-emerald-800 dark:text-emerald-300 ring-emerald-600/20"
+                    : "bg-rose-50 dark:bg-rose-400/10 text-rose-800 dark:text-rose-300 ring-rose-600/20",
                 )}
               >
                 {event.succeeded ? "ورود" : "ناموفق"}

@@ -57,17 +57,17 @@ export default function AccountPage() {
           />
         </div>
         <div className="flex flex-wrap items-end gap-4 px-5 pb-5 sm:px-6">
-          <span className="-mt-10 inline-flex rounded-full bg-white p-1.5 shadow-card">
+          <span className="-mt-10 inline-flex rounded-full bg-card p-1.5 shadow-card">
             <Avatar name={user.full_name} size="lg" className="size-20 text-xl" />
           </span>
           <div className="min-w-0 flex-1 pt-3">
-            <h1 className="truncate text-2xl font-bold leading-10 text-slate-900">{user.full_name}</h1>
-            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-slate-500">
+            <h1 className="truncate text-2xl font-bold leading-10 text-foreground">{user.full_name}</h1>
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground">
               <ShieldCheck className="size-4 text-emerald-500" />
               <span className="whitespace-nowrap">{user.title}</span>
               {user.company && (
                 <>
-                  <span className="text-slate-300">·</span>
+                  <span className="text-subtle-foreground">·</span>
                   {user.company.name}
                 </>
               )}
@@ -82,14 +82,14 @@ export default function AccountPage() {
             <div className="px-5 pt-5 sm:px-6">
               <CardHeader title="مشخصات" icon={<UserRound />} />
             </div>
-            <dl className="divide-y divide-slate-100 border-t border-slate-100">
+            <dl className="divide-y divide-border border-t border-border">
               {rows.map(({ label, value, icon: Icon, latin }) => (
                 <div key={label} className="flex items-center justify-between gap-4 px-5 py-3 text-sm sm:px-6">
-                  <dt className="flex items-center gap-2 text-slate-500">
-                    <Icon className="size-4 text-slate-400" />
+                  <dt className="flex items-center gap-2 text-muted-foreground">
+                    <Icon className="size-4 text-subtle-foreground" />
                     {label}
                   </dt>
-                  <dd className={cx("text-end font-bold text-slate-900", latin && "latn")}>{value}</dd>
+                  <dd className={cx("text-end font-bold text-foreground", latin && "latn")}>{value}</dd>
                 </div>
               ))}
             </dl>
@@ -118,16 +118,16 @@ export default function AccountPage() {
                 {memberships.map((membership) => (
                   <li
                     key={membership.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5 text-sm"
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-soft-foreground">
                         {ORG_KIND_LABELS[membership.node_kind]}
                       </span>
-                      <span className="truncate font-bold text-slate-900">{membership.node_name}</span>
+                      <span className="truncate font-bold text-foreground">{membership.node_name}</span>
                     </span>
                     {membership.is_lead && (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/25">
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-400/10 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-300 ring-1 ring-inset ring-amber-600/25">
                         <Crown className="size-3.5" />
                         مسئول
                       </span>
@@ -144,7 +144,7 @@ export default function AccountPage() {
               icon={<KeyRound />}
               actions={
                 user.capabilities.length > 0 && (
-                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 tabular-nums">
+                  <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-soft-foreground tabular-nums">
                     {user.capabilities.length.toLocaleString("fa-IR")}
                   </span>
                 )
@@ -157,10 +157,10 @@ export default function AccountPage() {
                 {user.capabilities.map((capability, i) => (
                   <li
                     key={capability}
-                    className="veye-stagger flex items-center gap-2 rounded-xl bg-brand-50/70 px-3 py-2 text-sm text-brand-900 ring-1 ring-inset ring-brand-600/10"
+                    className="veye-stagger flex items-center gap-2 rounded-xl bg-brand-50/70 px-3 py-2 text-sm text-brand-900 ring-1 ring-inset ring-primary/10"
                     style={{ "--i": i } as React.CSSProperties}
                   >
-                    <BadgeCheck className="size-4 text-brand-600" />
+                    <BadgeCheck className="size-4 text-primary" />
                     {CAPABILITY_LABELS[capability] ?? capability}
                   </li>
                 ))}

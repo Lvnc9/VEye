@@ -35,24 +35,24 @@ type Tone = "light" | "dark";
 
 const THEME = {
   light: {
-    wrap: "overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card",
-    section: "border-slate-100",
-    stepBadge: "bg-brand-50 text-brand-700 ring-brand-600/15",
-    title: "text-slate-900",
-    description: "text-slate-500",
-    label: "text-slate-700",
+    wrap: "overflow-hidden rounded-2xl border border-border bg-card shadow-card",
+    section: "border-border",
+    stepBadge: "bg-primary/10 text-primary ring-primary/15",
+    title: "text-foreground",
+    description: "text-muted-foreground",
+    label: "text-soft-foreground",
     input:
-      "h-11 w-full rounded-xl border border-slate-300 bg-white ps-10 pe-3 text-sm text-slate-900 shadow-xs placeholder:text-slate-400 " +
-      "transition-[border-color,box-shadow] duration-150 hover:border-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15",
-    icon: "text-slate-400",
-    choice: "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
-    choiceOn: "border-brand-500 bg-brand-50/70 ring-4 ring-brand-500/10",
-    choiceTitle: "text-slate-900",
-    choiceText: "text-slate-500",
-    footer: "border-slate-100 bg-slate-50/70",
+      "h-11 w-full rounded-xl border border-input bg-card ps-10 pe-3 text-sm text-foreground shadow-xs placeholder:text-subtle-foreground " +
+      "transition-[border-color,box-shadow] duration-150 hover:border-slate-400 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15",
+    icon: "text-subtle-foreground",
+    choice: "border-border bg-card hover:border-input hover:bg-accent/60",
+    choiceOn: "border-primary bg-primary/[0.07] ring-4 ring-primary/10",
+    choiceTitle: "text-foreground",
+    choiceText: "text-muted-foreground",
+    footer: "border-border bg-muted/50",
     submit:
-      "bg-brand-700 text-white shadow-[0_1px_2px_rgb(3_105_161/0.3),inset_0_1px_0_rgb(255_255_255/0.12)] hover:bg-brand-800",
-    hint: "text-slate-500",
+      "bg-primary text-primary-foreground shadow-[0_1px_2px_rgb(3_105_161/0.3),inset_0_1px_0_rgb(255_255_255/0.12)] hover:bg-primary-hover",
+    hint: "text-muted-foreground",
   },
   dark: {
     wrap: "overflow-hidden rounded-2xl border border-navy-line bg-navy",
@@ -195,7 +195,7 @@ function ChoiceCards<T extends string>({
                   aria-hidden
                   className={cx(
                     "size-4 transition-[opacity,transform] duration-200",
-                    on ? "scale-100 text-brand-600 opacity-100" : "scale-50 opacity-0",
+                    on ? "scale-100 text-primary opacity-100" : "scale-50 opacity-0",
                   )}
                 />
               </span>
@@ -447,7 +447,7 @@ export function PersonnelForm({
             title={showPassword ? "پنهان کردن رمز" : "نمایش رمز"}
             className={cx(
               "absolute inset-y-0 left-1.5 my-auto flex size-8 items-center justify-center rounded-lg transition-colors",
-              tone === "dark" ? "text-slate-500 hover:bg-white/5 hover:text-slate-200" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
+              tone === "dark" ? "text-muted-foreground hover:bg-white/5 hover:text-slate-200" : "text-subtle-foreground hover:bg-accent hover:text-soft-foreground",
             )}
           >
             {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -457,11 +457,11 @@ export function PersonnelForm({
 
       <div className={cx("flex flex-wrap items-center justify-between gap-3 border-t px-5 py-4 sm:px-6", t.footer)}>
         {tone === "light" && fullName ? (
-          <span className="flex min-w-0 items-center gap-2 text-sm text-slate-600 animate-fade-in">
+          <span className="flex min-w-0 items-center gap-2 text-sm text-soft-foreground animate-fade-in">
             <Avatar name={fullName} size="sm" />
             <span className="truncate">
               {fullName}
-              {title && <span className="text-slate-400"> · {title}</span>}
+              {title && <span className="text-subtle-foreground"> · {title}</span>}
             </span>
           </span>
         ) : (

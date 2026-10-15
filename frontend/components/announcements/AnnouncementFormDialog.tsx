@@ -116,7 +116,7 @@ export function AnnouncementFormDialog({
           <JalaliDatePicker id="announce-expires" value={form.expires_on} onChange={(iso) => set({ expires_on: iso ?? "" })} min={today} />
         </Field>
       </div>
-      <label className="flex w-fit items-center gap-2 text-sm text-slate-700">
+      <label className="flex w-fit items-center gap-2 text-sm text-soft-foreground">
         <input type="checkbox" className="size-4 rounded" checked={form.pinned} onChange={(e) => set({ pinned: e.target.checked })} />
         سنجاق در بالای فهرست
       </label>

@@ -68,12 +68,12 @@ export function DelegationsSection({ node }: { node: OrgNode }) {
   }
 
   return (
-    <section aria-label="جانشین موقت" className="space-y-3 border-t border-slate-100 pt-4">
-      <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-        <UserCheck className="size-4 text-brand-600" />
+    <section aria-label="جانشین موقت" className="space-y-3 border-t border-border pt-4">
+      <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+        <UserCheck className="size-4 text-primary" />
         جانشین موقت
       </h3>
-      <p className="text-[11px] leading-5 text-slate-500">
+      <p className="text-[11px] leading-5 text-muted-foreground">
         در بازهٔ انتخاب‌شده، جانشین مانند مسئول این گره (و زیرمجموعه‌های آن) عمل می‌کند و پس از پایان بازه خودکار برمی‌گردد.
       </p>
       {error && <ErrorBanner message={error} />}
@@ -81,11 +81,11 @@ export function DelegationsSection({ node }: { node: OrgNode }) {
       {rows.length > 0 && (
         <ul className="space-y-2">
           {rows.map((row) => (
-            <li key={row.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm">
+            <li key={row.id} className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm">
               <Avatar name={row.delegate_name} size="sm" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-slate-900">{row.delegate_name}</span>
-                <span className="block text-xs text-slate-500">
+                <span className="block truncate text-foreground">{row.delegate_name}</span>
+                <span className="block text-xs text-muted-foreground">
                   {formatJalali(row.starts_on)} تا {formatJalali(row.ends_on)}
                   {row.is_active ? " · در حال جانشینی" : " · آینده"}
                   {row.note && ` · ${row.note}`}
@@ -101,7 +101,7 @@ export function DelegationsSection({ node }: { node: OrgNode }) {
 
       <div className="space-y-2">
         {delegate ? (
-          <p className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2 text-sm text-brand-900">
+          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-brand-900">
             <Check className="size-4" />
             {delegate.full_name}
             <button type="button" onClick={() => setDelegate(null)} className="ms-auto text-xs underline">
@@ -119,11 +119,11 @@ export function DelegationsSection({ node }: { node: OrgNode }) {
         )}
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="mb-1 block text-xs text-slate-600" htmlFor={`deleg-from-${node.id}`}>از</label>
+            <label className="mb-1 block text-xs text-soft-foreground" htmlFor={`deleg-from-${node.id}`}>از</label>
             <JalaliDatePicker id={`deleg-from-${node.id}`} value={from} onChange={(iso) => setFrom(iso ?? "")} min={todayIso()} required />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-600" htmlFor={`deleg-to-${node.id}`}>تا</label>
+            <label className="mb-1 block text-xs text-soft-foreground" htmlFor={`deleg-to-${node.id}`}>تا</label>
             <JalaliDatePicker id={`deleg-to-${node.id}`} value={to} onChange={(iso) => setTo(iso ?? "")} min={from || todayIso()} required />
           </div>
         </div>

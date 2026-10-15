@@ -50,7 +50,7 @@ export function OrgActivityFeed({
         <button
           type="button"
           onClick={onClearNode}
-          className="mb-3 inline-flex items-center gap-1 text-xs text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+          className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
         >
           <X className="size-3.5" />
           نمایش تاریخچهٔ همه
@@ -59,16 +59,16 @@ export function OrgActivityFeed({
       {events.length === 0 ? (
         <EmptyState compact icon={<Activity />} message="هنوز تغییری ثبت نشده است." />
       ) : (
-        <ol className="relative max-h-[24rem] space-y-4 overflow-y-auto pe-1 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-slate-200">
+        <ol className="relative max-h-[24rem] space-y-4 overflow-y-auto pe-1 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-muted">
           {events.map((event) => (
             <li key={event.id} className="relative flex gap-3 text-sm">
               <span
                 aria-hidden
-                className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-white ${ORG_EVENT_TONE[event.kind] ?? "bg-slate-400"}`}
+                className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-card ${ORG_EVENT_TONE[event.kind] ?? "bg-slate-400"}`}
               />
-              <p className="min-w-0 text-slate-900">
+              <p className="min-w-0 text-foreground">
                 {describeOrgEvent(event)}
-                <span className="text-slate-500">
+                <span className="text-muted-foreground">
                   {" "}
                   · {event.actor_name}
                   {event.actor_title ? ` (${event.actor_title})` : ""} · {formatJalaliDateTime(event.created_at)}

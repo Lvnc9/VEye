@@ -10,14 +10,14 @@ import type { Announcement } from "@/lib/announcements";
  *  line breaks kept. `actions` are the manage buttons, when the viewer may manage it. */
 export function AnnouncementCard({ announcement, actions }: { announcement: Announcement; actions?: ReactNode }) {
   return (
-    <article className={cx(cardClass, "p-5 sm:p-6", announcement.pinned && !announcement.is_withdrawn && "ring-1 ring-brand-300")}>
+    <article className={cx(cardClass, "p-5 sm:p-6", announcement.pinned && !announcement.is_withdrawn && "ring-1 ring-primary/30")}>
       <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-lg font-bold leading-8 text-slate-900">
-            {announcement.pinned && <Pin className="size-4 shrink-0 text-brand-600" aria-label="سنجاق‌شده" />}
+          <h2 className="flex items-center gap-2 text-lg font-bold leading-8 text-foreground">
+            {announcement.pinned && <Pin className="size-4 shrink-0 text-primary" aria-label="سنجاق‌شده" />}
             {announcement.title}
           </h2>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <Users className="size-3.5" />
               {announcement.audience_name}
@@ -34,8 +34,8 @@ export function AnnouncementCard({ announcement, actions }: { announcement: Anno
           {!announcement.is_withdrawn && announcement.is_expired && <Badge tone="neutral">پایان‌یافته</Badge>}
         </div>
       </header>
-      <p className="whitespace-pre-line text-sm leading-8 text-slate-800">{announcement.body}</p>
-      {actions && <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">{actions}</div>}
+      <p className="whitespace-pre-line text-sm leading-8 text-foreground">{announcement.body}</p>
+      {actions && <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">{actions}</div>}
     </article>
   );
 }

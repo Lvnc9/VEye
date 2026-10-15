@@ -67,11 +67,11 @@ export function ResetPasswordCard() {
       )}
       {person ? (
         <form onSubmit={submit} className="space-y-4" noValidate>
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2 text-sm">
             <span className="flex min-w-0 items-center gap-2">
               <Avatar name={person.full_name} size="sm" />
-              <span className="min-w-0 truncate font-bold text-slate-900">{person.full_name}</span>
-              <span className="truncate text-xs text-slate-500">{person.title}</span>
+              <span className="min-w-0 truncate font-bold text-foreground">{person.full_name}</span>
+              <span className="truncate text-xs text-muted-foreground">{person.title}</span>
             </span>
             <IconButton label="انتخاب شخص دیگر" size="sm" onClick={() => setPerson(null)}>
               <X />
@@ -93,7 +93,7 @@ export function ResetPasswordCard() {
                 type="button"
                 onClick={() => setVisible((v) => !v)}
                 aria-label={visible ? "پنهان کردن رمز" : "نمایش رمز"}
-                className="absolute inset-y-0 left-2 my-auto flex size-7 items-center justify-center rounded-md text-slate-400 hover:text-slate-700"
+                className="absolute inset-y-0 left-2 my-auto flex size-7 items-center justify-center rounded-md text-subtle-foreground hover:text-soft-foreground"
               >
                 {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>

@@ -68,7 +68,7 @@ export function UnassignedPeople({ nodes, reload, onPlaced }: { nodes: OrgNode[]
         icon={<UserRoundX />}
         description="تا جایی در ساختار نداشته باشند، در هیچ بخشی دیده نمی‌شوند."
         actions={
-          <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs text-amber-800 ring-1 ring-inset ring-amber-600/25 tabular-nums">
+          <span className="rounded-full bg-amber-50 dark:bg-amber-400/10 px-2.5 py-0.5 text-xs text-amber-800 dark:text-amber-300 ring-1 ring-inset ring-amber-600/25 tabular-nums">
             {rows.length} نفر
           </span>
         }
@@ -82,7 +82,7 @@ export function UnassignedPeople({ nodes, reload, onPlaced }: { nodes: OrgNode[]
               key={person.id}
               className={cx(
                 "veye-stagger rounded-2xl border transition-[border-color,box-shadow] duration-200",
-                open ? "border-brand-300 shadow-raised md:col-span-2" : "border-slate-200 hover:border-slate-300",
+                open ? "border-primary/30 shadow-raised md:col-span-2" : "border-border hover:border-input",
               )}
               style={{ "--i": Math.min(i, 8) } as React.CSSProperties}
             >
@@ -94,17 +94,17 @@ export function UnassignedPeople({ nodes, reload, onPlaced }: { nodes: OrgNode[]
               >
                 <Avatar name={person.full_name} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-bold text-slate-900">{person.full_name}</span>
-                  <span className="block truncate text-xs text-slate-500">{person.title}</span>
+                  <span className="block truncate text-sm font-bold text-foreground">{person.full_name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{person.title}</span>
                 </span>
-                <span className="inline-flex items-center gap-1 text-xs text-brand-700">
+                <span className="inline-flex items-center gap-1 text-xs text-primary">
                   <MapPinPlus className="size-4" />
                   <span className="hidden sm:inline">جایگاه</span>
                   <ChevronDown className={cx("size-4 transition-transform duration-200", open && "rotate-180")} />
                 </span>
               </button>
               {open && (
-                <div className="space-y-4 border-t border-slate-100 px-4 pt-4 pb-4 animate-fade-in">
+                <div className="space-y-4 border-t border-border px-4 pt-4 pb-4 animate-fade-in">
                   <PlacementCascade
                     nodes={nodes}
                     value={placementOf(person.id)}

@@ -139,7 +139,7 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
             />
             <span
               aria-hidden
-              className="relative h-5 w-9 shrink-0 rounded-full bg-input transition-colors duration-200 peer-checked:bg-primary peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500 after:absolute after:top-0.5 after:right-0.5 after:size-4 after:rounded-full after:bg-card after:shadow after:transition-transform after:duration-200 peer-checked:after:-translate-x-4"
+              className="relative h-5 w-9 shrink-0 rounded-full bg-input transition-colors duration-200 peer-checked:bg-primary peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500 after:absolute after:top-0.5 after:right-0.5 after:size-4 after:rounded-full after:bg-white after:shadow after:transition-transform after:duration-200 peer-checked:after:-translate-x-4"
             />
             <span className="text-soft-foreground">شماره / تاریخ / پیوست در بالای صفحهٔ اول</span>
           </label>
