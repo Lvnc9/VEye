@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "apps.ops",
     "apps.distribution",
     "apps.search",
+    "apps.agenda",
 ]
 
 MIDDLEWARE = [
