@@ -45,7 +45,7 @@ export function NotificationsTab({ onChanged }: { onChanged?: () => void }) {
   return (
     <Card aria-label="اعلان‌ها">
       <div className="flex items-center justify-between gap-3 pb-3">
-        <h2 className="flex items-center gap-2 font-bold text-slate-900">
+        <h2 className="flex items-center gap-2 font-bold text-foreground">
           <Bell className="size-4" /> اعلان‌ها
         </h2>
         {unread.length > 0 && (
@@ -62,11 +62,11 @@ export function NotificationsTab({ onChanged }: { onChanged?: () => void }) {
       ) : rows.length === 0 ? (
         <EmptyState compact icon={<Bell />} message="اعلانی ندارید." />
       ) : (
-        <ul className="-mx-2 divide-y divide-slate-100">
+        <ul className="-mx-2 divide-y divide-border">
           {rows.map((notification) => (
             <li
               key={notification.id}
-              className={`rounded-xl px-2 py-3 text-sm transition-colors hover:bg-slate-50 ${
+              className={`rounded-xl px-2 py-3 text-sm transition-colors hover:bg-accent/60 ${
                 notification.is_read ? "" : "bg-brand-50/50"
               }`}
             >
@@ -75,12 +75,12 @@ export function NotificationsTab({ onChanged }: { onChanged?: () => void }) {
                 onClick={() => markRead(notification)}
                 className="flex flex-col gap-1"
               >
-                <span className={`flex items-center gap-2 ${notification.is_read ? "text-slate-700" : "font-bold text-slate-900"}`}>
-                  {!notification.is_read && <span className="size-2 shrink-0 rounded-full bg-brand-600" aria-hidden />}
+                <span className={`flex items-center gap-2 ${notification.is_read ? "text-soft-foreground" : "font-bold text-foreground"}`}>
+                  {!notification.is_read && <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden />}
                   {notification.title}
                 </span>
-                {notification.body && <span className="text-slate-500">{notification.body}</span>}
-                <span className="text-xs text-slate-400">{formatJalaliDateTime(notification.created_at)}</span>
+                {notification.body && <span className="text-muted-foreground">{notification.body}</span>}
+                <span className="text-xs text-subtle-foreground">{formatJalaliDateTime(notification.created_at)}</span>
               </Link>
             </li>
           ))}

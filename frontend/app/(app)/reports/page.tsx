@@ -102,7 +102,7 @@ export default function ReportsPage() {
 
         <Card aria-label="خروجی پروژه‌ها">
           <CardHeader title="فهرست پروژه‌ها" icon={<FolderKanban />} description="پروژه‌هایی که شما حق دیدنشان را دارید — با پیشرفت و ریزهدف‌های دیرکرد" />
-          <label className="flex h-10 w-fit items-center gap-2 rounded-lg px-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-800">
+          <label className="flex h-10 w-fit items-center gap-2 rounded-lg px-3 text-sm text-soft-foreground ring-1 ring-inset ring-border has-[:checked]:bg-primary/10 has-[:checked]:text-primary">
             <input type="checkbox" className="size-4 rounded" checked={archived} onChange={(e) => setArchived(e.target.checked)} />
             فقط پروژه‌های بایگانی‌شده
           </label>

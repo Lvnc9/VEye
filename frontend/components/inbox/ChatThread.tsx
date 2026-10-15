@@ -203,22 +203,22 @@ export function ChatThread({
 
   return (
     <section aria-label={`گفتگو با ${conversation.title}`} className="flex h-full min-h-0 flex-col">
-      <header className="flex items-center gap-3 border-b border-slate-200 px-5 py-3">
+      <header className="flex items-center gap-3 border-b border-border px-5 py-3">
         {conversation.kind === "DIRECT" ? (
           <Avatar name={conversation.title} />
         ) : (
-          <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-800">
+          <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-400/15 text-teal-800 dark:text-teal-300">
             <Hash className="size-4" />
           </span>
         )}
         <div className="min-w-0">
-          <h2 className="truncate font-bold text-slate-900">{conversation.title}</h2>
-          <p className="truncate text-xs text-slate-500">{conversationSubtitle(conversation)}</p>
+          <h2 className="truncate font-bold text-foreground">{conversation.title}</h2>
+          <p className="truncate text-xs text-muted-foreground">{conversationSubtitle(conversation)}</p>
         </div>
       </header>
 
       <div
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-slate-50/60 px-4 py-4 sm:px-5"
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-muted/50 px-4 py-4 sm:px-5"
         onScroll={(e) => {
           const el = e.currentTarget;
           stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -240,7 +240,7 @@ export function ChatThread({
                   type="button"
                   onClick={loadOlder}
                   disabled={loadingOlder}
-                  className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs text-slate-600 shadow-xs ring-1 ring-slate-200 transition-colors hover:text-slate-900 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-full bg-card px-3 py-1 text-xs text-soft-foreground shadow-xs ring-1 ring-border transition-colors hover:text-foreground disabled:opacity-50"
                 >
                   <ChevronUp className="size-3.5" />
                   {loadingOlder ? "در حال بارگذاری..." : "پیام‌های قبلی"}
@@ -248,8 +248,8 @@ export function ChatThread({
               </div>
             )}
             {messages.length === 0 && (
-              <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-slate-500">
-                <span className="flex size-14 items-center justify-center rounded-2xl bg-white text-slate-300 shadow-card ring-1 ring-slate-200">
+              <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
+                <span className="flex size-14 items-center justify-center rounded-2xl bg-card text-subtle-foreground shadow-card ring-1 ring-border">
                   <MessageCircle className="size-7" />
                 </span>
                 {conversation.can_post ? "هنوز پیامی نیست. اولین پیام را بنویسید." : "هنوز پیامی نیست."}
@@ -269,24 +269,24 @@ export function ChatThread({
         </div>
       )}
       {closed ? (
-        <p className="flex items-center gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-500">
-          <Lock className="size-4 text-slate-400" />
+        <p className="flex items-center gap-2 border-t border-border bg-muted/50 px-5 py-3 text-sm text-muted-foreground">
+          <Lock className="size-4 text-subtle-foreground" />
           {closed}
         </p>
       ) : (
-        <form onSubmit={send} className="border-t border-slate-200 px-3 py-3 sm:px-5">
+        <form onSubmit={send} className="border-t border-border px-3 py-3 sm:px-5">
           {files.length > 0 && (
             <ul aria-label="فایل‌های پیوست" className="mb-2 flex flex-wrap gap-1.5">
               {files.map((file, index) => (
                 <li
                   key={`${file.name}-${index}`}
-                  className="flex max-w-full items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs text-brand-900 ring-1 ring-inset ring-brand-600/15 animate-fade-in"
+                  className="flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-brand-900 ring-1 ring-inset ring-primary/15 animate-fade-in"
                 >
-                  <Paperclip className="size-3.5 text-brand-600" />
+                  <Paperclip className="size-3.5 text-primary" />
                   <span className="truncate" title={file.name}>
                     {file.name}
                   </span>
-                  <bdi dir="ltr" className="shrink-0 text-slate-500">
+                  <bdi dir="ltr" className="shrink-0 text-muted-foreground">
                     {formatSize(file.size)}
                   </bdi>
                   {!sending && (
@@ -294,7 +294,7 @@ export function ChatThread({
                       type="button"
                       onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
                       aria-label={`حذف ${file.name}`}
-                      className="flex size-5 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-rose-100 hover:text-rose-600"
+                      className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-rose-100 hover:dark:bg-rose-400/15 hover:text-rose-600"
                     >
                       <X className="size-3.5" />
                     </button>
@@ -304,12 +304,12 @@ export function ChatThread({
             </ul>
           )}
           {progress !== null && (
-            <div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
-                <div className="h-full rounded-full bg-brand-600 transition-[width] duration-300" style={{ width: `${Math.round(progress * 100)}%` }} />
+            <div className="mb-2 flex items-center gap-2 text-xs text-soft-foreground">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${Math.round(progress * 100)}%` }} />
               </div>
               <span>{Math.round(progress * 100)}٪</span>
-              <button type="button" onClick={() => uploadRef.current?.abort()} className="underline hover:text-slate-900">
+              <button type="button" onClick={() => uploadRef.current?.abort()} className="underline hover:text-foreground">
                 لغو
               </button>
             </div>
@@ -331,7 +331,7 @@ export function ChatThread({
               disabled={sending}
               aria-label="پیوست فایل"
               title="پیوست فایل (حداکثر ۵ فایل، هر کدام ۲۰ مگابایت)"
-              className="flex size-11 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+              className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
             >
               <Paperclip className="size-5" />
             </button>
@@ -372,7 +372,7 @@ function MessageRow({
   if (message.kind === "SYSTEM") {
     return (
       <p className="py-1 text-center">
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">
+        <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
           {message.body} · {formatJalaliDateTime(message.created_at)}
         </span>
       </p>
@@ -384,12 +384,12 @@ function MessageRow({
       <div
         className={`group max-w-[80%] px-3.5 py-2 text-sm shadow-xs animate-fade-in sm:max-w-[75%] ${
           message.is_mine
-            ? "rounded-2xl rounded-tr-md bg-brand-700 text-white"
-            : "rounded-2xl rounded-tl-md border border-slate-200 bg-white text-slate-900"
+            ? "rounded-2xl rounded-tr-md bg-gradient-to-bl from-sky-500 to-primary text-primary-foreground shadow-[0_6px_16px_-8px_var(--primary)]"
+            : "rounded-2xl rounded-tl-md border border-border bg-card text-foreground"
         }`}
       >
         {showSender && !message.is_mine && (
-          <p className="mb-0.5 text-xs font-bold text-brand-700">
+          <p className="mb-0.5 text-xs font-bold text-primary">
             {message.sender_name}
             {message.sender_title && <span className="font-normal"> ({message.sender_title})</span>}
           </p>
@@ -413,7 +413,7 @@ function MessageRow({
             ))}
           </ul>
         )}
-        <div className={`mt-1 flex items-center gap-2 text-[11px] ${message.is_mine ? "text-white/70" : "text-slate-500"}`}>
+        <div className={`mt-1 flex items-center gap-2 text-[11px] ${message.is_mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
           <span>{formatJalaliDateTime(message.created_at)}</span>
           {message.can_delete && (
             <button

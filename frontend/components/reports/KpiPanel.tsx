@@ -29,10 +29,11 @@ import { Activity, ClipboardCheck, Clock, FolderKanban, Gauge, ListChecks, Rotat
 /** One number with the words that say exactly what it measures — a KPI nobody can interpret is noise. */
 function Stat({ label, value, note }: { label: string; value: string; note: string }) {
   return (
-    <div className="rounded-xl bg-slate-50 px-4 py-3 ring-1 ring-inset ring-slate-200/70">
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className="mt-1 text-2xl font-bold text-slate-900 tabular-nums">{value}</dd>
-      <p className="mt-1 text-[11px] leading-5 text-slate-500">{note}</p>
+    <div className="relative overflow-hidden rounded-xl bg-gradient-to-b from-muted/70 to-muted/30 px-4 py-3 ring-1 ring-inset ring-border">
+      <span aria-hidden className="pointer-events-none absolute -top-8 -left-8 size-20 rounded-full bg-primary/10 blur-xl" />
+      <dt className="relative text-xs text-muted-foreground">{label}</dt>
+      <dd className="relative mt-1 text-2xl font-black tracking-tight text-foreground tabular-nums">{value}</dd>
+      <p className="relative mt-1 text-[11px] leading-5 text-muted-foreground">{note}</p>
     </div>
   );
 }
@@ -106,12 +107,12 @@ export function KpiPanel() {
                   ["منتظر تصویب", data.documents.waiting_now.approval],
                 ] as const
               ).map(([label, waiting]) => (
-                <p key={label} className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm ring-1 ring-inset ring-slate-200">
-                  <RotateCcw className="size-4 text-slate-400" />
-                  <span className="text-slate-600">{label} اکنون:</span>
+                <p key={label} className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm ring-1 ring-inset ring-border">
+                  <RotateCcw className="size-4 text-subtle-foreground" />
+                  <span className="text-soft-foreground">{label} اکنون:</span>
                   <b className="tabular-nums">{toPersianDigits(waiting.count)}</b>
                   {waiting.oldest_days !== null && (
-                    <span className="text-xs text-slate-500">· قدیمی‌ترین {formatDuration(waiting.oldest_days)}</span>
+                    <span className="text-xs text-muted-foreground">· قدیمی‌ترین {formatDuration(waiting.oldest_days)}</span>
                   )}
                 </p>
               ))}
@@ -128,7 +129,7 @@ export function KpiPanel() {
                 note={`و ${toPersianDigits(data.documents.control.review_due_soon)} مستند دیگر تا یک ماه آینده موعد بازنگری دارند`}
               />
             </dl>
-            <p className="mt-3 text-[11px] leading-5 text-slate-500">
+            <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
               مرجوع‌شدن، شمارش زمان را از نو شروع می‌کند: مدتی که مستند پس از مرجوع در حالت پیش‌نویس بوده، جزو هیچ مرحله‌ای حساب نمی‌شود.
             </p>
           </>
@@ -162,22 +163,22 @@ export function KpiPanel() {
             </dl>
             <ProgressBar value={data.projects.progress} className="mt-4 h-2.5" label="پیشرفت کلی پروژه‌ها" />
 
-            <h3 className="mt-6 mb-3 flex items-center gap-2 text-sm font-bold text-slate-800">
-              <Users className="size-4 text-brand-600" />
+            <h3 className="mt-6 mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
+              <Users className="size-4 text-primary" />
               بار کاری — ریزهدف‌های باز هر نفر
             </h3>
             {data.projects.workload.length === 0 ? (
-              <p className="text-xs text-slate-500">ریزهدف بازی به کسی واگذار نشده است.</p>
+              <p className="text-xs text-muted-foreground">ریزهدف بازی به کسی واگذار نشده است.</p>
             ) : (
               <ul className="space-y-2">
                 {data.projects.workload.map((row) => (
                   <li key={row.user} className="flex items-center gap-3 text-sm">
                     <Avatar name={row.name} size="sm" />
-                    <span className="w-36 shrink-0 truncate text-slate-800">{row.name}</span>
+                    <span className="w-36 shrink-0 truncate text-foreground">{row.name}</span>
                     <ProgressBar value={workloadWidth(row.open, busiest)} className="h-2 flex-1" />
-                    <span className="w-24 shrink-0 text-end text-xs text-slate-600 tabular-nums">
+                    <span className="w-24 shrink-0 text-end text-xs text-soft-foreground tabular-nums">
                       {toPersianDigits(row.open)} باز
-                      {row.overdue > 0 && <span className="text-rose-700"> · {toPersianDigits(row.overdue)} دیرکرد</span>}
+                      {row.overdue > 0 && <span className="text-rose-700 dark:text-rose-300"> · {toPersianDigits(row.overdue)} دیرکرد</span>}
                     </span>
                   </li>
                 ))}
@@ -233,26 +234,26 @@ function QualityFigures({ quality, days }: { quality: KpiResponse["quality"]; da
 
       <div className="mt-5 grid gap-6 lg:grid-cols-2">
         <section>
-          <h3 className="mb-3 text-sm font-bold text-slate-800">سن عدم‌انطباق‌های باز</h3>
+          <h3 className="mb-3 text-sm font-bold text-foreground">سن عدم‌انطباق‌های باز</h3>
           {nc.open === 0 ? (
-            <p className="text-xs text-slate-500">عدم‌انطباق بازی نیست.</p>
+            <p className="text-xs text-muted-foreground">عدم‌انطباق بازی نیست.</p>
           ) : (
             <ul className="space-y-2">
               {AGING_BUCKETS.map(([key, label]) => (
                 <li key={key} className="flex items-center gap-3 text-sm">
-                  <span className="w-28 shrink-0 text-slate-700">{label}</span>
+                  <span className="w-28 shrink-0 text-soft-foreground">{label}</span>
                   <ProgressBar value={agingWidth(nc.aging, key)} className="h-2 flex-1" />
-                  <span className="w-10 shrink-0 text-end tabular-nums text-slate-700">{toPersianDigits(nc.aging[key])}</span>
+                  <span className="w-10 shrink-0 text-end tabular-nums text-soft-foreground">{toPersianDigits(nc.aging[key])}</span>
                 </li>
               ))}
             </ul>
           )}
-          <p className="mt-2 text-[11px] leading-5 text-slate-500">از زمان ثبت هر مورد تا امروز.</p>
+          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">از زمان ثبت هر مورد تا امروز.</p>
         </section>
 
         <section>
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800">
-            <Gauge className="size-4 text-brand-600" />
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
+            <Gauge className="size-4 text-primary" />
             ریسک‌های باز ({toPersianDigits(risks.live)})
           </h3>
           <ul className="flex flex-wrap gap-2">
@@ -262,35 +263,35 @@ function QualityFigures({ quality, days }: { quality: KpiResponse["quality"]; da
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-xs text-slate-600">
+          <p className="mt-3 text-xs text-soft-foreground">
             {toPersianDigits(risks.review_overdue)} ریسک از تاریخ بازنگری گذشته · {toPersianDigits(risks.without_owner)} ریسک بدون مسئول پیگیری
           </p>
         </section>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <p className="flex flex-wrap items-center gap-2 rounded-xl px-4 py-2.5 text-sm ring-1 ring-inset ring-slate-200">
-          <ListChecks className="size-4 text-slate-400" />
-          <span className="text-slate-600">اقدام‌های باز:</span>
+        <p className="flex flex-wrap items-center gap-2 rounded-xl px-4 py-2.5 text-sm ring-1 ring-inset ring-border">
+          <ListChecks className="size-4 text-subtle-foreground" />
+          <span className="text-soft-foreground">اقدام‌های باز:</span>
           <b className="tabular-nums">{toPersianDigits(actions.open)}</b>
-          {actions.overdue > 0 && <span className="text-xs font-bold text-rose-700">· {toPersianDigits(actions.overdue)} دیرکرد</span>}
+          {actions.overdue > 0 && <span className="text-xs font-bold text-rose-700 dark:text-rose-300">· {toPersianDigits(actions.overdue)} دیرکرد</span>}
         </p>
-        <p className="flex flex-wrap items-center gap-2 rounded-xl px-4 py-2.5 text-sm ring-1 ring-inset ring-slate-200">
-          <ClipboardCheck className="size-4 text-slate-400" />
-          <span className="text-slate-600">ممیزی:</span>
+        <p className="flex flex-wrap items-center gap-2 rounded-xl px-4 py-2.5 text-sm ring-1 ring-inset ring-border">
+          <ClipboardCheck className="size-4 text-subtle-foreground" />
+          <span className="text-soft-foreground">ممیزی:</span>
           <span>
             {toPersianDigits(audits.completed_in_window)} انجام‌شده در {span} · {toPersianDigits(audits.in_progress)} در حال انجام ·{" "}
             {toPersianDigits(audits.planned)} برنامه‌ریزی‌شده
-            {audits.late > 0 && <span className="font-bold text-rose-700"> ({toPersianDigits(audits.late)} از موعد گذشته)</span>} ·{" "}
+            {audits.late > 0 && <span className="font-bold text-rose-700 dark:text-rose-300"> ({toPersianDigits(audits.late)} از موعد گذشته)</span>} ·{" "}
             {toPersianDigits(audits.findings_in_window)} یافته
           </span>
         </p>
       </div>
-      <p className="mt-3 text-[11px] leading-5 text-slate-500">
+      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
         «اقدام به‌موقع» یعنی کار پیش از مهلتش انجام و سپس تایید شده است. جزئیات در{" "}
-        <Link href="/quality" className="underline hover:text-slate-800">عدم‌انطباق‌ها</Link>،{" "}
-        <Link href="/quality/audits" className="underline hover:text-slate-800">ممیزی‌ها</Link> و{" "}
-        <Link href="/quality/risks" className="underline hover:text-slate-800">ریسک‌ها</Link>.
+        <Link href="/quality" className="underline hover:text-foreground">عدم‌انطباق‌ها</Link>،{" "}
+        <Link href="/quality/audits" className="underline hover:text-foreground">ممیزی‌ها</Link> و{" "}
+        <Link href="/quality/risks" className="underline hover:text-foreground">ریسک‌ها</Link>.
       </p>
     </>
   );

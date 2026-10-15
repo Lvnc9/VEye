@@ -98,11 +98,11 @@ export function ConversationsTab({
   const open = selectedId !== null;
 
   return (
-    <div className="flex h-[calc(100dvh-15.5rem)] min-h-[26rem] overflow-hidden md:h-[calc(100vh-13rem)] md:min-h-[28rem] rounded-2xl border border-slate-200/80 bg-white shadow-card">
+    <div className="flex h-[calc(100dvh-15.5rem)] min-h-[26rem] overflow-hidden md:h-[calc(100vh-13rem)] md:min-h-[28rem] rounded-2xl border border-border bg-card shadow-card">
       {/* Side by side from `md` up; on a phone one at a time — the list, or (with ?c=) the thread. */}
       <aside
         aria-label="فهرست گفتگوها"
-        className={`${open ? "hidden md:flex" : "flex"} w-full flex-shrink-0 flex-col border-slate-200 md:w-80 md:border-l`}
+        className={`${open ? "hidden md:flex" : "flex"} w-full flex-shrink-0 flex-col border-border md:w-80 md:border-l`}
       >
         {list?.error && (
           <div className="p-3">
@@ -141,7 +141,7 @@ export function ConversationsTab({
           <button
             type="button"
             onClick={onBack}
-            className="flex items-center gap-1.5 border-b border-slate-200 px-4 py-2.5 text-right text-sm text-slate-600 transition-colors hover:bg-slate-50 md:hidden"
+            className="flex items-center gap-1.5 border-b border-border px-4 py-2.5 text-right text-sm text-soft-foreground transition-colors hover:bg-accent/60 md:hidden"
           >
             <ArrowRight className="size-4" />
             همهٔ گفتگوها
@@ -155,9 +155,9 @@ export function ConversationsTab({
               <ErrorBanner message={selectedError} />
             </div>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 bg-slate-50/60 p-5 text-sm text-slate-500">
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-muted/50 p-5 text-sm text-muted-foreground">
               {selectedId === null && (
-                <span className="flex size-14 items-center justify-center rounded-2xl bg-white text-slate-300 shadow-card ring-1 ring-slate-200">
+                <span className="flex size-14 items-center justify-center rounded-2xl bg-card text-subtle-foreground shadow-card ring-1 ring-border">
                   <MessagesSquare className="size-7" />
                 </span>
               )}
@@ -185,30 +185,30 @@ function ConversationRow({
       type="button"
       onClick={onSelect}
       aria-current={active ? "true" : undefined}
-      className={`relative flex w-full items-start gap-3 border-b border-slate-100 px-4 py-3 text-right transition-colors ${
-        active ? "bg-brand-50/70" : "hover:bg-slate-50"
+      className={`relative flex w-full items-start gap-3 border-b border-border px-4 py-3 text-right transition-colors ${
+        active ? "bg-brand-50/70" : "hover:bg-accent/60"
       }`}
     >
-      {active && <span aria-hidden className="absolute inset-y-2 right-0 w-1 rounded-l-full bg-brand-600 animate-fade-in" />}
+      {active && <span aria-hidden className="absolute inset-y-2 right-0 w-1 rounded-l-full bg-primary animate-fade-in" />}
       {conversation.kind === "DIRECT" ? (
         <Avatar name={conversation.title} size="md" />
       ) : (
-        <span aria-hidden className="flex size-9 flex-shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-800">
+        <span aria-hidden className="flex size-9 flex-shrink-0 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-400/15 text-teal-800 dark:text-teal-300">
           <Hash className="size-4" />
         </span>
       )}
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
-          <span className={`truncate text-sm ${badge ? "font-bold text-slate-900" : "text-slate-800"}`}>
+          <span className={`truncate text-sm ${badge ? "font-bold text-foreground" : "text-foreground"}`}>
             {conversation.title}
           </span>
           {badge && (
             <CountBadge label={`${conversation.unread_count} پیام خوانده‌نشده`}>{badge}</CountBadge>
           )}
         </span>
-        <span className="mt-0.5 block truncate text-xs text-slate-500">{lastMessageLine(conversation)}</span>
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{lastMessageLine(conversation)}</span>
         {conversation.last_message_at && (
-          <span className="mt-0.5 block text-[10px] text-slate-500">{formatJalaliDateTime(conversation.last_message_at)}</span>
+          <span className="mt-0.5 block text-[10px] text-muted-foreground">{formatJalaliDateTime(conversation.last_message_at)}</span>
         )}
       </span>
     </button>
