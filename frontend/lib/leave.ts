@@ -35,8 +35,10 @@ export interface LeaveRequest {
   leave_type_label: string;
   starts_on: string;
   ends_on: string;
-  /** Calendar days, both ends included — derived by the server. */
+  /** Working days (Phase 22): Fridays and official holidays are not counted — derived by the server. */
   days: number;
+  /** Every day from the first to the last, both included. */
+  calendar_days: number;
   reason: string;
   status: LeaveStatus;
   status_label: string;
@@ -49,6 +51,76 @@ export interface LeaveRequest {
   can_decide: boolean;
   /** Yours, and pending — or approved and not begun. */
   can_cancel: boolean;
+  /** Phase 22: a pending استحقاقی request that would take more days than the requester has left. */
+  balance_warning: BalanceWarning | null;
+}
+
+export interface BalanceWarning {
+  year: number;
+  requested: number;
+  remaining: number;
+}
+
+export interface Holiday {
+  id: number;
+  /** ISO date. */
+  date: string;
+  title: string;
+}
+
+/** `GET /leave/requests/preview/` — what a span would count, before it is asked for. */
+export interface LeavePreview {
+  days: number;
+  calendar_days: number;
+  holidays: Holiday[];
+  /** Annual leave only: what the span would leave, year by year. */
+  balance: (BalanceWarning & { exceeds: boolean })[];
+}
+
+/** One person's annual-leave balance for a Jalali year (`/leave/balance/`, `/leave/balances/`). */
+export interface LeaveBalance {
+  year: number;
+  entitlement: number;
+  carried: number;
+  used: number;
+  pending: number;
+  remaining: number;
+}
+
+export interface LeavePolicy {
+  annual_days: number;
+  carry_max: number;
+  start_year: number;
+}
+
+export interface BalanceResponse {
+  user: { id: number; full_name: string };
+  year: number;
+  tracked: boolean;
+  balance: LeaveBalance | null;
+  policy: LeavePolicy;
+}
+
+export interface BalancesRow {
+  user: { id: number; full_name: string; title: string };
+  has_override: boolean;
+  balance: LeaveBalance | null;
+}
+
+/** "۳ روز کاری (از ۵ روز)" — the calendar count only when it differs. */
+export function workingDaysText(days: number, calendarDays: number): string {
+  const base = `${toPersianDigits(days)} روز کاری`;
+  return calendarDays !== days ? `${base} (از ${toPersianDigits(calendarDays)} روز)` : base;
+}
+
+/** The decider's warning: "۳ روز درخواست، ۲ روز مانده در ۱۴۰۵". */
+export function balanceWarningText(warning: BalanceWarning): string {
+  return `${toPersianDigits(warning.requested)} روز درخواست، ${toPersianDigits(Math.max(warning.remaining, 0))} روز مانده در ${toPersianDigits(warning.year)}`;
+}
+
+/** A balance figure that may be negative (overdrawn): "−۲". */
+export function signedDays(value: number): string {
+  return value < 0 ? `−${toPersianDigits(-value)}` : toPersianDigits(value);
 }
 
 /** Days off between two ISO dates, both included; null while incomplete or out of order. */

@@ -8,7 +8,10 @@ import {
   leavePayload,
   leaveQueryParams,
   leaveTabs,
+  balanceWarningText,
+  signedDays,
   validateLeaveForm,
+  workingDaysText,
 } from "./leave";
 
 describe("the leave vocabulary", () => {
@@ -74,5 +77,23 @@ describe("the request form", () => {
       ends_on: "2026-10-09",
       reason: "سفر",
     });
+  });
+});
+
+
+describe("working days and balances (Phase 22)", () => {
+  it("says working days, and the calendar days only when they differ", () => {
+    expect(workingDaysText(3, 5)).toBe("۳ روز کاری (از ۵ روز)");
+    expect(workingDaysText(2, 2)).toBe("۲ روز کاری");
+  });
+
+  it("phrases the decider's warning, never showing a negative remainder there", () => {
+    expect(balanceWarningText({ year: 1405, requested: 3, remaining: 2 })).toBe("۳ روز درخواست، ۲ روز مانده در ۱۴۰۵");
+    expect(balanceWarningText({ year: 1405, requested: 3, remaining: -1 })).toBe("۳ روز درخواست، ۰ روز مانده در ۱۴۰۵");
+  });
+
+  it("signs an overdrawn balance", () => {
+    expect(signedDays(-2)).toBe("−۲");
+    expect(signedDays(4)).toBe("۴");
   });
 });

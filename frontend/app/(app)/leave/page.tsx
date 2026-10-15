@@ -22,8 +22,10 @@ import { formatJalali } from "@/lib/jalali";
 import {
   LEAVE_STATUS_LABELS,
   LEAVE_STATUS_TONE,
+  balanceWarningText,
   daysText,
   leaveQueryParams,
+  workingDaysText,
   leaveTabs,
   type LeaveRequest,
   type LeaveStatus,
@@ -191,7 +193,7 @@ function LeaveRow({ leave, showRequester, onAct }: { leave: LeaveRequest; showRe
           </span>
         )}
         <span className="font-bold text-foreground">
-          {leave.leave_type_label} · {daysText(leave.days)}
+          {leave.leave_type_label} · {workingDaysText(leave.days, leave.calendar_days)}
         </span>
         <span className="text-sm text-soft-foreground">
           {formatJalali(leave.starts_on)}
@@ -201,6 +203,11 @@ function LeaveRow({ leave, showRequester, onAct }: { leave: LeaveRequest; showRe
           {leave.status_label}
         </Badge>
       </div>
+      {leave.balance_warning && leave.can_decide && (
+        <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:bg-amber-400/10 dark:text-amber-200">
+          بیش از ماندهٔ مرخصی: {balanceWarningText(leave.balance_warning)}
+        </p>
+      )}
       {(showRequester && leave.node_name) || leave.reason ? (
         <p className="text-sm leading-7 text-soft-foreground">
           {showRequester && leave.node_name && <span className="text-muted-foreground">{leave.node_name}</span>}
