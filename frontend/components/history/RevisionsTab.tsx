@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Code } from "@/components/Code";
 import { Pager } from "@/components/Pager";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
-import { ExternalLink, FileText, RotateCcw, SearchX, X } from "lucide-react";
+import { ExternalLink, FileText, GitCompareArrows, RotateCcw, SearchX, X } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { Button, buttonClass } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -188,19 +189,27 @@ export function RevisionsTab({
                     <Signer signoff={row.signoffs.approver} />
                   </td>
                   <td className="px-3 py-3">
-                    {row.pdf_status === "ready" ? (
-                      <a
-                        href={pdfDownloadUrl(row.id)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={buttonClass({ size: "xs" })}
-                      >
-                        <ExternalLink />
-                        باز کردن
-                      </a>
-                    ) : (
-                      <span className="text-subtle-foreground">—</span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {row.pdf_status === "ready" ? (
+                        <a
+                          href={pdfDownloadUrl(row.id)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={buttonClass({ size: "xs" })}
+                        >
+                          <ExternalLink />
+                          باز کردن
+                        </a>
+                      ) : (
+                        <span className="text-subtle-foreground">—</span>
+                      )}
+                      {row.revision > 1 && (
+                        <Link href={`/documents/${row.id}/compare`} className={buttonClass({ size: "xs", variant: "ghost" })}>
+                          <GitCompareArrows />
+                          مقایسه با قبلی
+                        </Link>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -232,12 +241,20 @@ export function RevisionsTab({
                     .filter(Boolean)
                     .join(" · ") || "—"}
                 </span>
-                {row.pdf_status === "ready" && (
-                  <a href={pdfDownloadUrl(row.id)} target="_blank" rel="noreferrer" className={buttonClass({ size: "xs" })}>
-                    <ExternalLink />
-                    باز کردن PDF
-                  </a>
-                )}
+                <span className="flex flex-wrap gap-1.5">
+                  {row.revision > 1 && (
+                    <Link href={`/documents/${row.id}/compare`} className={buttonClass({ size: "xs", variant: "ghost" })}>
+                      <GitCompareArrows />
+                      مقایسه با قبلی
+                    </Link>
+                  )}
+                  {row.pdf_status === "ready" && (
+                    <a href={pdfDownloadUrl(row.id)} target="_blank" rel="noreferrer" className={buttonClass({ size: "xs" })}>
+                      <ExternalLink />
+                      باز کردن PDF
+                    </a>
+                  )}
+                </span>
               </div>
             </li>
           ))}

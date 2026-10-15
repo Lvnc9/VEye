@@ -1104,3 +1104,15 @@ class ReviewIntervalEndpointTests(WorkflowBase):
         self.assertEqual(self.set(outsider, 6).status_code, 403)
         self.run_chain()
         self.assertEqual(self.set(self.author, 6).status_code, 409)
+
+
+class PreviousRevisionFieldTests(WorkflowBase):
+    """Phase 21 revision compare: a revision names the one it replaced."""
+
+    def test_rows_carry_the_previous_revision(self):
+        first = self.run_chain()
+        response = self.as_user(self.author).post(reverse("document-revise", args=[first.pk]))
+        self.assertEqual(response.data["previous_revision_id"], first.pk)
+        rows = {r["id"]: r for r in self.as_user(self.author).get(reverse("document-list")).data["results"]}
+        self.assertIsNone(rows[first.pk]["previous_revision_id"])
+        self.assertEqual(rows[response.data["id"]]["previous_revision_id"], first.pk)

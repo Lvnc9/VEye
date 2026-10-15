@@ -13,7 +13,7 @@ import { OwnerNodeSelect, useOwnerNodeChoices } from "@/components/OwnerNodeSele
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { apiPost, ApiError } from "@/lib/api-client";
 import type { DesignerDocument } from "./useDesignerDocument";
-import { ArrowRight, CalendarClock, ClipboardCheck, Eye, Redo2, RotateCcw, Save, Undo2 } from "lucide-react";
+import { ArrowRight, CalendarClock, ClipboardCheck, Eye, GitCompareArrows, Redo2, RotateCcw, Save, Undo2 } from "lucide-react";
 import { ReviewDialog } from "@/components/ReviewDialog";
 import { ReadingPanel } from "@/components/distribution/ReadingPanel";
 import {
@@ -25,7 +25,7 @@ import {
 } from "@/lib/review";
 import { selectClass } from "@/components/ui/Field";
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClass } from "@/components/ui/Button";
 import { cardClass } from "@/components/ui/Card";
 import { cx } from "@/components/ui/cx";
 
@@ -188,6 +188,12 @@ export function DesignerShell<S>({
             <Button size="xs" variant="secondary" icon={<ClipboardCheck />} onClick={() => setReviewing(true)}>
               بازنگری شد — بدون تغییر
             </Button>
+          )}
+          {document.previous_revision_id !== null && (
+            <Link href={`/documents/${document.id}/compare`} className={buttonClass({ size: "xs", variant: "ghost" })}>
+              <GitCompareArrows />
+              مقایسه با بازنگری قبلی
+            </Link>
           )}
         </div>
         {reviewing && (

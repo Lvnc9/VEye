@@ -36,6 +36,8 @@ class DocumentSerializer(serializers.ModelSerializer):
     workflow = serializers.SerializerMethodField()
     review_state = serializers.SerializerMethodField()
     can_mark_reviewed = serializers.SerializerMethodField()
+    # Phase 21: «مقایسه با بازنگری قبلی» needs the revision this one replaced (no query: a column).
+    previous_revision_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Document
@@ -62,6 +64,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "pdf_status",
             "pdf_built_at",
             "workflow",
+            "previous_revision_id",
             "review_interval_months",
             "review_due_on",
             "review_state",

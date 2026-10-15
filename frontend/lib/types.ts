@@ -265,6 +265,8 @@ export interface DocumentRow {
   review_state: ReviewState | null;
   /** «بازنگری شد — بدون تغییر»: in force, and this person may write it. */
   can_mark_reviewed: boolean;
+  /** Phase 21: the revision this one replaced (null for revision 01) — «مقایسه با بازنگری قبلی». */
+  previous_revision_id: number | null;
   content_saved_at: string | null;
   created_at: string;
 }
