@@ -14,6 +14,7 @@ class NotificationKind(models.TextChoices):
     DOCUMENT_APPROVED = "document_approved", "مستند تصویب و ابلاغ شد"
     DOCUMENT_RETURNED = "document_returned", "مستند مرجوع شد"
     DOCUMENT_WITHDRAWN = "document_withdrawn", "مستند بازپس گرفته شد"
+    BACKUP_FAILED = "backup_failed", "پشتیبان‌گیری ناموفق بود"
     DOCUMENT_STALLED = "document_stalled", "مستند مدتی است منتظر مانده"
     MEMBERSHIP_ADDED = "membership_added", "عضویت جدید در ساختار سازمانی"
     MEMBERSHIP_REMOVED = "membership_removed", "پایان عضویت در ساختار سازمانی"

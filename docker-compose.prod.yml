@@ -71,6 +71,16 @@ services:
   celery:
     <<: *backend
     command: celery -A config worker --loglevel=info
+    # Phase 20: the worker runs the nightly backup (apps/ops) — it needs the media volume (above) and a
+    # place on the server's disk for the files: ./backups beside this file. Copy them off the server.
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      RATELIMIT_IP_META_KEY: HTTP_X_FORWARDED_FOR
+      BACKUP_DIR: /backups
+    volumes:
+      - media:/app/media
+      - ./backups:/backups
 
   # One scheduler only — two would send every reminder twice.
   celery-beat:

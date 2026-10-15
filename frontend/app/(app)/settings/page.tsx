@@ -15,6 +15,7 @@ import { cardClass } from "@/components/ui/Card";
 import { FormSection } from "@/components/ui/FormSection";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cx } from "@/components/ui/cx";
+import { BackupsCard } from "@/components/settings/BackupsCard";
 
 /**
  * «تنظیمات». V_1.0 had the button but never wired it (main.py:938). It now holds
@@ -23,6 +24,9 @@ import { cx } from "@/components/ui/cx";
 export default function SettingsPage() {
   const [reload, setReload] = useState(0);
   const company = useApiQuery<Company>("/org/company/", reload);
+  const { user, can } = useCurrentUser();
+  // The server answers 403 to anyone else (apps/ops/access.py); this only avoids showing them an error.
+  const seesBackups = Boolean(user?.is_developer) || can("approve_document");
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -34,6 +38,7 @@ export default function SettingsPage() {
       ) : (
         <DocumentDefaultsCard company={company.data} onSaved={() => setReload((n) => n + 1)} />
       )}
+      {seesBackups && <BackupsCard />}
     </div>
   );
 }

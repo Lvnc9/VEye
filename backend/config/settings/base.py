@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "apps.quality",
     "apps.leave",
     "apps.announcements",
+    "apps.ops",
 ]
 
 MIDDLEWARE = [
@@ -291,7 +292,19 @@ CELERY_BEAT_SCHEDULE = {
         "task": "accounts.purge_login_events",
         "schedule": crontab(hour=3, minute=10),
     },
+    "ops-nightly-backup": {
+        "task": "ops.run_backup",
+        "schedule": crontab(hour=2, minute=30),
+    },
 }
+
+# Nightly backups (Phase 20, owner's decision 2026-10-15): apps/ops. BACKUP_DIR is a bind mount of
+# ./backups on the celery worker (docker-compose*.yml); the newest BACKUP_KEEP successful sets stay.
+BACKUP_DIR = env("BACKUP_DIR", default=str(BASE_DIR / "backups"))
+BACKUP_KEEP = env.int("BACKUP_KEEP", default=14)
+BACKUP_TIMEOUT_SECONDS = env.int("BACKUP_TIMEOUT_SECONDS", default=1800)
+BACKUP_SCHEDULE_LABEL = "هر شب ساعت ۰۲:۳۰"
+PG_DUMP_BIN = env("PG_DUMP_BIN", default="pg_dump")
 
 # ---------------------------------------------------------------------------
 # PDF engine (apps.pdfgen, Phase 4)

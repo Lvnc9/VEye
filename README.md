@@ -314,16 +314,39 @@ first-run wizard as described in [Quick start](#-quick-start).
 ### 4. Back up
 
 Everything lives in two places: the PostgreSQL database and the `media` volume (PDFs, signatures, uploaded files).
+**VEye backs both up by itself every night at 02:30** (the `celery` worker runs `pg_dump` and archives `media/`):
 
-```bash
-# database
-docker compose -f docker-compose.prod.yml exec -T postgres pg_dump -U veye -Fc veye > veye-$(date +%F).dump
-# files
-docker run --rm -v veye_media:/m -v "$PWD":/b alpine tar czf /b/veye-media-$(date +%F).tgz -C /m .
+```
+backups/                                   # beside docker-compose.prod.yml, git-ignored
+  veye-20261015-023000-41.dump             # pg_dump --format=custom
+  veye-20261015-023000-41-media.tar.gz     # the media volume
 ```
 
-Restore with `pg_restore -U veye -d veye --clean` and by extracting the archive back into the volume.
-Keep copies off the server.
+- The newest **14** successful sets are kept (`BACKUP_KEEP`); older ones are deleted automatically.
+- «تنظیمات → پشتیبان‌گیری» (the managing director and the developer account) shows the last good backup, the recent runs and
+  a «پشتیبان‌گیری الان» button. A failed run notifies them, and the card turns red if no backup has succeeded for 36 hours.
+- **The files stay on the server.** If its disk dies, the backups die with it — copy them elsewhere regularly, e.g. from
+  another machine:
+
+```bash
+rsync -av user@server:/path/to/VEye/backups/ ./veye-backups/
+```
+
+**Restore** (stop the app first; this replaces the current data):
+
+```bash
+docker compose -f docker-compose.prod.yml stop backend celery celery-beat
+# database: the celery image has a matching pg_restore (PostgreSQL 16)
+docker compose -f docker-compose.prod.yml run --rm --no-deps celery \
+  sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner /backups/veye-20261015-023000-41.dump'
+# files: unpack the archive back into the media volume
+docker run --rm -v veye_media:/m -v "$PWD/backups":/b alpine \
+  sh -c 'rm -rf /m/* && tar xzf /b/veye-20261015-023000-41-media.tar.gz -C /m --strip-components=1'
+docker compose -f docker-compose.prod.yml start backend celery celery-beat
+```
+
+A restore you have never tried is not a backup: rehearse it once into a scratch database
+(`createdb veye_restore_check`, `pg_restore -d veye_restore_check …`, compare, `dropdb`).
 
 ### 5. Update
 
@@ -340,7 +363,7 @@ Migrations run on start. Back up first.
 - [ ] `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD` are long, random and only in `.env` (never committed)
 - [ ] `DJANGO_DEBUG=False`, `JWT_COOKIE_SECURE=True`, all URLs use `https://`
 - [ ] `FRONTEND_BASE_URL` is the final public address — it is printed into the QR code of every PDF
-- [ ] Nightly database + media backups, copied to another machine, and a restore you have actually tried
+- [ ] The nightly backups in `backups/` are copied to another machine, and a restore you have actually tried
 - [ ] Only ports 80/443 reachable from outside (PostgreSQL and Redis are not published by the production stack)
 
 ---
