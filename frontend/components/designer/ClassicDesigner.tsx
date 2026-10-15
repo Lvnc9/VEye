@@ -79,7 +79,7 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
                 canEdit={canEdit}
                 onChange={(logoUrl) => doc.setContent((current) => ({ ...current, logo_url: logoUrl }))}
               />
-              <label className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4 text-sm text-slate-700">
+              <label className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-sm text-soft-foreground">
                 <input
                   type="checkbox"
                   checked={state.showCompanyName}
@@ -94,8 +94,8 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
             </Card>
 
             {canEdit && (
-              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white/60 p-3">
-                <span className="text-sm text-slate-500">افزودن بخش:</span>
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-dashed border-input bg-card/60 p-3">
+                <span className="text-sm text-muted-foreground">افزودن بخش:</span>
                 {SECTION_TYPES.map((type) => (
                   <button
                     key={type}
@@ -103,7 +103,7 @@ export function ClassicDesigner({ initial }: { initial: ContentResponse }) {
                     disabled={locked || !canAddSection(state.sections, type)}
                     onClick={() => addSection(type)}
                     title={canAddSection(state.sections, type) ? undefined : "در هر مستند فقط یک بخش از این نوع مجاز است."}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand-50 px-3 text-sm text-brand-800 ring-1 ring-inset ring-brand-600/15 transition-[background-color,transform] duration-150 hover:bg-brand-100 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-brand-50"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary/10 px-3 text-sm text-primary ring-1 ring-inset ring-primary/15 transition-[background-color,transform] duration-150 hover:bg-primary/15 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-primary/10"
                   >
                     <Plus className="size-4" />
                     {SECTION_TYPE_LABELS[type]}

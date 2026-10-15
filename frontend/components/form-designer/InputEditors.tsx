@@ -45,8 +45,8 @@ import { Check, Field, NumberInput, Select } from "./Inspector";
 type Patch<T> = (patch: Partial<T>) => void;
 
 const smallButton =
-  "inline-flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 shadow-xs " +
-  "transition-[background-color,transform] duration-150 hover:bg-slate-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 " +
+  "inline-flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border border-border bg-card px-2 text-xs text-soft-foreground shadow-xs " +
+  "transition-[background-color,transform] duration-150 hover:bg-accent/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 " +
   "disabled:active:scale-100 [&_svg]:size-3.5";
 
 function withWidths(cells: FieldCell[], widths: number[]): FieldCell[] {
@@ -80,8 +80,8 @@ export function FieldsEditor({ element, disabled, set }: { element: FieldsProps;
 
       <div className="space-y-3">
         {element.rows.map((row, r) => (
-          <fieldset key={r} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/40 p-2.5">
-            <legend className="flex w-full items-center gap-1 px-1 text-xs font-bold text-slate-600">
+          <fieldset key={r} className="space-y-2 rounded-xl border border-border bg-muted/50 p-2.5">
+            <legend className="flex w-full items-center gap-1 px-1 text-xs font-bold text-soft-foreground">
               <span className="flex-1">ردیف {(r + 1).toLocaleString("fa-IR")}</span>
               <button type="button" className={smallButton} disabled={disabled || r === 0} aria-label="ردیف بالا" onClick={() => set({ rows: moveElement(element.rows, r, r - 1) })}>
                 <ChevronUp />
@@ -97,7 +97,7 @@ export function FieldsEditor({ element, disabled, set }: { element: FieldsProps;
               </button>
               <button
                 type="button"
-                className={`${smallButton} text-rose-600 hover:bg-rose-50`}
+                className={`${smallButton} text-rose-600 hover:bg-rose-50 hover:dark:bg-rose-400/10`}
                 disabled={disabled || element.rows.length === 1}
                 aria-label="حذف ردیف"
                 onClick={() => set({ rows: element.rows.filter((_, i) => i !== r) })}
@@ -106,7 +106,7 @@ export function FieldsEditor({ element, disabled, set }: { element: FieldsProps;
               </button>
             </legend>
             {row.cells.map((cell, c) => (
-              <div key={c} className="space-y-1 border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+              <div key={c} className="space-y-1 border-b border-border pb-2 last:border-0 last:pb-0">
                 <div className="flex gap-1">
                   <input
                     value={cell.label}
@@ -119,7 +119,7 @@ export function FieldsEditor({ element, disabled, set }: { element: FieldsProps;
                   />
                   <button
                     type="button"
-                    className={`${smallButton} text-rose-600 hover:bg-rose-50`}
+                    className={`${smallButton} text-rose-600 hover:bg-rose-50 hover:dark:bg-rose-400/10`}
                     disabled={disabled || row.cells.length === 1}
                     aria-label="حذف خانه"
                     onClick={() => {
@@ -175,7 +175,7 @@ export function FieldsEditor({ element, disabled, set }: { element: FieldsProps;
         >
           + ردیف
         </button>
-        <p className="text-xs text-slate-500">پهنای هر خانه درصدی از ردیف است و جمع هر ردیف ۱۰۰ می‌شود.</p>
+        <p className="text-xs text-muted-foreground">پهنای هر خانه درصدی از ردیف است و جمع هر ردیف ۱۰۰ می‌شود.</p>
       </div>
     </div>
   );
@@ -226,7 +226,7 @@ export function SignaturesEditor({ element, disabled, set }: { element: Signatur
   return (
     <div className="space-y-4">
       {element.boxes.map((box, b) => (
-        <fieldset key={b} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/40 p-2.5">
+        <fieldset key={b} className="space-y-2 rounded-xl border border-border bg-muted/50 p-2.5">
           <div className="flex gap-1">
             <input
               value={box.caption}
@@ -238,7 +238,7 @@ export function SignaturesEditor({ element, disabled, set }: { element: Signatur
             />
             <button
               type="button"
-              className={`${smallButton} text-rose-600 hover:bg-rose-50`}
+              className={`${smallButton} text-rose-600 hover:bg-rose-50 hover:dark:bg-rose-400/10`}
               disabled={disabled || element.boxes.length === 1}
               aria-label="حذف کادر"
               onClick={() => set({ boxes: element.boxes.filter((_, i) => i !== b) })}
@@ -286,10 +286,10 @@ export function TableEditor({ element, disabled, set }: { element: TableProps; d
       </Field>
 
       <div className="space-y-2">
-        <p className="text-sm font-bold text-slate-700">ستون‌ها (از راست به چپ)</p>
+        <p className="text-sm font-bold text-soft-foreground">ستون‌ها (از راست به چپ)</p>
         {element.columns.map((column, c) => (
-          <div key={c} className="space-y-1 rounded-xl border border-slate-200 bg-slate-50/40 p-2.5">
-            <div className="flex items-center gap-1 text-xs text-slate-600">
+          <div key={c} className="space-y-1 rounded-xl border border-border bg-muted/50 p-2.5">
+            <div className="flex items-center gap-1 text-xs text-soft-foreground">
               <span className="flex-1 truncate">
                 ستون {(c + 1).toLocaleString("fa-IR")}
                 {element.header[element.header.length - 1][c] ? ` — ${element.header[element.header.length - 1][c]}` : ""}
@@ -302,7 +302,7 @@ export function TableEditor({ element, disabled, set }: { element: TableProps; d
               </button>
               <button
                 type="button"
-                className={`${smallButton} text-rose-600 hover:bg-rose-50`}
+                className={`${smallButton} text-rose-600 hover:bg-rose-50 hover:dark:bg-rose-400/10`}
                 disabled={disabled || count === 1}
                 aria-label="حذف ستون"
                 onClick={() => table((t) => removeColumn(t, c))}
@@ -345,7 +345,7 @@ export function TableEditor({ element, disabled, set }: { element: TableProps; d
             پهنای برابر
           </button>
         </div>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           پهنا درصدی از جدول است. روی خود جدول هم می‌توانید مرز ستون‌ها را بکشید. متن سرستون‌ها و ردیف‌های متن‌دار را روی جدول بنویسید؛ برای ادغام، خانه‌ای را انتخاب کنید (با Shift چند خانه) و از نوار بالای جدول استفاده کنید.
         </p>
       </div>
@@ -436,7 +436,7 @@ function StringList({
           </button>
           <button
             type="button"
-            className={`${smallButton} text-rose-600 hover:bg-rose-50`}
+            className={`${smallButton} text-rose-600 hover:bg-rose-50 hover:dark:bg-rose-400/10`}
             disabled={disabled || values.length <= min}
             aria-label="حذف"
             onClick={() => onChange(values.filter((_, j) => j !== i))}
@@ -459,7 +459,7 @@ export function ChoicesEditor({ element, disabled, set }: { element: ChoicesProp
         <input value={element.label} maxLength={MAX_LABEL} disabled={disabled} onChange={(event) => set({ label: event.target.value })} className={inputClass} />
       </Field>
       <div>
-        <p className="mb-1 text-sm font-bold text-slate-700">گزینه‌ها</p>
+        <p className="mb-1 text-sm font-bold text-soft-foreground">گزینه‌ها</p>
         <StringList values={element.options} min={1} max={MAX_OPTIONS} disabled={disabled} addLabel="گزینه" onChange={(options) => set({ options })} />
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -504,11 +504,11 @@ export function MatrixEditor({ element, disabled, set }: { element: MatrixProps;
         <input value={element.title} maxLength={MAX_LABEL} disabled={disabled} placeholder="مثال: ارزیابی عملکرد" onChange={(event) => set({ title: event.target.value })} className={inputClass} />
       </Field>
       <div>
-        <p className="mb-1 text-sm font-bold text-slate-700">موارد (ردیف‌ها)</p>
+        <p className="mb-1 text-sm font-bold text-soft-foreground">موارد (ردیف‌ها)</p>
         <StringList values={element.items} min={1} max={MAX_MATRIX_ITEMS} disabled={disabled} addLabel="مورد" onChange={(items) => set({ items })} />
       </div>
       <div>
-        <p className="mb-1 text-sm font-bold text-slate-700">درجه‌ها (ستون‌ها)</p>
+        <p className="mb-1 text-sm font-bold text-soft-foreground">درجه‌ها (ستون‌ها)</p>
         <StringList values={element.scale} min={2} max={MAX_SCALE} disabled={disabled} addLabel="درجه" onChange={(scale) => set({ scale })} />
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -548,8 +548,8 @@ export function QuestionsEditor({ element, disabled, set }: { element: Questions
     <div className="space-y-3">
       <Check label="شماره‌گذاری پرسش‌ها" checked={element.numbered} disabled={disabled} onChange={(numbered) => set({ numbered })} />
       {element.items.map((item, i) => (
-        <fieldset key={i} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/40 p-2.5">
-          <legend className="flex w-full items-center gap-1 px-1 text-xs font-bold text-slate-600">
+        <fieldset key={i} className="space-y-2 rounded-xl border border-border bg-muted/50 p-2.5">
+          <legend className="flex w-full items-center gap-1 px-1 text-xs font-bold text-soft-foreground">
             <span className="flex-1">پرسش {(i + 1).toLocaleString("fa-IR")}</span>
             <button type="button" className={smallButton} disabled={disabled || i === 0} aria-label="بالا" onClick={() => set({ items: moveElement(element.items, i, i - 1) })}>
               <ChevronUp />
@@ -565,7 +565,7 @@ export function QuestionsEditor({ element, disabled, set }: { element: Questions
             </button>
             <button
               type="button"
-              className={`${smallButton} text-rose-600 hover:bg-rose-50`}
+              className={`${smallButton} text-rose-600 hover:bg-rose-50 hover:dark:bg-rose-400/10`}
               disabled={disabled || element.items.length === 1}
               aria-label="حذف پرسش"
               onClick={() => set({ items: element.items.filter((_, j) => j !== i) })}
@@ -606,7 +606,7 @@ export function QuestionsEditor({ element, disabled, set }: { element: Questions
       >
         + پرسش
       </button>
-      <p className="text-xs text-slate-500">عدد کنار نوع پاسخ: تعداد خط، یا ارتفاع کادر به میلی‌متر.</p>
+      <p className="text-xs text-muted-foreground">عدد کنار نوع پاسخ: تعداد خط، یا ارتفاع کادر به میلی‌متر.</p>
     </div>
   );
 }

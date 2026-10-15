@@ -111,10 +111,10 @@ function readState(editor: Editor): ToolbarState {
 }
 
 const buttonBase =
-  "inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors " +
-  "hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent " +
+  "inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-soft-foreground transition-colors " +
+  "hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent " +
   "pointer-coarse:size-11 [&_svg]:size-[18px]";
-const buttonActive = "bg-brand-50 text-brand-800 hover:bg-brand-100 hover:text-brand-900";
+const buttonActive = "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary-hover";
 
 function ToolButton({
   label,
@@ -147,7 +147,7 @@ function ToolButton({
 }
 
 function Divider() {
-  return <span aria-hidden className="mx-1 hidden h-6 w-px bg-slate-200 sm:inline-block" />;
+  return <span aria-hidden className="mx-1 hidden h-6 w-px bg-muted sm:inline-block" />;
 }
 
 function MenuItem({ children, disabled, onClick }: { children: ReactNode; disabled?: boolean; onClick: () => void }) {
@@ -157,7 +157,7 @@ function MenuItem({ children, disabled, onClick }: { children: ReactNode; disabl
       disabled={disabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
-      className="flex w-full items-center rounded-lg px-3 py-2 text-start text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+      className="flex w-full items-center rounded-lg px-3 py-2 text-start text-sm text-soft-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
     >
       {children}
     </button>
@@ -193,7 +193,7 @@ export function RichToolbar({ editor }: { editor: Editor }) {
     <div
       role="toolbar"
       aria-label="ابزار قالب‌بندی متن"
-      className="z-20 flex flex-wrap items-center gap-0.5 rounded-t-xl border-b border-slate-200 bg-white/95 px-2 py-1.5 backdrop-blur md:sticky md:top-0"
+      className="z-20 flex flex-wrap items-center gap-0.5 rounded-t-xl border-b border-border bg-card/95 px-2 py-1.5 backdrop-blur md:sticky md:top-0"
     >
       <ToolButton label="واگرد (Ctrl+Z)" disabled={!state.canUndo} onClick={() => editor.chain().focus().undo().run()}>
         <Undo2 />
@@ -387,7 +387,7 @@ export function RichToolbar({ editor }: { editor: Editor }) {
                 {state.hasHeaderRow ? "برداشتن سطر عنوان" : "سطر اول عنوان باشد"}
               </MenuItem>
               <MenuItem disabled={!state.inTable} onClick={run(() => chain().deleteTable().run())}>
-                <span className="text-rose-700">حذف جدول</span>
+                <span className="text-rose-700 dark:text-rose-300">حذف جدول</span>
               </MenuItem>
             </div>
           );
@@ -497,7 +497,7 @@ function TableDialog({
             />
           </Field>
         </div>
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-soft-foreground">
           <input type="checkbox" checked={withHeaderRow} onChange={(event) => setWithHeaderRow(event.target.checked)} />
           سطر اول عنوان باشد
         </label>

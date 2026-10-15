@@ -141,7 +141,7 @@ export function LongBlock({
         />
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">
+      <div className="rounded-xl border border-border bg-muted/50 p-4">
         <FieldLabel>فایل‌های پیوست</FieldLabel>
 
         {!disabled && (
@@ -168,10 +168,10 @@ export function LongBlock({
           </div>
         )}
 
-        {error && <p className="mb-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+        {error && <p className="mb-2 rounded-lg bg-rose-50 dark:bg-rose-400/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">{error}</p>}
 
         {uploads.map((pending) => (
-          <div key={pending.id} className="mb-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+          <div key={pending.id} className="mb-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="truncate">{pending.name}</span>
               <button
@@ -182,9 +182,9 @@ export function LongBlock({
                 لغو
               </button>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-brand-600 transition-[width] duration-300"
+                className="h-full rounded-full bg-primary transition-[width] duration-300"
                 style={{ width: `${Math.round(pending.progress * 100)}%` }}
               />
             </div>
@@ -192,7 +192,7 @@ export function LongBlock({
         ))}
 
         {section.files.length === 0 && uploads.length === 0 ? (
-          <p className="text-sm text-slate-500">فایلی پیوست نشده است.</p>
+          <p className="text-sm text-muted-foreground">فایلی پیوست نشده است.</p>
         ) : (
           <ul className="space-y-2">
             {section.files.map((file) => (

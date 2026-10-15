@@ -89,15 +89,15 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start">
       <section aria-labelledby="defaults-title" className={cx(cardClass, "overflow-hidden")}>
-        <header className="flex items-start gap-3 border-b border-slate-100 px-5 py-5 sm:px-6">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-600/10">
+        <header className="flex items-start gap-3 border-b border-border px-5 py-5 sm:px-6">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10">
             <Settings2 className="size-5" />
           </span>
           <div>
-            <h2 id="defaults-title" className="text-lg font-bold text-slate-900">
+            <h2 id="defaults-title" className="text-lg font-bold text-foreground">
               پیش‌فرض‌های مستندات
             </h2>
-            <p className="mt-1 text-sm leading-7 text-slate-500">
+            <p className="mt-1 text-sm leading-7 text-muted-foreground">
               هر مستندِ تازه با این لوگو و پاورقی‌ها شروع می‌شود و در هر فرمِ تازه، سربرگ هم از اینجا پر می‌شود. پس از ایجاد، در خود
               مستند قابل تغییرند؛ تغییر این پیش‌فرض‌ها مستندهای موجود را تغییر نمی‌دهد.
             </p>
@@ -126,7 +126,7 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
           <label
             className={cx(
               "flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-2.5 text-sm transition-colors duration-150",
-              draft.form_show_letter_box ? "border-brand-300 bg-brand-50/60" : "border-slate-200 hover:border-slate-300",
+              draft.form_show_letter_box ? "border-primary/30 bg-brand-50/60" : "border-border hover:border-input",
               (!canEdit || saving) && "cursor-not-allowed opacity-60",
             )}
           >
@@ -139,9 +139,9 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
             />
             <span
               aria-hidden
-              className="relative h-5 w-9 shrink-0 rounded-full bg-slate-300 transition-colors duration-200 peer-checked:bg-brand-600 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500 after:absolute after:top-0.5 after:right-0.5 after:size-4 after:rounded-full after:bg-white after:shadow after:transition-transform after:duration-200 peer-checked:after:-translate-x-4"
+              className="relative h-5 w-9 shrink-0 rounded-full bg-input transition-colors duration-200 peer-checked:bg-primary peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500 after:absolute after:top-0.5 after:right-0.5 after:size-4 after:rounded-full after:bg-card after:shadow after:transition-transform after:duration-200 peer-checked:after:-translate-x-4"
             />
-            <span className="text-slate-700">شماره / تاریخ / پیوست در بالای صفحهٔ اول</span>
+            <span className="text-soft-foreground">شماره / تاریخ / پیوست در بالای صفحهٔ اول</span>
           </label>
         </FormSection>
 
@@ -168,12 +168,12 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
         </FormSection>
 
         {canEdit && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/50 px-5 py-4 sm:px-6">
             <span aria-live="polite" className="text-sm">
               {message ? (
-                <span className={cx("animate-fade-in", message.ok ? "text-emerald-700" : "text-rose-700")}>{message.text}</span>
+                <span className={cx("animate-fade-in", message.ok ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300")}>{message.text}</span>
               ) : dirty ? (
-                <span className="inline-flex items-center gap-1.5 text-amber-700">
+                <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
                   <span aria-hidden className="size-2 rounded-full bg-amber-500" />
                   تغییرات ذخیره‌نشده
                 </span>
@@ -217,29 +217,29 @@ function PagePreview({
 }) {
   return (
     <aside aria-label="نمای کلی صفحه" className="space-y-3 lg:sticky lg:top-4">
-      <p className="flex items-center gap-1.5 px-1 text-xs text-slate-500">
+      <p className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
         <FileText className="size-3.5" />
         نمای کلی صفحهٔ یک فرم
       </p>
-      <div className="rounded-2xl bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.35)_1px,transparent_0)] bg-[length:16px_16px] bg-slate-100 p-4 ring-1 ring-slate-200/70">
-        <div className="mx-auto flex aspect-[210/297] w-full max-w-64 flex-col rounded-sm bg-white p-3 text-[7px] leading-tight text-slate-700 shadow-[0_1px_3px_rgb(15_23_42/0.12),0_12px_32px_-12px_rgb(15_23_42/0.35)]">
+      <div className="rounded-2xl bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.35)_1px,transparent_0)] bg-[length:16px_16px] bg-muted p-4 ring-1 ring-border">
+        <div className="paper light mx-auto flex aspect-[210/297] w-full max-w-64 flex-col rounded-sm bg-white p-3 text-[7px] leading-tight text-soft-foreground shadow-[0_1px_3px_rgb(15_23_42/0.12),0_12px_32px_-12px_rgb(15_23_42/0.35)]">
           <div className="flex items-stretch border border-slate-700">
             <div className="flex w-8 items-center justify-center border-e border-slate-700 p-0.5">
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- an authenticated API image, not a static asset
                 <img src={logoUrl} alt="" className="max-h-6 max-w-full object-contain" />
               ) : (
-                <span className="size-5 rounded-sm bg-slate-100" />
+                <span className="size-5 rounded-sm bg-muted" />
               )}
             </div>
             <div className="flex flex-1 flex-col items-center justify-center py-1 text-center">
-              <span className="text-slate-400">{companyName}</span>
-              <span className="text-[8px] font-bold text-slate-900">عنوان فرم</span>
-              {subtitle && <span className="text-slate-500 animate-fade-in">{subtitle}</span>}
+              <span className="text-subtle-foreground">{companyName}</span>
+              <span className="text-[8px] font-bold text-foreground">عنوان فرم</span>
+              {subtitle && <span className="text-muted-foreground animate-fade-in">{subtitle}</span>}
             </div>
             <div className="flex w-10 flex-col border-s border-slate-700">
               {[0, 1, 2].map((i) => (
-                <span key={i} className={cx("flex-1", i > 0 && "border-t border-slate-300")} />
+                <span key={i} className={cx("flex-1", i > 0 && "border-t border-input")} />
               ))}
             </div>
           </div>
@@ -255,19 +255,19 @@ function PagePreview({
           )}
           <div className="mt-2 flex-1 space-y-1.5">
             {[11, 9, 10, 7, 9, 8].map((w, i) => (
-              <span key={i} className="block h-1 rounded-full bg-slate-100" style={{ width: `${w * 9}%` }} />
+              <span key={i} className="block h-1 rounded-full bg-muted" style={{ width: `${w * 9}%` }} />
             ))}
           </div>
           <div className="mt-2 flex items-end justify-between border-t border-slate-700 pt-1">
-            <div className="min-w-0 space-y-0.5 text-slate-500">
+            <div className="min-w-0 space-y-0.5 text-muted-foreground">
               <span className="block truncate">{footnote1 || "متن آزاد"}</span>
               <span className="block truncate">{footnote2 || "متن دلخواه"}</span>
             </div>
-            <span className="size-5 shrink-0 border border-dashed border-slate-300" />
+            <span className="size-5 shrink-0 border border-dashed border-input" />
           </div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-3 px-1 text-xs text-slate-500">
+      <div className="flex flex-wrap gap-3 px-1 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1">
           <PanelTop className="size-3.5" /> سربرگ
         </span>

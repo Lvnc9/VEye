@@ -78,7 +78,7 @@ export function RichTextArea({
               onClick={() => apply(button.style)}
               title={button.title}
               aria-label={button.title}
-              className={`size-8 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 shadow-xs transition-[background-color,transform] duration-150 hover:bg-slate-50 active:scale-95 ${button.className}`}
+              className={`size-8 rounded-lg border border-border bg-card text-sm text-soft-foreground shadow-xs transition-[background-color,transform] duration-150 hover:bg-accent/60 active:scale-95 ${button.className}`}
             >
               {button.label}
             </button>
@@ -86,7 +86,7 @@ export function RichTextArea({
           <button
             type="button"
             onClick={() => setPreview((open) => !open)}
-            className="ms-2 rounded-lg px-2.5 py-1 text-xs text-brand-700 transition-colors hover:bg-brand-50"
+            className="ms-2 rounded-lg px-2.5 py-1 text-xs text-primary transition-colors hover:bg-primary/10"
           >
             {preview ? "پنهان کردن پیش‌نمایش" : "پیش‌نمایش"}
           </button>
@@ -108,12 +108,12 @@ export function RichTextArea({
         className={`${controlClass} w-full resize-y py-2 leading-7`}
       />
 
-      {notice && <p className="text-xs text-amber-700">{notice}</p>}
+      {notice && <p className="text-xs text-amber-700 dark:text-amber-300">{notice}</p>}
 
       {preview && (
         <div
           dir="auto"
-          className="whitespace-pre-wrap rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm leading-7 animate-fade-in"
+          className="whitespace-pre-wrap rounded-xl border border-dashed border-input bg-muted/50 px-3 py-2 text-sm leading-7 animate-fade-in"
         >
           {value.split("\n").map((line, lineIndex) => (
             <div key={lineIndex} className="min-h-7">

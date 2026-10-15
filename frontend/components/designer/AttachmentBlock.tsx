@@ -28,7 +28,7 @@ export function AttachmentBlock({
   return (
     <div className="space-y-3">
       {section.items.map((item, position) => (
-        <div key={position} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/40 p-3">
+        <div key={position} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-muted/50 p-3">
           <input
             type="text"
             value={item.caption}
@@ -47,7 +47,7 @@ export function AttachmentBlock({
           {item.document ? (
             <span className="flex items-center gap-2 text-sm">
               <Code>{item.document.full_code}</Code>
-              <span className="max-w-48 truncate text-slate-600" title={item.document.title}>
+              <span className="max-w-48 truncate text-soft-foreground" title={item.document.title}>
                 {item.document.title}
               </span>
               <StatusBadge status={item.document.status} label={item.document.status_label} />
@@ -77,7 +77,7 @@ export function AttachmentBlock({
         </div>
       ))}
 
-      {section.items.length === 0 && <p className="text-sm text-slate-500">ضمیمه‌ای ثبت نشده است.</p>}
+      {section.items.length === 0 && <p className="text-sm text-muted-foreground">ضمیمه‌ای ثبت نشده است.</p>}
 
       {!disabled && (
         <AddButton onClick={() => update((s) => ({ ...s, items: [...s.items, { caption: "", document: null }] }))}>

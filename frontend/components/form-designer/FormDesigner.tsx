@@ -85,13 +85,13 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
     <DesignerShell doc={doc} wide>
       {canEdit && (
         <div className={`${cardClass} flex flex-wrap items-center gap-x-5 gap-y-2.5 px-4 py-3`}>
-          <span className="flex items-center gap-1.5 text-sm font-bold text-slate-700">
-            <Plus className="size-4 text-brand-600" />
+          <span className="flex items-center gap-1.5 text-sm font-bold text-soft-foreground">
+            <Plus className="size-4 text-primary" />
             افزودن:
           </span>
           {groups.map(({ group, kinds }) => (
             <div key={group} className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-slate-500">{ELEMENT_GROUP_LABELS[group]}</span>
+              <span className="text-xs text-muted-foreground">{ELEMENT_GROUP_LABELS[group]}</span>
               {kinds.map(({ kind, label }) => (
                 <button
                   key={kind}
@@ -99,7 +99,7 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
                   disabled={locked || full}
                   title={full ? `یک فرم حداکثر ${MAX_ELEMENTS.toLocaleString("fa-IR")} جزء دارد.` : undefined}
                   onClick={() => add(kind)}
-                  className="inline-flex h-8 items-center rounded-lg bg-brand-50 px-2.5 text-sm text-brand-800 ring-1 ring-inset ring-brand-600/15 transition-[background-color,transform] duration-150 hover:bg-brand-100 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-brand-50"
+                  className="inline-flex h-8 items-center rounded-lg bg-primary/10 px-2.5 text-sm text-primary ring-1 ring-inset ring-primary/15 transition-[background-color,transform] duration-150 hover:bg-primary/15 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-primary/10"
                 >
                   {label}
                 </button>
@@ -162,8 +162,8 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
                   disabled={locked}
                   onChange={(settings) => edit((current) => ({ ...current, settings }))}
                 />
-                <section className="space-y-2 border-t border-slate-100 pt-4">
-                  <h3 className="text-sm font-bold text-slate-800">لوگو</h3>
+                <section className="space-y-2 border-t border-border pt-4">
+                  <h3 className="text-sm font-bold text-foreground">لوگو</h3>
                   <LogoSection
                     endpoint={`/documents/${document.id}/logo/`}
                     logoUrl={content.logo_url}
@@ -171,8 +171,8 @@ export function FormDesigner({ initial }: { initial: ContentResponse }) {
                     onChange={(logoUrl) => doc.setContent((current) => ({ ...current, logo_url: logoUrl }))}
                   />
                 </section>
-                <section className="space-y-2 border-t border-slate-100 pt-4">
-                  <h3 className="text-sm font-bold text-slate-800">پاورقی</h3>
+                <section className="space-y-2 border-t border-border pt-4">
+                  <h3 className="text-sm font-bold text-foreground">پاورقی</h3>
                   <FootnoteFields
                     footnote1={state.footnote1}
                     footnote2={state.footnote2}

@@ -47,7 +47,7 @@ export function BlockFrame({
   return (
     <section
       {...(drag ? drag.rowProps(position) : {})}
-      className={`relative rounded-2xl border border-slate-200/80 bg-white shadow-card transition-[opacity,box-shadow,border-color] duration-200 focus-within:border-brand-300 focus-within:shadow-raised ${drag?.isDragging(position) ? "scale-[0.99] opacity-40" : ""}`}
+      className={`relative rounded-2xl border border-border bg-card shadow-card transition-[opacity,box-shadow,border-color] duration-200 focus-within:border-primary/30 focus-within:shadow-raised ${drag?.isDragging(position) ? "scale-[0.99] opacity-40" : ""}`}
     >
       {marker && (
         <span
@@ -55,22 +55,22 @@ export function BlockFrame({
           className={`absolute inset-x-4 h-1 rounded-full bg-brand-500 shadow-[0_0_10px_rgb(14_165_233/0.6)] animate-fade-in ${marker === "before" ? "-top-2.5" : "-bottom-2.5"}`}
         />
       )}
-      <header className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-4">
-        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
+      <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
           {drag && !disabled && (
             <span
               {...drag.gripProps(position, dragKey ?? String(index))}
-              className="flex size-8 cursor-grab select-none items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 active:cursor-grabbing"
+              className="flex size-8 cursor-grab select-none items-center justify-center rounded-lg text-subtle-foreground transition-colors hover:bg-accent hover:text-soft-foreground active:cursor-grabbing"
             >
               <GripVertical className="size-4" />
             </span>
           )}
-          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-bold text-brand-700 ring-1 ring-inset ring-brand-600/15 tabular-nums">
+          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-bold text-primary ring-1 ring-inset ring-primary/15 tabular-nums">
             {index}
           </span>
           {(() => {
             const Icon = TYPE_ICON[type];
-            return <Icon aria-hidden className="size-4 text-slate-400" />;
+            return <Icon aria-hidden className="size-4 text-subtle-foreground" />;
           })()}
           {SECTION_TYPE_LABELS[type]}
         </h3>

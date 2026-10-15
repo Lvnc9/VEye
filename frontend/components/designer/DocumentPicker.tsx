@@ -64,7 +64,7 @@ export function DocumentPicker({
   return (
     <Dialog label="انتخاب مستند" title="انتخاب مستند ضمیمه" onClose={onClose} size="lg">
       <div className="relative">
-        <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-slate-400" />
+        <Search className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-subtle-foreground" />
         <input
           type="search"
           autoFocus
@@ -77,10 +77,10 @@ export function DocumentPicker({
       </div>
 
       <div className="max-h-80 overflow-y-auto">
-        {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+        {error && <p className="rounded-lg bg-rose-50 dark:bg-rose-400/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">{error}</p>}
         {!error && loading && results.length === 0 && (
           <div role="status" className="space-y-3 py-2">
-            <p className="text-sm text-slate-500">در حال جست و جو...</p>
+            <p className="text-sm text-muted-foreground">در حال جست و جو...</p>
             <SkeletonLines rows={3} />
           </div>
         )}
@@ -105,7 +105,7 @@ export function DocumentPicker({
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <Code>{row.full_code}</Code>
-                  <span className="truncate text-sm text-slate-800">{row.title}</span>
+                  <span className="truncate text-sm text-foreground">{row.title}</span>
                 </span>
                 <StatusBadge status={row.status} label={row.status_label} />
               </button>
@@ -113,7 +113,7 @@ export function DocumentPicker({
           ))}
         </ul>
         {count > LIMIT + 1 && (
-          <p className="pt-3 text-center text-xs text-slate-500">نتایج بیشتری هست — جست و جو را دقیق‌تر کنید.</p>
+          <p className="pt-3 text-center text-xs text-muted-foreground">نتایج بیشتری هست — جست و جو را دقیق‌تر کنید.</p>
         )}
       </div>
     </Dialog>

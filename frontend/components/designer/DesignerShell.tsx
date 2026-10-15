@@ -93,7 +93,7 @@ export function DesignerShell<S>({
       <nav className="text-sm">
         <Link
           href="/documents"
-          className="group inline-flex items-center gap-1.5 text-slate-500 transition-colors hover:text-slate-900"
+          className="group inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
           بازگشت به فهرست مستندات
@@ -105,12 +105,12 @@ export function DesignerShell<S>({
         <div aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-brand-500 via-indigo-400 to-emerald-400 opacity-80" />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold leading-10 text-slate-900">{document.title}</h1>
-            <p className="mt-0.5 text-sm text-slate-500">
+            <h1 className="text-2xl font-bold leading-10 text-foreground">{document.title}</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
               {document.group_label} · {document.category_label}
             </p>
             {(document.owner_node || (canEdit && ownerChoices.length > 0)) && (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-soft-foreground">
                 <span>گرهٔ مالک:</span>
                 {canEdit && ownerChoices.length > 0 ? (
                   <OwnerNodeSelect
@@ -121,18 +121,18 @@ export function DesignerShell<S>({
                     className="w-64 max-w-full"
                   />
                 ) : (
-                  <span className="font-medium text-slate-800">
+                  <span className="font-medium text-foreground">
                     {document.owner_node?.kind_label} · {document.owner_node?.name}
                   </span>
                 )}
                 {dirty && canEdit && ownerChoices.length > 0 && (
-                  <span className="text-xs text-slate-500">ابتدا تغییرات را ذخیره کنید.</span>
+                  <span className="text-xs text-muted-foreground">ابتدا تغییرات را ذخیره کنید.</span>
                 )}
               </div>
             )}
-            {ownerError && <p className="mt-1 text-sm text-rose-700">{ownerError}</p>}
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-              <CalendarClock className="size-4 text-slate-400" />
+            {ownerError && <p className="mt-1 text-sm text-rose-700 dark:text-rose-300">{ownerError}</p>}
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-soft-foreground">
+              <CalendarClock className="size-4 text-subtle-foreground" />
               <span>بازنگری دوره‌ای:</span>
               {canEdit ? (
                 <select
@@ -149,25 +149,25 @@ export function DesignerShell<S>({
                   ))}
                 </select>
               ) : (
-                <span className="font-medium text-slate-800">{reviewIntervalLabel(document.review_interval_months)}</span>
+                <span className="font-medium text-foreground">{reviewIntervalLabel(document.review_interval_months)}</span>
               )}
               {document.review_due_on && (
-                <span className="text-slate-500">· موعد بعدی {formatJalali(document.review_due_on)}</span>
+                <span className="text-muted-foreground">· موعد بعدی {formatJalali(document.review_due_on)}</span>
               )}
               {document.review_state && (
                 <span
                   className={cx(
                     "rounded-full px-2 py-0.5 text-xs ring-1 ring-inset",
                     document.review_state === "overdue"
-                      ? "bg-rose-50 text-rose-800 ring-rose-600/20 dark:bg-rose-950/40 dark:text-rose-200"
-                      : "bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-200",
+                      ? "bg-rose-50 dark:bg-rose-400/10 text-rose-800 dark:text-rose-300 ring-rose-600/20 dark:bg-rose-950/40 dark:text-rose-200"
+                      : "bg-amber-50 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300 ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-200",
                   )}
                 >
                   {REVIEW_STATE_LABELS[document.review_state]}
                 </span>
               )}
             </div>
-            {reviewError && <p className="mt-1 text-sm text-rose-700">{reviewError}</p>}
+            {reviewError && <p className="mt-1 text-sm text-rose-700 dark:text-rose-300">{reviewError}</p>}
           </div>
           <div className="flex items-center gap-2">
             <Code>{document.full_code}</Code>
@@ -217,7 +217,7 @@ export function DesignerShell<S>({
           }
         >
           <p className="whitespace-pre-wrap">{document.return_note.reason}</p>
-          <p className="text-rose-700">پس از اصلاح، مستند را دوباره برای تایید ارسال کنید.</p>
+          <p className="text-rose-700 dark:text-rose-300">پس از اصلاح، مستند را دوباره برای تایید ارسال کنید.</p>
         </Alert>
       )}
 
@@ -283,7 +283,7 @@ export function DesignerShell<S>({
           slide it under the sidebar). The negative margins cancel <main>'s padding
           (p-4 sm:p-6 md:p-8, app/(app)/layout.tsx) at every width, so the bar spans
           the column edge to edge without pushing the page sideways on a phone. */}
-      <div className="sticky bottom-0 z-40 -mx-4 -mb-4 mt-6 border-t border-slate-200/80 bg-white/85 px-4 py-3 shadow-[0_-8px_24px_-12px_rgb(15_23_42/0.15)] backdrop-blur-md sm:-mx-6 sm:-mb-6 sm:px-6 md:-mx-8 md:-mb-8 md:px-8">
+      <div className="sticky bottom-0 z-40 -mx-4 -mb-4 mt-6 border-t border-border bg-card/85 px-4 py-3 shadow-[0_-8px_24px_-12px_rgb(15_23_42/0.15)] backdrop-blur-md sm:-mx-6 sm:-mb-6 sm:px-6 md:-mx-8 md:-mb-8 md:px-8">
         <div className={`mx-auto flex ${width} flex-wrap items-center gap-2 sm:gap-3`}>
           {canEdit && (
             <>
@@ -307,7 +307,7 @@ export function DesignerShell<S>({
                 ذخیره و بازگشت
               </Button>
               <span
-                className="flex items-center rounded-lg border border-slate-300 bg-white shadow-xs"
+                className="flex items-center rounded-lg border border-input bg-card shadow-xs"
                 role="group"
                 aria-label="واگرد و ازنو"
               >
@@ -317,18 +317,18 @@ export function DesignerShell<S>({
                   disabled={!doc.canUndo || saving}
                   title="واگرد (Ctrl+Z)"
                   aria-label="واگرد"
-                  className="flex size-10 items-center justify-center rounded-s-lg text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
+                  className="flex size-10 items-center justify-center rounded-s-lg text-soft-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
                 >
                   <Undo2 className="rtl-flip size-4" />
                 </button>
-                <span aria-hidden className="h-5 w-px bg-slate-200" />
+                <span aria-hidden className="h-5 w-px bg-muted" />
                 <button
                   type="button"
                   onClick={doc.redo}
                   disabled={!doc.canRedo || saving}
                   title="ازنو (Ctrl+Shift+Z)"
                   aria-label="ازنو"
-                  className="flex size-10 items-center justify-center rounded-e-lg text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
+                  className="flex size-10 items-center justify-center rounded-e-lg text-soft-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
                 >
                   <Redo2 className="rtl-flip size-4" />
                 </button>
@@ -353,21 +353,21 @@ export function DesignerShell<S>({
 
           <span className="flex flex-wrap items-center gap-3 text-sm" aria-live="polite">
             {dirty && canEdit && (
-              <span className="inline-flex items-center gap-1.5 text-amber-700 animate-fade-in">
+              <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300 animate-fade-in">
                 <span aria-hidden className="size-2 rounded-full bg-amber-500 shadow-[0_0_0_3px_rgb(245_158_11/0.2)]" />
                 تغییرات ذخیره‌نشده
               </span>
             )}
-            {pendingUploads > 0 && <span className="text-slate-500">در حال بارگذاری فایل...</span>}
+            {pendingUploads > 0 && <span className="text-muted-foreground">در حال بارگذاری فایل...</span>}
             {notice && !dirty && (
-              <span className="inline-flex items-center gap-1.5 text-emerald-700 animate-fade-in">
+              <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 animate-fade-in">
                 <span aria-hidden className="size-2 rounded-full bg-emerald-500" />
                 {notice}
               </span>
             )}
           </span>
           {saveErrors.length > 0 && (
-            <ul className="w-full list-disc space-y-0.5 rounded-lg bg-rose-50 py-2 ps-8 pe-3 text-sm text-rose-800">
+            <ul className="w-full list-disc space-y-0.5 rounded-lg bg-rose-50 dark:bg-rose-400/10 py-2 ps-8 pe-3 text-sm text-rose-800 dark:text-rose-300">
               {saveErrors.map((message, i) => (
                 <li key={i}>{message}</li>
               ))}

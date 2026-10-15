@@ -73,7 +73,8 @@ export function RichEditor({
   }, [editor, incoming]);
 
   return (
-    <div className={cx("rich-editor rounded-xl border border-slate-300 bg-white shadow-xs", disabled && "bg-slate-50")}>
+    // `light`: the editor is a preview of the printed page, white in either theme (its toolbar with it).
+    <div className={cx("rich-editor light rounded-xl border border-slate-300 bg-white shadow-xs", disabled && "bg-slate-50")}>
       {editor && !disabled && <RichToolbar editor={editor} />}
       <EditorContent editor={editor} className="rich-scroll" />
     </div>

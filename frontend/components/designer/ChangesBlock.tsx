@@ -47,14 +47,14 @@ export function ChangesBlock({
   return (
     <div className="space-y-3">
       {previous.length > 0 && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           ردیف‌های ویرایش‌های قبلی به‌صورت خودکار نمایش داده می‌شوند و قابل تغییر نیستند.
         </p>
       )}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-right text-sm">
-          <thead className="text-xs text-slate-500">
+          <thead className="text-xs text-muted-foreground">
             <tr>
               <th className="w-16 px-2 pb-2 font-normal">ردیف</th>
               <th className="w-28 px-2 pb-2 font-normal">شماره ویرایش</th>
@@ -65,7 +65,7 @@ export function ChangesBlock({
           </thead>
           <tbody>
             {previous.map((row, position) => (
-              <tr key={`prev-${row.id}`} className="bg-slate-50 text-slate-600">
+              <tr key={`prev-${row.id}`} className="bg-muted/50 text-soft-foreground">
                 <td className="px-2 py-2">{position + 1}</td>
                 <td className="px-2 py-2">
                   <Code>{row.revision_display}</Code>
@@ -81,7 +81,7 @@ export function ChangesBlock({
                 <td className="px-2 py-1">
                   <Code>{revisionDisplay}</Code>
                 </td>
-                <td className="px-2 py-1 text-slate-600">
+                <td className="px-2 py-1 text-soft-foreground">
                   {row.date ? formatJalali(row.date) : <span title="پس از ذخیره‌سازی ثبت می‌شود">{today}</span>}
                 </td>
                 <td className="px-2 py-1">
@@ -113,7 +113,7 @@ export function ChangesBlock({
             ))}
             {previous.length === 0 && section.rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-2 py-4 text-center text-slate-500">
+                <td colSpan={5} className="px-2 py-4 text-center text-muted-foreground">
                   هنوز تغییری ثبت نشده است.
                 </td>
               </tr>

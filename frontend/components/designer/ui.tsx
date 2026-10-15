@@ -56,7 +56,7 @@ export function AddButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 text-sm text-slate-600 transition-[background-color,border-color,color,transform] duration-150 hover:border-brand-400 hover:bg-brand-50/60 hover:text-brand-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-300 disabled:hover:bg-transparent disabled:hover:text-slate-600"
+      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-input px-3 text-sm text-soft-foreground transition-[background-color,border-color,color,transform] duration-150 hover:border-primary hover:bg-brand-50/60 hover:text-primary-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-input disabled:hover:bg-transparent disabled:hover:text-soft-foreground"
     >
       <Plus className="size-4" />
       {children}
@@ -65,5 +65,5 @@ export function AddButton({
 }
 
 export function FieldLabel({ children }: { children: ReactNode }) {
-  return <span className="mb-1.5 block text-sm text-slate-700">{children}</span>;
+  return <span className="mb-1.5 block text-sm text-soft-foreground">{children}</span>;
 }

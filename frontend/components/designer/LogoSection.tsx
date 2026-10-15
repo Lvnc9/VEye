@@ -58,13 +58,13 @@ export function LogoSection({
 
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl p-2 border border-dashed border-slate-300 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.3)_1px,transparent_0)] bg-[length:10px_10px] bg-slate-50">
+      <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl p-2 border border-dashed border-input bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.3)_1px,transparent_0)] bg-[length:10px_10px] bg-muted/50">
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- an authenticated API image, not a static asset
           <img src={logoUrl} alt={alt} className="max-h-full max-w-full object-contain" />
         ) : (
-          <span className="flex flex-col items-center gap-1 text-xs text-slate-500">
-            <ImagePlus className="size-6 text-slate-300" />
+          <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
+            <ImagePlus className="size-6 text-subtle-foreground" />
             بدون لوگو
           </span>
         )}
@@ -100,7 +100,7 @@ export function LogoSection({
               </button>
             )}
           </div>
-          <p className="text-xs text-slate-500">تصویر PNG یا JPEG؛ لوگو بلافاصله ذخیره می‌شود.</p>
+          <p className="text-xs text-muted-foreground">تصویر PNG یا JPEG؛ لوگو بلافاصله ذخیره می‌شود.</p>
           {error && <p className="text-xs text-rose-600">{error}</p>}
         </div>
       )}

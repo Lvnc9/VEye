@@ -54,19 +54,19 @@ function Picker<T extends { id: number; name: string }>({
       disabled={disabled}
       triggerClassName={cx(
         pickerButton,
-        chosen ? "border-brand-300 bg-brand-50 text-brand-900" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50",
+        chosen ? "border-primary/30 bg-primary/10 text-brand-900" : "border-input bg-card text-soft-foreground hover:bg-accent/60",
       )}
       panelClassName="max-h-64 w-64 overflow-y-auto"
       trigger={
         <>
           <span className="truncate">{chosen || label}</span>
-          <ChevronDown className="size-4 shrink-0 text-slate-400" />
+          <ChevronDown className="size-4 shrink-0 text-subtle-foreground" />
         </>
       }
     >
       {(close) => (
         <div className="space-y-0.5">
-          {options.length === 0 && !extra && <p className="px-3 py-2 text-sm text-slate-500">{empty}</p>}
+          {options.length === 0 && !extra && <p className="px-3 py-2 text-sm text-muted-foreground">{empty}</p>}
           {options.map((option) => (
             <button
               key={option.id}
@@ -76,7 +76,7 @@ function Picker<T extends { id: number; name: string }>({
                 onPick(option);
                 close();
               }}
-              className="flex w-full items-center rounded-lg px-3 py-2 text-start text-sm text-slate-700 hover:bg-slate-100"
+              className="flex w-full items-center rounded-lg px-3 py-2 text-start text-sm text-soft-foreground hover:bg-accent"
             >
               {option.name}
             </button>
@@ -89,7 +89,7 @@ function Picker<T extends { id: number; name: string }>({
                 extra.onPick();
                 close();
               }}
-              className="flex w-full items-center rounded-lg border-t border-slate-100 px-3 py-2 text-start text-sm text-slate-500 hover:bg-slate-100"
+              className="flex w-full items-center rounded-lg border-t border-border px-3 py-2 text-start text-sm text-muted-foreground hover:bg-accent"
             >
               {extra.label}
             </button>
@@ -143,7 +143,7 @@ export function ResponsibilitiesBlock({ section, disabled, update }: BlockProps<
 
   return (
     <div className="space-y-3">
-      {tree.error && <p className="text-sm text-rose-700">{tree.error}</p>}
+      {tree.error && <p className="text-sm text-rose-700 dark:text-rose-300">{tree.error}</p>}
       {section.rows.map((row, position) => (
         <Row
           key={position}
@@ -209,8 +209,8 @@ function Row({
   const canStandAlone = hasDomains && standaloneUnits(nodes).length > 0;
 
   return (
-    <div className="flex flex-wrap items-start gap-2 rounded-xl border border-slate-200 bg-white p-3">
-      <span className="mt-2 w-6 shrink-0 text-center text-xs text-slate-400">{index + 1}</span>
+    <div className="flex flex-wrap items-start gap-2 rounded-xl border border-border bg-card p-3">
+      <span className="mt-2 w-6 shrink-0 text-center text-xs text-subtle-foreground">{index + 1}</span>
       <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
         {hasDomains && (
           <Picker
@@ -255,7 +255,7 @@ function Row({
           <button
             type="button"
             onClick={() => onChange(clearChoice)}
-            className="mt-2 inline-flex items-center gap-1 text-xs text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+            className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           >
             تغییر {hasDomains ? "حوزه و واحد" : "واحد"}
           </button>

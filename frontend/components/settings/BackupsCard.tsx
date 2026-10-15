@@ -15,9 +15,9 @@ import { useToast } from "@/components/ui/Toast";
 import { cx } from "@/components/ui/cx";
 
 const STATUS_TONE = {
-  running: "bg-brand-50 text-brand-800 ring-brand-600/20",
-  succeeded: "bg-emerald-50 text-emerald-800 ring-emerald-600/20",
-  failed: "bg-rose-50 text-rose-800 ring-rose-600/20",
+  running: "bg-primary/10 text-primary ring-primary/20",
+  succeeded: "bg-emerald-50 dark:bg-emerald-400/10 text-emerald-800 dark:text-emerald-300 ring-emerald-600/20",
+  failed: "bg-rose-50 dark:bg-rose-400/10 text-rose-800 dark:text-rose-300 ring-rose-600/20",
 } as const;
 
 /**
@@ -77,9 +77,9 @@ export function BackupsCard() {
         }
       />
       {backups.loading ? (
-        <p className="text-sm text-slate-500">در حال بارگذاری...</p>
+        <p className="text-sm text-muted-foreground">در حال بارگذاری...</p>
       ) : backups.error ? (
-        <p className="text-sm text-rose-700">{backups.error}</p>
+        <p className="text-sm text-rose-700 dark:text-rose-300">{backups.error}</p>
       ) : (
         <div className="space-y-4">
           {health.state === "none" ? (
@@ -100,26 +100,26 @@ export function BackupsCard() {
           {runs.length === 0 ? (
             <EmptyState compact icon={<DatabaseBackup />} message="فهرست پشتیبان‌ها خالی است." />
           ) : (
-            <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+            <ul className="divide-y divide-border rounded-xl border border-border">
               {runs.map((run) => (
                 <li key={run.id} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
                   <span className="min-w-0">
-                    <span className="block text-slate-900">
+                    <span className="block text-foreground">
                       {formatJalaliDateTime(run.started_at)}
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-muted-foreground">
                         {" · "}
                         {run.trigger_label}
                         {run.requested_by && ` (${run.requested_by})`}
                       </span>
                     </span>
                     {run.status === "succeeded" && (
-                      <span className="block text-xs text-slate-500">
+                      <span className="block text-xs text-muted-foreground">
                         <bdi dir="ltr">{formatSize(run.size_bytes)}</bdi>
                         {run.pruned && " · فایل‌ها طبق سیاست نگهداری پاک شده‌اند"}
                       </span>
                     )}
                     {run.status === "failed" && run.error && (
-                      <span className="block break-words text-xs text-rose-700">{run.error}</span>
+                      <span className="block break-words text-xs text-rose-700 dark:text-rose-300">{run.error}</span>
                     )}
                   </span>
                   <span
@@ -131,7 +131,7 @@ export function BackupsCard() {
               ))}
             </ul>
           )}
-          <p className="text-xs leading-6 text-slate-500">
+          <p className="text-xs leading-6 text-muted-foreground">
             فایل‌ها در پوشهٔ <span className="latn">backups</span> کنار فایل docker-compose روی سرور ذخیره می‌شوند. اگر دیسک
             سرور از دست برود پشتیبان‌ها هم می‌روند؛ هر از گاهی یک نسخه را بیرون از سرور نگه دارید (راهنمای README).
           </p>

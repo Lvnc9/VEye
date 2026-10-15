@@ -101,7 +101,7 @@ export function Check({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex items-center gap-2 text-sm text-slate-700">
+    <label className="flex items-center gap-2 text-sm text-soft-foreground">
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
       {label}
     </label>
@@ -129,7 +129,7 @@ export function ElementInspector({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm font-bold text-slate-800">{elementLabel(element.kind)}</p>
+      <p className="text-sm font-bold text-foreground">{elementLabel(element.kind)}</p>
 
       {element.kind === "heading" && (
         <>
@@ -244,7 +244,7 @@ export function ElementInspector({
       )}
 
       {element.kind === "page_break" && (
-        <p className="text-sm text-slate-600">جزء بعدی از بالای یک صفحهٔ تازه چاپ می‌شود.</p>
+        <p className="text-sm text-soft-foreground">جزء بعدی از بالای یک صفحهٔ تازه چاپ می‌شود.</p>
       )}
 
       {element.kind === "fields" && <FieldsEditor element={element} disabled={disabled} set={set} />}
