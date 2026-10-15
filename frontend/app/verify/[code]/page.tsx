@@ -43,8 +43,9 @@ export default function VerifyPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-canvas">
       {/* A navy band behind the card, as on the sign-in page. */}
-      <div aria-hidden className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-navy to-navy-raised">
-        <div className="absolute -top-24 left-1/2 size-96 -translate-x-1/2 rounded-full bg-glow/15 blur-3xl" />
+      <div aria-hidden className="absolute inset-x-0 top-0 h-72 overflow-hidden bg-gradient-to-b from-navy to-navy-raised">
+        <div className="veye-aurora absolute -top-24 left-1/2 size-96 -translate-x-1/2 rounded-full bg-glow/20 blur-3xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.14)_1px,transparent_0)] bg-[length:22px_22px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen max-w-xl flex-col gap-5 px-4 py-8 sm:py-12">
@@ -56,12 +57,12 @@ export default function VerifyPage() {
           </div>
         </header>
 
-        <div className="rounded-3xl border border-slate-200/80 bg-white shadow-overlay animate-scale-in">
+        <div className="rounded-3xl border border-border bg-card shadow-overlay animate-scale-in">
           {outcome === null && (
             <div role="status" className="space-y-4 p-6">
               <div className="flex flex-col items-center gap-3">
                 <Skeleton className="size-16 rounded-full" />
-                <p className="text-sm text-slate-500">در حال بررسی...</p>
+                <p className="text-sm text-muted-foreground">در حال بررسی...</p>
               </div>
               <Skeleton className="h-3 w-3/4" />
               <Skeleton className="h-3 w-1/2" />
@@ -70,12 +71,12 @@ export default function VerifyPage() {
 
           {outcome?.kind === "not_found" && (
             <div role="alert" className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-              <span className="flex size-16 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-8 ring-slate-100/60">
+              <span className="flex size-16 items-center justify-center rounded-full bg-muted text-muted-foreground ring-8 ring-muted/60">
                 <FileQuestion className="size-8" />
               </span>
-              <p className="text-xl font-bold text-slate-900">مستندی یافت نشد</p>
-              <p className="text-sm leading-7 text-slate-600">{outcome.message}</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xl font-bold text-foreground">مستندی یافت نشد</p>
+              <p className="text-sm leading-7 text-soft-foreground">{outcome.message}</p>
+              <p className="text-xs text-muted-foreground">
                 کد واردشده: <Code>{code}</Code>
               </p>
             </div>
@@ -83,10 +84,10 @@ export default function VerifyPage() {
 
           {outcome?.kind === "error" && (
             <div role="alert" className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-              <span className="flex size-16 items-center justify-center rounded-full bg-rose-50 text-rose-500 ring-8 ring-rose-50/60">
+              <span className="flex size-16 items-center justify-center rounded-full bg-rose-50 text-rose-500 ring-8 ring-rose-50/60 dark:bg-rose-500/10 dark:ring-rose-500/5">
                 <WifiOff className="size-8" />
               </span>
-              <p className="text-sm leading-7 text-rose-700">{outcome.message}</p>
+              <p className="text-sm leading-7 text-rose-700 dark:text-rose-400">{outcome.message}</p>
             </div>
           )}
 
@@ -101,43 +102,43 @@ export default function VerifyPage() {
                     <span className={`flex size-16 items-center justify-center rounded-full animate-pop ${style.badge}`}>
                       <Seal className="size-8" />
                     </span>
-                    <p className={`text-2xl font-bold ${style.text}`}>{outcome.data.state_label}</p>
-                    <p className="max-w-sm text-sm leading-7 text-slate-600">{outcome.data.message}</p>
+                    <p className={`text-2xl font-black ${style.text}`}>{outcome.data.state_label}</p>
+                    <p className="max-w-sm text-sm leading-7 text-soft-foreground">{outcome.data.message}</p>
                   </div>
 
-                  <dl className="grid grid-cols-2 gap-px border-y border-slate-100 bg-slate-100 text-sm">
+                  <dl className="grid grid-cols-2 gap-px border-y border-border bg-border text-sm">
                     {outcome.data.title && (
-                      <div className="col-span-2 bg-white px-5 py-3">
-                        <dt className="text-xs text-slate-500">عنوان</dt>
-                        <dd className="mt-0.5 font-bold text-slate-900">{outcome.data.title}</dd>
+                      <div className="col-span-2 bg-card px-5 py-3">
+                        <dt className="text-xs text-muted-foreground">عنوان</dt>
+                        <dd className="mt-0.5 font-bold text-foreground">{outcome.data.title}</dd>
                       </div>
                     )}
-                    <div className="bg-white px-5 py-3">
-                      <dt className="text-xs text-slate-500">کد مستند</dt>
+                    <div className="bg-card px-5 py-3">
+                      <dt className="text-xs text-muted-foreground">کد مستند</dt>
                       <dd className="mt-1">
                         <Code>{outcome.data.full_code}</Code>
                       </dd>
                     </div>
-                    <div className="bg-white px-5 py-3">
-                      <dt className="text-xs text-slate-500">شماره بازنگری</dt>
+                    <div className="bg-card px-5 py-3">
+                      <dt className="text-xs text-muted-foreground">شماره بازنگری</dt>
                       <dd className="mt-1">
                         <Code>{outcome.data.revision_display}</Code>
                       </dd>
                     </div>
                     {outcome.data.group_label && (
-                      <div className="col-span-2 bg-white px-5 py-3">
-                        <dt className="text-xs text-slate-500">گروه</dt>
-                        <dd className="mt-0.5 text-slate-900">{outcome.data.group_label}</dd>
+                      <div className="col-span-2 bg-card px-5 py-3">
+                        <dt className="text-xs text-muted-foreground">گروه</dt>
+                        <dd className="mt-0.5 text-foreground">{outcome.data.group_label}</dd>
                       </div>
                     )}
                   </dl>
 
                   {outcome.data.current_revision && (
-                    <p className="mx-5 mt-5 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-900">
+                    <p className="mx-5 mt-5 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-400/[0.07] dark:text-emerald-100">
                       آخرین بازنگری معتبر این مستند:{" "}
                       <Link
                         href={`/verify/${outcome.data.current_revision.full_code}`}
-                        className="font-bold text-brand-700 underline-offset-4 hover:underline"
+                        className="font-bold text-primary underline-offset-4 hover:underline"
                       >
                         <Code>{outcome.data.current_revision.full_code}</Code>
                       </Link>
@@ -146,9 +147,23 @@ export default function VerifyPage() {
 
                   {outcome.data.signers && outcome.data.signers.length > 0 && (
                     <div className="p-5">
-                      <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <h2 className="mb-3 text-xs font-bold text-muted-foreground">امضاکنندگان</h2>
+                      {/* A list of cards on a phone, a table from `sm` up. */}
+                      <ul className="space-y-2 sm:hidden">
+                        {outcome.data.signers.map((signer) => (
+                          <li key={signer.role_label} className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">{signer.role_label}</span>
+                              <span className="whitespace-nowrap text-xs text-muted-foreground">{formatJalali(signer.signed_date)}</span>
+                            </div>
+                            <p className="mt-1 font-bold text-foreground">{signer.name}</p>
+                            <p className="text-xs text-soft-foreground">{signer.position}</p>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="hidden overflow-x-auto rounded-xl border border-border sm:block">
                         <table className="w-full text-right text-sm">
-                          <thead className="bg-slate-50 text-xs text-slate-500">
+                          <thead className="bg-muted/60 text-xs text-muted-foreground">
                             <tr>
                               <th className="px-3 py-2.5 font-normal">مسئولیت</th>
                               <th className="px-3 py-2.5 font-normal">نام</th>
@@ -156,13 +171,13 @@ export default function VerifyPage() {
                               <th className="px-3 py-2.5 font-normal">تاریخ</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100">
+                          <tbody className="divide-y divide-border">
                             {outcome.data.signers.map((signer) => (
                               <tr key={signer.role_label}>
-                                <td className="px-3 py-2.5 text-slate-600">{signer.role_label}</td>
-                                <td className="px-3 py-2.5 font-bold text-slate-900">{signer.name}</td>
-                                <td className="px-3 py-2.5 text-slate-600">{signer.position}</td>
-                                <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{formatJalali(signer.signed_date)}</td>
+                                <td className="px-3 py-2.5 text-soft-foreground">{signer.role_label}</td>
+                                <td className="px-3 py-2.5 font-bold text-foreground">{signer.name}</td>
+                                <td className="px-3 py-2.5 text-soft-foreground">{signer.position}</td>
+                                <td className="whitespace-nowrap px-3 py-2.5 text-soft-foreground">{formatJalali(signer.signed_date)}</td>
                               </tr>
                             ))}
                           </tbody>

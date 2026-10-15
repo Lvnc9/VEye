@@ -10,6 +10,13 @@ export const controlClass =
   "focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground " +
   "disabled:hover:border-input aria-[invalid=true]:border-rose-400 aria-[invalid=true]:focus:ring-rose-500/15";
 
+/** The same control on the navy pages (sign-in, setup): a dark well with a glowing focus ring. */
+export const navyControlClass =
+  "rounded-xl border border-navy-line bg-navy/70 px-3.5 text-sm text-slate-100 placeholder:text-slate-500 " +
+  "shadow-[inset_0_1px_2px_rgb(0_0_0/0.35)] transition-[border-color,box-shadow,background-color] duration-150 " +
+  "hover:border-slate-600 focus:border-glow focus:bg-navy focus:outline-none focus:ring-4 focus:ring-glow/20 " +
+  "focus-visible:outline-none disabled:opacity-50";
+
 export const inputClass = `${controlClass} h-10 w-full`;
 export const selectClass = `${controlClass} h-10`;
 export const textareaClass = `${controlClass} w-full py-2 leading-7`;

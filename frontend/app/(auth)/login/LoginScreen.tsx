@@ -6,28 +6,26 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { normalizeNationalCode, safeNextPath } from "@/lib/login";
 import type { SetupStatus } from "@/lib/types";
-import { ArrowLeft, Eye, EyeOff, IdCard, LockKeyhole } from "lucide-react";
+import { ArrowLeft, CircleAlert, Eye, EyeOff, FileCheck2, FolderKanban, IdCard, LockKeyhole, Network } from "lucide-react";
+import { AnimatedBackground } from "@/components/ui/AnimatedBackground";
 import { BrandMark } from "@/components/ui/BrandMark";
+import { buttonClass } from "@/components/ui/Button";
+import { navyControlClass } from "@/components/ui/Field";
 import { Spinner } from "@/components/ui/Spinner";
 
 const FEATURES = [
-  "هر مستند، از تدوین تا تصویب، با امضا و سوابق کامل",
-  "ساختار سازمان و مسئولان هر بخش، یک‌جا و روشن",
-  "پروژه‌ها و ریزهدف‌ها با مسئول و مهلت مشخص",
+  { icon: FileCheck2, text: "هر مستند، از تدوین تا تصویب، با امضا و سوابق کامل" },
+  { icon: Network, text: "ساختار سازمان و مسئولان هر بخش، یک‌جا و روشن" },
+  { icon: FolderKanban, text: "پروژه‌ها و ریزهدف‌ها با مسئول و مهلت مشخص" },
 ];
 
-const inputClass =
-  "h-11 w-full rounded-xl border border-navy-line bg-navy px-10 text-sm text-slate-100 placeholder:text-slate-500 " +
-  "transition-[border-color,box-shadow] duration-150 hover:border-slate-500/60 " +
-  "focus:border-glow focus:outline-none focus:ring-4 focus:ring-glow/20";
+const inputClass = `${navyControlClass} h-11 w-full ps-10`;
 
-const primaryClass =
-  "group flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-glow px-4 text-sm font-bold text-slate-950 " +
-  "shadow-[0_8px_24px_-8px_rgb(56_189_248/0.6)] transition-[background-color,transform,box-shadow] duration-150 " +
-  "hover:bg-glow-strong hover:shadow-[0_10px_28px_-8px_rgb(56_189_248/0.75)] active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100";
+const primaryClass = buttonClass({ variant: "glow", size: "lg", className: "group w-full" });
 
 /**
- * Dark, two-column sign-in: the brand on the right (RTL first), the card on the left.
+ * Dark, two-column sign-in over the living navy backdrop: the brand on the right (RTL first), a glass card on
+ * the left. On a phone the card comes first, under a compact brand mark.
  *
  * On a database with no developer account yet (`/setup/status/` says `!developer_exists`) the card
  * offers «شروع راه‌اندازی» straight to `/setup`'s account form. Once the developer exists but has not
@@ -79,149 +77,158 @@ export function LoginScreen() {
   }
 
   return (
-    <main className="grid min-h-screen bg-navy text-slate-100 lg:grid-cols-2">
-      <section className="relative hidden flex-col justify-between overflow-hidden px-8 py-10 sm:px-14 lg:flex lg:py-16">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-40 -right-40 h-[28rem] w-[28rem] rounded-full bg-glow/10 blur-3xl"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.12)_1px,transparent_0)] bg-[length:26px_26px] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]"
-        />
-        <div className="veye-rise relative flex items-center gap-3" style={{ "--i": 0 } as React.CSSProperties}>
+    <main className="relative isolate grid min-h-dvh text-slate-100 lg:grid-cols-2">
+      <AnimatedBackground />
+
+      <section className="relative hidden flex-col justify-between px-8 py-10 sm:px-14 lg:flex lg:py-16">
+        <div className="veye-rise flex items-center gap-3" style={{ "--i": 0 } as React.CSSProperties}>
           <BrandMark size="lg" />
-          <span className="text-lg font-bold">وی‌آی</span>
+          <span className="text-xl font-extrabold">وی‌آی</span>
         </div>
 
-        <div className="relative my-14 max-w-xl lg:my-0">
-          <h1
-            className="veye-rise text-3xl leading-[1.5] font-bold sm:text-4xl sm:leading-[1.5]"
+        <div className="max-w-xl">
+          <span
+            className="veye-rise mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300 backdrop-blur"
             style={{ "--i": 1 } as React.CSSProperties}
+          >
+            <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgb(52_211_153/0.8)]" />
+            سامانه کنترل مستندات
+          </span>
+          <h1
+            className="veye-rise text-4xl leading-[1.45] font-black"
+            style={{ "--i": 2 } as React.CSSProperties}
           >
             سازمان شما،
             <br />
-            <span className="text-glow">منظم، کنترل‌شده و قابل‌پیگیری.</span>
+            <span className="bg-gradient-to-l from-sky-300 via-glow to-indigo-300 bg-clip-text text-transparent">
+              منظم، کنترل‌شده و قابل‌پیگیری.
+            </span>
           </h1>
-          <div className="veye-rise veye-rule mt-6 w-40" style={{ "--i": 2 } as React.CSSProperties} aria-hidden />
-          <p className="veye-rise mt-6 text-base leading-8 text-slate-400" style={{ "--i": 3 } as React.CSSProperties}>
+          <div className="veye-rise veye-rule mt-7 w-40" style={{ "--i": 3 } as React.CSSProperties} aria-hidden />
+          <p className="veye-rise mt-7 text-base leading-8 text-slate-400" style={{ "--i": 4 } as React.CSSProperties}>
             سامانهٔ کنترل مستندات و مدیریت کار؛ از تدوین و تصویب مستند تا ساختار سازمان و پروژه‌ها.
           </p>
-          <ul className="mt-8 space-y-3 text-sm text-slate-300">
-            {FEATURES.map((feature, index) => (
+          <ul className="mt-9 space-y-3.5">
+            {FEATURES.map(({ icon: Icon, text }, index) => (
               <li
-                key={feature}
-                className="veye-rise flex items-start gap-3"
-                style={{ "--i": 4 + index } as React.CSSProperties}
+                key={text}
+                className="veye-rise flex items-center gap-3 text-sm text-slate-300"
+                style={{ "--i": 5 + index } as React.CSSProperties}
               >
-                <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-glow" />
-                {feature}
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-glow/10 text-glow ring-1 ring-inset ring-glow/20">
+                  <Icon className="size-4" />
+                </span>
+                {text}
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="veye-rise relative text-xs text-slate-500" style={{ "--i": 7 } as React.CSSProperties}>
+        <p className="veye-rise text-xs text-slate-500" style={{ "--i": 8 } as React.CSSProperties}>
           وی‌آی · سامانه کنترل مستندات
         </p>
       </section>
 
-      <section className="flex min-h-screen items-center justify-center border-navy-line bg-navy-raised px-6 py-12 lg:min-h-0 lg:border-r">
-        <div className="veye-rise w-full max-w-sm" style={{ "--i": 2 } as React.CSSProperties}>
-          {/* The hero is desktop-only; on a phone the form comes first, under a compact brand mark. */}
-          <div className="mb-10 flex items-center gap-3 lg:hidden">
+      <section className="relative flex min-h-dvh items-center justify-center px-5 py-12 lg:min-h-0">
+        <div className="veye-rise w-full max-w-md" style={{ "--i": 2 } as React.CSSProperties}>
+          {/* The hero is desktop-only; on a phone the card comes first, under a compact brand mark. */}
+          <div className="mb-8 flex items-center justify-center gap-3 lg:hidden">
             <BrandMark />
-            <span className="text-lg font-bold">وی‌آی</span>
+            <span className="text-lg font-extrabold">وی‌آی</span>
           </div>
-          {freshWithNoAccounts ? (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold">به وی‌آی خوش آمدید</h2>
-                <p className="mt-2 text-sm leading-7 text-slate-400">
-                  این سامانه هنوز راه‌اندازی نشده است. با چند مرحلهٔ ساده، حساب توسعه‌دهنده و ساختار سازمان را بسازید.
-                </p>
-              </div>
-              <Link href="/setup" className={primaryClass}>
-                شروع راه‌اندازی
-                <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
-              </Link>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <h2 className="text-2xl font-bold">ورود به سامانه</h2>
-                <p className="mt-2 text-sm text-slate-400">با کد ملی و رمز عبور خود وارد شوید.</p>
-              </div>
 
-              {error && (
-                <div
-                  role="alert"
-                  className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-200 animate-fade-in"
-                >
-                  {error}
+          <div className="veye-glass rounded-3xl p-6 sm:p-8">
+            {freshWithNoAccounts ? (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-extrabold">به وی‌آی خوش آمدید</h2>
+                  <p className="mt-2 text-sm leading-7 text-slate-400">
+                    این سامانه هنوز راه‌اندازی نشده است. با چند مرحلهٔ ساده، حساب توسعه‌دهنده و ساختار سازمان را بسازید.
+                  </p>
                 </div>
-              )}
-
-              <div>
-                <label htmlFor="national-code" className="mb-1.5 block text-sm font-medium text-slate-300">
-                  کد ملی
-                </label>
-                <div className="relative">
-                <IdCard aria-hidden className="pointer-events-none absolute inset-y-0 right-3.5 my-auto size-4 text-slate-500" />
-                <input
-                  id="national-code"
-                  type="text"
-                  required
-                  inputMode="numeric"
-                  autoComplete="username"
-                  value={nationalCode}
-                  onChange={(e) => setNationalCode(e.target.value)}
-                  className={`${inputClass} latn pl-3.5 text-left`}
-                />
-                </div>
+                <Link href="/setup" className={primaryClass}>
+                  شروع راه‌اندازی
+                  <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-1" />
+                </Link>
               </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                  <h2 className="text-2xl font-extrabold">ورود به سامانه</h2>
+                  <p className="mt-2 text-sm text-slate-400">با کد ملی و رمز عبور خود وارد شوید.</p>
+                </div>
 
-              <div>
-                <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-300">
-                  رمز عبور
-                </label>
-                <div className="relative">
-                <LockKeyhole aria-hidden className="pointer-events-none absolute inset-y-0 right-3.5 my-auto size-4 text-slate-500" />
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`${inputClass} latn text-left`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((shown) => !shown)}
-                  aria-label={showPassword ? "پنهان کردن رمز" : "نمایش رمز"}
-                  aria-pressed={showPassword}
-                  title={showPassword ? "پنهان کردن رمز" : "نمایش رمز"}
-                  className="absolute inset-y-0 left-1.5 my-auto flex size-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/5 hover:text-slate-200"
-                >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                {error && (
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2.5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-200 animate-fade-in"
+                  >
+                    <CircleAlert className="mt-0.5 size-4 shrink-0" />
+                    {error}
+                  </div>
+                )}
+
+                <div>
+                  <label htmlFor="national-code" className="mb-1.5 block text-sm font-medium text-slate-300">
+                    کد ملی
+                  </label>
+                  <div className="relative">
+                    <IdCard aria-hidden className="pointer-events-none absolute inset-y-0 start-3.5 my-auto size-4 text-slate-500" />
+                    <input
+                      id="national-code"
+                      type="text"
+                      required
+                      inputMode="numeric"
+                      autoComplete="username"
+                      value={nationalCode}
+                      onChange={(e) => setNationalCode(e.target.value)}
+                      className={`${inputClass} latn pe-3.5 text-left`}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-300">
+                    رمز عبور
+                  </label>
+                  <div className="relative">
+                    <LockKeyhole aria-hidden className="pointer-events-none absolute inset-y-0 start-3.5 my-auto size-4 text-slate-500" />
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      required
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className={`${inputClass} latn pe-10 text-left`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((shown) => !shown)}
+                      aria-label={showPassword ? "پنهان کردن رمز" : "نمایش رمز"}
+                      aria-pressed={showPassword}
+                      title={showPassword ? "پنهان کردن رمز" : "نمایش رمز"}
+                      className="absolute inset-y-0 end-1.5 my-auto flex size-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/5 hover:text-slate-200"
+                    >
+                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button type="submit" disabled={loading} aria-busy={loading || undefined} className={primaryClass}>
+                  {loading && <Spinner />}
+                  {loading ? "در حال ورود..." : "ورود"}
+                  {!loading && <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-1" />}
                 </button>
-                </div>
-              </div>
 
-              <button type="submit" disabled={loading} aria-busy={loading || undefined} className={primaryClass}>
-                {loading && <Spinner />}
-                {loading ? "در حال ورود..." : "ورود"}
-                {!loading && <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />}
-              </button>
-
-              {setupAvailable && (
-                <p className="border-t border-navy-line pt-5 text-center text-sm leading-7 text-slate-400">
-                  ساختار سازمان هنوز تعریف نشده است. با حساب توسعه‌دهنده وارد شوید و «شروع راه‌اندازی» را بزنید.
-                </p>
-              )}
-            </form>
-          )}
+                {setupAvailable && (
+                  <p className="border-t border-white/[0.06] pt-5 text-center text-sm leading-7 text-slate-400">
+                    ساختار سازمان هنوز تعریف نشده است. با حساب توسعه‌دهنده وارد شوید و «شروع راه‌اندازی» را بزنید.
+                  </p>
+                )}
+              </form>
+            )}
+          </div>
         </div>
       </section>
     </main>

@@ -13,6 +13,7 @@ import { UnitsStep } from "@/components/setup/UnitsStep";
 import { DarkError, StepCard, primaryButton } from "@/components/setup/ui";
 import { apiGetIfSignedIn } from "@/lib/api-client";
 import { Check } from "lucide-react";
+import { AnimatedBackground } from "@/components/ui/AnimatedBackground";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { useApiQuery } from "@/lib/use-api-query";
 import type { Company, OrgTreeResponse } from "@/lib/organization";
@@ -32,13 +33,14 @@ export function SetupWizard() {
   const refreshNodes = () => setNodeReload((n) => n + 1);
 
   return (
-    <main className="min-h-screen bg-navy text-slate-100">
+    <main className="relative isolate min-h-dvh text-slate-100">
+      <AnimatedBackground beams={false} />
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-8">
         <header className="mb-8 flex items-center gap-3">
           <BrandMark />
           <div>
-            <h1 className="text-lg font-bold">راه‌اندازی وی‌آی</h1>
-            <p className="text-xs text-slate-500">حساب توسعه‌دهنده و ساختار سازمان</p>
+            <h1 className="text-lg font-extrabold">راه‌اندازی وی‌آی</h1>
+            <p className="text-xs text-slate-400">حساب توسعه‌دهنده و ساختار سازمان</p>
           </div>
         </header>
 
@@ -218,10 +220,10 @@ function SignedInWizard({
                   >
                     <span
                       className={`flex size-6 items-center justify-center rounded-full text-[11px] font-bold transition-colors duration-200 ${
-                        active ? "bg-glow text-slate-950" : done ? "bg-glow/20 text-glow" : "bg-white/5 text-slate-400"
+                        active ? "bg-glow text-navy shadow-[0_0_12px_rgb(56_189_248/0.6)]" : done ? "bg-glow/20 text-glow" : "bg-white/5 text-slate-400"
                       }`}
                     >
-                      {done ? <Check className="size-3.5" /> : index + 1}
+                      {done ? <Check className="size-3.5" /> : (index + 1).toLocaleString("fa-IR")}
                     </span>
                     {item.title}
                   </button>
@@ -252,8 +254,8 @@ function SignedInWizard({
         </div>
       </div>
 
-      <aside aria-label="پیش‌نمایش ساختار" className="h-fit rounded-2xl border border-navy-line bg-navy-raised p-4 lg:sticky lg:top-6">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">ساختاری که تا اینجا ساخته‌اید</h2>
+      <aside aria-label="پیش‌نمایش ساختار" className="veye-glass h-fit rounded-2xl p-4 lg:sticky lg:top-6">
+        <h2 className="mb-3 text-sm font-bold text-slate-200">ساختاری که تا اینجا ساخته‌اید</h2>
         <OrgTreeList nodes={nodes} tone="dark" />
         {tree.data?.truncated && <p className="mt-3 text-xs text-slate-500">فقط دو سطح بالا نمایش داده می‌شود.</p>}
       </aside>

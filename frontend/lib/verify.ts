@@ -19,17 +19,17 @@ export const VERIFY_STYLES: Record<VerifyState, { badge: string; band: string; t
   valid: {
     badge: "bg-emerald-500 text-white shadow-[0_8px_24px_-6px_rgb(16_185_129/0.6)] ring-8 ring-emerald-500/15",
     band: "from-emerald-500 to-teal-400",
-    text: "text-emerald-700",
+    text: "text-emerald-700 dark:text-emerald-400",
   },
   obsolete: {
     badge: "bg-rose-500 text-white shadow-[0_8px_24px_-6px_rgb(244_63_94/0.6)] ring-8 ring-rose-500/15",
     band: "from-rose-500 to-orange-400",
-    text: "text-rose-700",
+    text: "text-rose-700 dark:text-rose-400",
   },
   pending: {
     badge: "bg-amber-500 text-white shadow-[0_8px_24px_-6px_rgb(245_158_11/0.6)] ring-8 ring-amber-500/15",
     band: "from-amber-500 to-yellow-400",
-    text: "text-amber-700",
+    text: "text-amber-700 dark:text-amber-400",
   },
 };
 
