@@ -2,14 +2,14 @@ import { initials } from "@/lib/organization";
 import { cx } from "./cx";
 
 const TONES = [
-  "bg-sky-100 text-sky-800",
-  "bg-indigo-100 text-indigo-800",
-  "bg-emerald-100 text-emerald-800",
-  "bg-amber-100 text-amber-900",
-  "bg-rose-100 text-rose-800",
-  "bg-violet-100 text-violet-800",
-  "bg-teal-100 text-teal-800",
-  "bg-orange-100 text-orange-900",
+  "bg-sky-100 text-sky-800 dark:bg-sky-400/15 dark:text-sky-200",
+  "bg-indigo-100 text-indigo-800 dark:bg-indigo-400/15 dark:text-indigo-200",
+  "bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200",
+  "bg-amber-100 text-amber-900 dark:bg-amber-400/15 dark:text-amber-200",
+  "bg-rose-100 text-rose-800 dark:bg-rose-400/15 dark:text-rose-200",
+  "bg-violet-100 text-violet-800 dark:bg-violet-400/15 dark:text-violet-200",
+  "bg-teal-100 text-teal-800 dark:bg-teal-400/15 dark:text-teal-200",
+  "bg-orange-100 text-orange-900 dark:bg-orange-400/15 dark:text-orange-200",
 ];
 
 /** The same person always gets the same colour. */
@@ -72,12 +72,12 @@ export function AvatarStack({
   return (
     <div className="flex -space-x-2 space-x-reverse" aria-label={label} role={label ? "img" : undefined}>
       {names.slice(0, max).map((name, i) => (
-        <Avatar key={`${name}-${i}`} name={name} size={size} className="ring-2 ring-white" />
+        <Avatar key={`${name}-${i}`} name={name} size={size} className="ring-2 ring-card" />
       ))}
       {extra > 0 && (
         <span
           className={cx(
-            "inline-flex shrink-0 items-center justify-center rounded-full bg-slate-200 font-bold text-slate-700 ring-2 ring-white",
+            "inline-flex shrink-0 items-center justify-center rounded-full bg-muted font-bold text-soft-foreground ring-2 ring-card",
             SIZES[size],
           )}
         >

@@ -23,14 +23,14 @@ export function PageHeader({
         {back && (
           <Link
             href={back.href}
-            className="group mb-2 inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-900"
+            className="group mb-2 inline-flex items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
             {back.label}
           </Link>
         )}
-        <h1 className="text-2xl font-bold leading-10 text-slate-900">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+        <h1 className="text-2xl font-extrabold leading-10 tracking-tight text-foreground">{title}</h1>
+        {subtitle && <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>

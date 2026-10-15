@@ -303,6 +303,22 @@
   animation: veye-fade-up 280ms var(--ease-out-quint) backwards;
 }
 
+/* A dialog rises in: a sheet from the bottom edge on a phone, a soft scale near the top on a larger screen.
+   `backwards`, so no transform stays behind to trap a `position: fixed` date picker inside it. */
+.veye-dialog {
+  animation: veye-sheet-up 300ms var(--ease-out-quint) backwards;
+}
+@media (min-width: 40rem) {
+  .veye-dialog {
+    animation: veye-scale-in 260ms var(--ease-out-quint) backwards;
+  }
+}
+@keyframes veye-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
 /* A staggered entrance for cards and list items: set --i on each (40ms apart). */
 .veye-stagger {
   animation: veye-fade-up 320ms var(--ease-out-quint) backwards;

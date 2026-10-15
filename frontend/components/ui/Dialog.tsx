@@ -1,27 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { Dialog as D } from "radix-ui";
 import { IconButton } from "./IconButton";
 import { cx } from "./cx";
 
 const SIZES = { sm: "sm:max-w-md", md: "sm:max-w-lg", lg: "sm:max-w-xl", xl: "sm:max-w-2xl" } as const;
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-const subscribeNothing = () => () => {};
-
 /**
- * A modal window: the page dims and softens behind it, and the panel rises in — from the bottom edge on a
- * phone, near the top on a larger screen. Escape and a click on the backdrop close it unless `busy`.
- * Focus goes inside (to whatever the content focused itself, else the panel), Tab stays inside, and focus
- * returns to the opener when it closes.
+ * A modal window (Radix Dialog): the page dims and softens behind it, and the panel rises in — a bottom
+ * sheet on a phone, near the top on a larger screen. Escape and a click outside close it unless `busy`.
+ * Focus goes inside (to whatever the content focused itself, else the panel), Tab stays inside, the page
+ * behind is hidden from screen readers and doesn't scroll, and focus returns to the opener when it closes.
  *
- * It is drawn into `document.body`, not where it is written: an ancestor with a `transform` (the page's
- * entrance animation keeps one) becomes the containing block of every `position: fixed` descendant, so a
- * dialog left in place was laid out against the scrolled page and could sit above the visible area.
+ * Callers mount it only while it is open (there is no `open` prop) and unmount it in `onClose`, so it has
+ * no exit animation. It is drawn into `document.body`, so no transformed ancestor can trap it.
  */
 export function Dialog({
   label,
@@ -47,87 +41,74 @@ export function Dialog({
   children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  // False while the server (and the hydrating client) render; there is no `document` to portal into yet.
-  const inBrowser = useSyncExternalStore(subscribeNothing, () => true, () => false);
   // Who had focus before the dialog opened — read during the first render, before any child focuses.
+  // Radix would send focus back to a <Dialog.Trigger>; callers open dialogs from their own buttons.
   const [opener] = useState<Element | null>(() => (typeof document === "undefined" ? null : document.activeElement));
-
-  useEffect(() => {
-    if (!inBrowser) return;
-    const panel = panelRef.current;
-    if (panel && !panel.contains(document.activeElement)) panel.focus();
-    return () => {
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
-    };
-  }, [opener, inBrowser]);
-
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      if (!busy) onClose();
-      return;
-    }
-    if (event.key !== "Tab" || !panelRef.current) return;
-    const items = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-      (element) => element.offsetParent !== null,
-    );
-    if (items.length === 0) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
-  if (!inBrowser) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-50" onKeyDown={onKeyDown}>
-      <div aria-hidden className="absolute inset-0 bg-slate-950/45 backdrop-blur-[3px] animate-fade-in" />
-      <div
-        className="absolute inset-0 overflow-y-auto overscroll-contain"
-        onClick={(event) => event.target === event.currentTarget && !busy && onClose()}
-      >
-        <div
-          className="flex min-h-full items-end justify-center sm:items-start sm:p-4 sm:pt-[10vh]"
-          onClick={(event) => event.target === event.currentTarget && !busy && onClose()}
+  const dismiss = (event: React.MouseEvent) => {
+    if (event.target === event.currentTarget && !busy) onClose();
+  };
+  return (
+    <D.Root open onOpenChange={(open) => !open && !busy && onClose()}>
+      <D.Portal>
+        <D.Overlay className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-[3px] animate-fade-in" />
+        {/* The content is the whole scrolling layer, not just the panel: a date picker or a long form can
+            reach past the panel's edge and the layer scrolls, as a page would. A click on the bare layer
+            closes the dialog. */}
+        <D.Content
+          aria-label={label}
+          aria-describedby={undefined}
+          onEscapeKeyDown={(event) => busy && event.preventDefault()}
+          onOpenAutoFocus={(event) => {
+            // Radix asks only when the content took no focus itself (an autoFocus field keeps it): then
+            // focus the panel, not the first button (the close «×»).
+            event.preventDefault();
+            panelRef.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+          }}
+          onClick={dismiss}
+          className="fixed inset-0 z-50 overflow-y-auto overscroll-contain outline-none"
         >
-          <div
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label={label}
-            tabIndex={-1}
-            className={cx(
-              "relative w-full rounded-t-2xl bg-white p-5 shadow-overlay ring-1 ring-slate-900/5 outline-none animate-scale-in",
-              "pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-2xl sm:p-6",
-              SIZES[size],
-              className,
-            )}
-          >
-            {(title || showClose) && (
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  {title && <h2 className="text-lg font-bold leading-8 text-slate-900">{title}</h2>}
-                  {description && <p className="mt-0.5 text-sm text-slate-500">{description}</p>}
+          <div className="flex min-h-full items-end justify-center sm:items-start sm:p-4 sm:pt-[10vh]" onClick={dismiss}>
+            <div
+              ref={panelRef}
+              tabIndex={-1}
+              className={cx(
+                "veye-dialog relative w-full rounded-t-3xl border border-border bg-popover p-5 text-popover-foreground shadow-overlay outline-none",
+                "pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-2xl sm:p-6",
+                SIZES[size],
+                className,
+              )}
+            >
+              {/* A grab handle: this is a sheet on a phone. */}
+              <span aria-hidden className="mx-auto -mt-2 mb-3 block h-1 w-10 rounded-full bg-border sm:hidden" />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-l from-transparent via-primary/50 to-transparent"
+              />
+              {/* Radix wants a title for screen readers; `label` is it when nothing is shown. */}
+              {!title && <D.Title className="sr-only">{label}</D.Title>}
+              {(title || showClose) && (
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    {title && <D.Title className="text-lg font-bold leading-8 text-foreground">{title}</D.Title>}
+                    {description && <D.Description className="mt-0.5 text-sm text-muted-foreground">{description}</D.Description>}
+                  </div>
+                  {showClose && (
+                    <IconButton label="بستن" size="sm" onClick={onClose} disabled={busy} className="-me-2 -mt-1">
+                      <X />
+                    </IconButton>
+                  )}
                 </div>
-                {showClose && (
-                  <IconButton label="بستن" size="sm" onClick={onClose} disabled={busy} className="-me-2 -mt-1">
-                    <X />
-                  </IconButton>
-                )}
-              </div>
-            )}
-            <div className="space-y-4">{children}</div>
+              )}
+              <div className="space-y-4">{children}</div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
+        </D.Content>
+      </D.Portal>
+    </D.Root>
   );
 }
 

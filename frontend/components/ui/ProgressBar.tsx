@@ -4,7 +4,7 @@ import { cx } from "./cx";
  *  so a change animates smoothly. */
 export function ProgressBar({
   value,
-  tone = "bg-brand-600",
+  tone = "bg-gradient-to-l from-sky-500 to-brand-600 dark:from-sky-300 dark:to-sky-500",
   className,
   label,
 }: {
@@ -22,10 +22,10 @@ export function ProgressBar({
       aria-valuenow={label && value !== null ? value : undefined}
       aria-valuemin={label ? 0 : undefined}
       aria-valuemax={label ? 100 : undefined}
-      className={cx("h-2 overflow-hidden rounded-full bg-slate-100", className)}
+      className={cx("h-2 overflow-hidden rounded-full bg-muted", className)}
     >
       <div
-        className={cx("h-full w-full origin-right rounded-full transition-transform duration-500 ease-out-quint", tone)}
+        className={cx("h-full w-full origin-right rounded-full transition-transform duration-700 ease-out-quint", tone)}
         style={{ transform: `scaleX(${ratio})` }}
       />
     </div>

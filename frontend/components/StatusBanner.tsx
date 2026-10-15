@@ -9,11 +9,11 @@ export function LoadingBanner({ label = "در حال بارگذاری..." }: { l
   return (
     <div
       role="status"
-      className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card animate-fade-in"
+      className="rounded-2xl border border-border bg-card p-5 shadow-card animate-fade-in"
       style={{ animationDelay: "150ms" }}
     >
-      <div className="flex items-center gap-2 text-sm text-slate-500">
-        <Spinner className="text-brand-600" />
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner className="text-primary" />
         {label}
       </div>
       <SkeletonLines rows={3} className="mt-4" />

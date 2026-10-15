@@ -1,15 +1,14 @@
 import type { ReactNode } from "react";
 import { CircleAlert } from "lucide-react";
-import { cx } from "./cx";
 
 /** The shared look of every text box, select and text area: a hairline border that darkens on hover and
- *  a soft brand halo on focus. */
+ *  a soft halo of the brand colour on focus. */
 export const controlClass =
-  "rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-xs " +
-  "transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-slate-400 " +
-  "hover:border-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15 " +
-  "focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 " +
-  "disabled:hover:border-slate-300 aria-[invalid=true]:border-rose-400 aria-[invalid=true]:focus:ring-rose-500/15";
+  "rounded-lg border border-input bg-card px-3 text-sm text-foreground shadow-xs " +
+  "transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-subtle-foreground " +
+  "hover:border-slate-400 dark:hover:border-white/25 focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20 " +
+  "focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground " +
+  "disabled:hover:border-input aria-[invalid=true]:border-rose-400 aria-[invalid=true]:focus:ring-rose-500/15";
 
 export const inputClass = `${controlClass} h-10 w-full`;
 export const selectClass = `${controlClass} h-10`;
@@ -35,18 +34,18 @@ export function Field({
 }) {
   return (
     <div className={className}>
-      <label htmlFor={htmlFor} className="mb-1.5 block text-sm text-slate-700">
+      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-soft-foreground">
         {label}
         {required && (
-          <span aria-hidden className="ms-0.5 text-rose-600">
+          <span aria-hidden className="ms-0.5 text-destructive">
             *
           </span>
         )}
       </label>
       {children}
-      {hint && !error && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>}
+      {hint && !error && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
       {error && (
-        <p role="alert" className={cx("mt-1.5 flex items-start gap-1 text-xs text-rose-700")}>
+        <p role="alert" className="mt-1.5 flex items-start gap-1 text-xs text-rose-700 animate-fade-in dark:text-rose-400">
           <CircleAlert className="mt-0.5 size-3.5" />
           {error}
         </p>
