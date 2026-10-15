@@ -105,7 +105,7 @@ export default function LeavePage() {
       {loading ? (
         <Card flush role="status" aria-label="در حال بارگذاری">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="space-y-2.5 border-b border-slate-100 px-5 py-4 last:border-0">
+            <div key={i} className="space-y-2.5 border-b border-border px-5 py-4 last:border-0">
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-3 w-1/3" />
             </div>
@@ -120,7 +120,7 @@ export default function LeavePage() {
         />
       ) : (
         <Card flush>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-border">
             {rows.map((leave) => (
               <LeaveRow key={leave.id} leave={leave} showRequester={tab !== "mine"} onAct={(kind) => setDialog({ kind, leave })} />
             ))}
@@ -185,15 +185,15 @@ function LeaveRow({ leave, showRequester, onAct }: { leave: LeaveRequest; showRe
     <li className="space-y-2 px-4 py-3.5 sm:px-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {showRequester && (
-          <span className="inline-flex items-center gap-2 font-bold text-slate-900">
+          <span className="inline-flex items-center gap-2 font-bold text-foreground">
             <Avatar name={leave.requester_name} size="sm" />
             {leave.requester_name}
           </span>
         )}
-        <span className="font-bold text-slate-800">
+        <span className="font-bold text-foreground">
           {leave.leave_type_label} · {daysText(leave.days)}
         </span>
-        <span className="text-sm text-slate-600">
+        <span className="text-sm text-soft-foreground">
           {formatJalali(leave.starts_on)}
           {leave.ends_on !== leave.starts_on && <> تا {formatJalali(leave.ends_on)}</>}
         </span>
@@ -202,14 +202,14 @@ function LeaveRow({ leave, showRequester, onAct }: { leave: LeaveRequest; showRe
         </Badge>
       </div>
       {(showRequester && leave.node_name) || leave.reason ? (
-        <p className="text-sm leading-7 text-slate-600">
-          {showRequester && leave.node_name && <span className="text-slate-500">{leave.node_name}</span>}
+        <p className="text-sm leading-7 text-soft-foreground">
+          {showRequester && leave.node_name && <span className="text-muted-foreground">{leave.node_name}</span>}
           {showRequester && leave.node_name && leave.reason && " · "}
           {leave.reason}
         </p>
       ) : null}
       {leave.decided_by_name && (
-        <p className={leave.status === "REJECTED" ? "rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-800" : "text-xs text-slate-500"}>
+        <p className={leave.status === "REJECTED" ? "rounded-lg bg-rose-50 dark:bg-rose-400/10 px-3 py-1.5 text-xs text-rose-800 dark:text-rose-300" : "text-xs text-muted-foreground"}>
           {leave.status === "REJECTED" ? "رد توسط" : "تصمیم توسط"} {leave.decided_by_name}
           {leave.decided_at && ` · ${formatJalali(leave.decided_at)}`}
           {leave.decision_note && `: ${leave.decision_note}`}

@@ -80,7 +80,7 @@ export function LeaveFormDialog({ onSaved, onClose }: { onSaved: () => void; onC
           <JalaliDatePicker id="leave-end" value={form.ends_on} onChange={(iso) => set({ ends_on: iso ?? "" })} min={form.starts_on || undefined} required />
         </Field>
       </div>
-      <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ring-1 ring-inset ring-slate-200" aria-live="polite">
+      <p className="rounded-xl bg-muted/50 px-3 py-2 text-sm text-soft-foreground ring-1 ring-inset ring-border" aria-live="polite">
         {days === null ? "روز شروع و پایان را انتخاب کنید." : <>جمعاً <b>{daysText(days)}</b> (هر دو روز شروع و پایان شمرده می‌شود)</>}
       </p>
       <Field label="توضیح (اختیاری)" htmlFor="leave-reason" error={shown("reason")}>
