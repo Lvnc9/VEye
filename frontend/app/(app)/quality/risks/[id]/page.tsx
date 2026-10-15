@@ -42,14 +42,14 @@ export default function RiskPage() {
       "تاریخ بازنگری",
       risk.review_on ? formatJalali(risk.review_on) : "تعیین نشده",
       risk.review_overdue ? <AlarmClock key="r" /> : <CalendarClock key="r" />,
-      risk.review_overdue ? "text-rose-700" : undefined,
+      risk.review_overdue ? "text-rose-700 dark:text-rose-300" : undefined,
     ],
   ];
 
   return (
     <div className="space-y-6">
       <nav className="text-sm">
-        <Link href="/quality/risks" className="group inline-flex items-center gap-1.5 text-slate-500 transition-colors hover:text-slate-900">
+        <Link href="/quality/risks" className="group inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground">
           <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
           ریسک‌ها
         </Link>
@@ -64,7 +64,7 @@ export default function RiskPage() {
               <RiskLevelBadge level={risk.level} label={risk.level_label} score={toPersianDigits(risk.score)} />
               <RiskStatusBadge status={risk.status} label={risk.status_label} />
             </div>
-            <h1 className="text-2xl font-bold leading-10 text-slate-900">{risk.title}</h1>
+            <h1 className="text-2xl font-bold leading-10 text-foreground">{risk.title}</h1>
           </div>
           {risk.can_edit && (
             <Button size="sm" icon={<Pencil />} onClick={() => setEditing(true)}>
@@ -75,19 +75,19 @@ export default function RiskPage() {
 
         <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {tiles.map(([label, value, icon, tone]) => (
-            <div key={label} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-200/70">
-              <span className={cx("text-slate-400 [&_svg]:size-4", tone)}>{icon}</span>
+            <div key={label} className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5 ring-1 ring-inset ring-border">
+              <span className={cx("text-subtle-foreground [&_svg]:size-4", tone)}>{icon}</span>
               <div className="min-w-0">
-                <dt className="text-xs text-slate-500">{label}</dt>
-                <dd className={cx("truncate text-sm font-bold text-slate-800", tone)}>{value}</dd>
+                <dt className="text-xs text-muted-foreground">{label}</dt>
+                <dd className={cx("truncate text-sm font-bold text-foreground", tone)}>{value}</dd>
               </div>
             </div>
           ))}
         </dl>
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-muted-foreground">
           احتمال: {LIKELIHOOD_LABELS[risk.likelihood]} · اثر: {IMPACT_LABELS[risk.impact]} · ثبت توسط {risk.created_by_name}
         </p>
-        {risk.review_overdue && <p className="mt-2 text-xs font-bold text-rose-700">زمان بازنگری این ریسک گذشته است.</p>}
+        {risk.review_overdue && <p className="mt-2 text-xs font-bold text-rose-700 dark:text-rose-300">زمان بازنگری این ریسک گذشته است.</p>}
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -95,7 +95,7 @@ export default function RiskPage() {
           <div className="space-y-3">
             <TextBlock title="شرح" text={risk.description} />
             <TextBlock title="برنامهٔ کاهش" text={risk.mitigation_plan} tone="success" />
-            {!risk.mitigation_plan && <p className="text-sm text-slate-500">هنوز برنامه‌ای برای کاهش این ریسک نوشته نشده است.</p>}
+            {!risk.mitigation_plan && <p className="text-sm text-muted-foreground">هنوز برنامه‌ای برای کاهش این ریسک نوشته نشده است.</p>}
           </div>
         </Card>
         <aside>

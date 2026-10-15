@@ -26,14 +26,14 @@ export function RiskHeatMap({
       <div className="flex items-stretch gap-2" dir="ltr">
         {/* The likelihood axis, written upwards. */}
         <div className="flex w-5 shrink-0 items-center justify-center">
-          <span className="-rotate-90 whitespace-nowrap text-xs font-bold text-slate-500" dir="rtl">
+          <span className="-rotate-90 whitespace-nowrap text-xs font-bold text-muted-foreground" dir="rtl">
             احتمال ↑
           </span>
         </div>
         <div className="grid flex-1 grid-cols-[2.25rem_repeat(5,minmax(0,1fr))] gap-1.5">
           {rows.map((row) => (
             <div key={row[0].likelihood} className="contents">
-              <span className="flex items-center justify-center text-xs text-slate-500" title={LIKELIHOOD_LABELS[row[0].likelihood]}>
+              <span className="flex items-center justify-center text-xs text-muted-foreground" title={LIKELIHOOD_LABELS[row[0].likelihood]}>
                 {toPersianDigits(row[0].likelihood)}
               </span>
               {row.map((cell) => {
@@ -49,7 +49,7 @@ export function RiskHeatMap({
                       "flex aspect-square min-h-11 items-center justify-center rounded-lg text-sm transition",
                       RISK_LEVEL_STYLE[cell.level].cell,
                       cell.count > 0 ? "font-bold" : "opacity-60",
-                      isSelected ? "ring-2 ring-slate-900 ring-offset-2" : "hover:brightness-95",
+                      isSelected ? "ring-2 ring-foreground ring-offset-2 ring-offset-card" : "hover:brightness-95 hover:scale-[1.04]",
                     )}
                   >
                     {toPersianDigits(cell.count)}
@@ -60,14 +60,14 @@ export function RiskHeatMap({
           ))}
           <span />
           {[1, 2, 3, 4, 5].map((impact) => (
-            <span key={impact} className="text-center text-xs text-slate-500" title={IMPACT_LABELS[impact]}>
+            <span key={impact} className="text-center text-xs text-muted-foreground" title={IMPACT_LABELS[impact]}>
               {toPersianDigits(impact)}
             </span>
           ))}
         </div>
       </div>
-      <p className="text-center text-xs font-bold text-slate-500">اثر →</p>
-      <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1.5 text-xs text-slate-600">
+      <p className="text-center text-xs font-bold text-muted-foreground">اثر →</p>
+      <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1.5 text-xs text-soft-foreground">
         {(Object.keys(RISK_LEVEL_LABELS) as (keyof typeof RISK_LEVEL_LABELS)[]).map((level) => (
           <li key={level} className="inline-flex items-center gap-1.5">
             <span aria-hidden className={cx("size-3 rounded", RISK_LEVEL_STYLE[level].cell)} />

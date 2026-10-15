@@ -54,7 +54,7 @@ export function FindingsPanel({ audit, version, onChanged }: { audit: InternalAu
           />
         )
       ) : (
-        <ul className="-mx-5 divide-y divide-slate-100 border-t border-slate-100 sm:-mx-6">
+        <ul className="-mx-5 divide-y divide-border border-t border-border sm:-mx-6">
           {findings.rows.map((nc) => (
             <NcListItem key={nc.id} nc={nc} />
           ))}

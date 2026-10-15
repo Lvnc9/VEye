@@ -82,12 +82,12 @@ export function MembersPanel({
         {members.map((member) => (
           <li
             key={member.id}
-            className="flex items-center gap-1.5 rounded-full bg-white py-1 pe-1 ps-1 text-xs text-slate-700 ring-1 ring-inset ring-slate-200"
+            className="flex items-center gap-1.5 rounded-full bg-card py-1 pe-1 ps-1 text-xs text-soft-foreground ring-1 ring-inset ring-border"
           >
             <Avatar name={member.user_name} size="xs" />
             <span>
               {member.user_name}
-              {member.is_guest && <span className="text-slate-500"> · مهمان</span>}
+              {member.is_guest && <span className="text-muted-foreground"> · مهمان</span>}
             </span>
             {canEdit ? (
               <>
@@ -113,7 +113,7 @@ export function MembersPanel({
               </>
             ) : (
               member.role === "MANAGER" && (
-                <span className="inline-flex items-center gap-0.5 text-amber-700">
+                <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-300">
                   <Crown className="size-3" /> مدیر
                 </span>
               )
@@ -123,7 +123,7 @@ export function MembersPanel({
       </ul>
 
       {canEdit && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 border-t border-border pt-4">
           <PersonPicker id="add-member-search" label="افزودن عضو" excludedIds={memberIds} onPick={add} />
         </div>
       )}

@@ -34,7 +34,7 @@ import { cardClass } from "@/components/ui/Card";
 import { cx } from "@/components/ui/cx";
 
 const input = `${controlClass} w-full px-3 py-2 text-sm`;
-const label = "mb-1.5 block text-sm text-slate-700";
+const label = "mb-1.5 block text-sm text-soft-foreground";
 const DRAFT_DEBOUNCE_MS = 1500;
 
 function emptyDraft(): DraftObjective {
@@ -200,7 +200,7 @@ export default function NewProjectPage() {
       />
 
       {draftState === "banner" && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 animate-fade-in">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 dark:border-amber-400/25 bg-amber-50/80 dark:bg-amber-400/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-300 animate-fade-in">
           <span className="flex items-center gap-2">
             <FilePenLine className="size-4 text-amber-600" />
             پیش‌نویس ذخیره‌شده دارید.
@@ -216,7 +216,7 @@ export default function NewProjectPage() {
             <button
               type="button"
               onClick={discardDraft}
-              className="inline-flex h-9 items-center rounded-lg border border-amber-300 bg-white px-3 text-xs text-amber-900 transition-colors hover:bg-amber-100"
+              className="inline-flex h-9 items-center rounded-lg border border-amber-300 dark:border-amber-400/25 bg-card px-3 text-xs text-amber-900 dark:text-amber-300 transition-colors hover:bg-amber-100 hover:dark:bg-amber-400/15"
             >
               شروع از نو
             </button>
@@ -238,7 +238,7 @@ export default function NewProjectPage() {
                 بخش
               </label>
               {sections.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-300 px-3 py-3 text-xs text-slate-500">
+                <p className="rounded-xl border border-dashed border-input px-3 py-3 text-xs text-muted-foreground">
                   هنوز بخشی در ساختار سازمان تعریف نشده است.
                 </p>
               ) : (
@@ -278,8 +278,8 @@ export default function NewProjectPage() {
             {form.section !== null ? (
               <MemberPicker sectionId={form.section} members={form.members} onChange={applyMembers} />
             ) : (
-              <p className="flex items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-3 text-xs text-slate-500">
-                <Users className="size-4 text-slate-400" />
+              <p className="flex items-center gap-2 rounded-xl border border-dashed border-input px-3 py-3 text-xs text-muted-foreground">
+                <Users className="size-4 text-subtle-foreground" />
                 ابتدا بخش را انتخاب کنید.
               </p>
             )}
@@ -326,7 +326,7 @@ export default function NewProjectPage() {
             description="کارهایی که پروژه را جلو می‌برند، هر کدام با مسئول و مهلت."
             actions={
               form.objectives.length > 0 && (
-                <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs text-brand-800 ring-1 ring-inset ring-brand-600/15 tabular-nums">
+                <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs text-primary ring-1 ring-inset ring-primary/15 tabular-nums">
                   {form.objectives.length} ریزهدف
                 </span>
               )
@@ -337,16 +337,16 @@ export default function NewProjectPage() {
                 {form.objectives.map((objective, index) => (
                   <li
                     key={objective.key}
-                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm animate-fade-in"
+                    className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-sm animate-fade-in"
                   >
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 tabular-nums">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-soft-foreground tabular-nums">
                       {(index + 1).toLocaleString("fa-IR")}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-bold text-slate-900">{objective.title}</span>
-                      <span className="block truncate text-xs text-slate-500">{assigneeNames(objective.assignees)}</span>
+                      <span className="block truncate font-bold text-foreground">{objective.title}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{assigneeNames(objective.assignees)}</span>
                     </span>
-                    <span className="hidden shrink-0 items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-xs text-slate-600 ring-1 ring-inset ring-slate-200 sm:inline-flex">
+                    <span className="hidden shrink-0 items-center gap-1 rounded-full bg-muted/50 px-2 py-0.5 text-xs text-soft-foreground ring-1 ring-inset ring-border sm:inline-flex">
                       <CalendarClock className="size-3.5" />
                       {formatJalali(objective.due_on)}
                     </span>
@@ -355,7 +355,7 @@ export default function NewProjectPage() {
                       onClick={() => removeObjective(objective.key)}
                       aria-label={`حذف ${objective.title}`}
                       title="حذف"
-                      className="flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                      className="flex size-8 shrink-0 items-center justify-center rounded-lg text-subtle-foreground transition-colors hover:bg-rose-50 hover:dark:bg-rose-400/10 hover:text-rose-600"
                     >
                       <Trash2 className="size-4" />
                     </button>
@@ -365,10 +365,10 @@ export default function NewProjectPage() {
             )}
 
             {form.section !== null && form.members.length > 0 ? (
-              <div className="space-y-4 rounded-2xl border border-dashed border-brand-200 bg-brand-50/30 p-4">
+              <div className="space-y-4 rounded-2xl border border-dashed border-primary/30 bg-brand-50/30 p-4">
                 <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
                   <div>
-                    <label className="mb-1.5 block text-xs text-slate-600" htmlFor="objective-title">
+                    <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="objective-title">
                       عنوان ریزهدف
                     </label>
                     <input
@@ -379,14 +379,14 @@ export default function NewProjectPage() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs text-slate-600" htmlFor="objective-due">
+                    <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="objective-due">
                       مهلت
                     </label>
                     <JalaliDatePicker id="objective-due" value={draft.due_on} onChange={(iso) => setDraft({ ...draft, due_on: iso ?? "" })} />
                   </div>
                 </div>
                 <div>
-                  <span className="mb-1.5 block text-xs text-slate-600">مسئولان</span>
+                  <span className="mb-1.5 block text-xs text-soft-foreground">مسئولان</span>
                   <div className="flex flex-wrap gap-2">
                     {form.members.map((member) => {
                       const on = draft.assignees.includes(member.user);
@@ -398,7 +398,7 @@ export default function NewProjectPage() {
                           onClick={() => toggleDraftAssignee(member.user)}
                           className={cx(
                             "flex items-center gap-2 rounded-full py-1 ps-1 pe-3 text-xs ring-1 ring-inset transition-[background-color,box-shadow] duration-150 active:scale-[0.97]",
-                            on ? "bg-brand-700 text-white ring-brand-700" : "bg-white text-slate-700 ring-slate-200 hover:ring-slate-300",
+                            on ? "bg-primary text-white ring-brand-700" : "bg-card text-soft-foreground ring-border hover:ring-slate-300",
                           )}
                         >
                           {on ? (
@@ -421,14 +421,14 @@ export default function NewProjectPage() {
                 </div>
               </div>
             ) : (
-              <p className="flex items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-3 text-xs text-slate-500">
-                <ListChecks className="size-4 text-slate-400" />
+              <p className="flex items-center gap-2 rounded-xl border border-dashed border-input px-3 py-3 text-xs text-muted-foreground">
+                <ListChecks className="size-4 text-subtle-foreground" />
                 برای افزودن ریزهدف، ابتدا بخش و دست‌کم یک عضو را انتخاب کنید.
               </p>
             )}
           </FormSection>
 
-          <div className="flex justify-end border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:px-6">
+          <div className="flex justify-end border-t border-border bg-muted/50 px-5 py-4 sm:px-6">
             <Button type="submit" variant="primary" size="lg" loading={saving} icon={<FolderPlus />} className="min-w-44">
               {saving ? "در حال ایجاد..." : "ایجاد پروژه"}
             </Button>
@@ -442,12 +442,12 @@ export default function NewProjectPage() {
           </div>
           <div className="space-y-4 p-5">
             <div>
-              <p className="truncate text-lg font-bold text-slate-900">{form.name || "نام پروژه"}</p>
-              <p className="truncate text-xs text-slate-500">{sectionName ?? "بخش انتخاب نشده"}</p>
+              <p className="truncate text-lg font-bold text-foreground">{form.name || "نام پروژه"}</p>
+              <p className="truncate text-xs text-muted-foreground">{sectionName ?? "بخش انتخاب نشده"}</p>
             </div>
             <dl className="space-y-2.5 text-sm">
               <div className="flex items-center justify-between gap-2">
-                <dt className="flex items-center gap-2 text-slate-500">
+                <dt className="flex items-center gap-2 text-muted-foreground">
                   <Users className="size-4" />
                   اعضا
                 </dt>
@@ -455,30 +455,30 @@ export default function NewProjectPage() {
                   {form.members.length > 0 ? (
                     <AvatarStack names={form.members.map((m) => m.name)} label={`${form.members.length} عضو`} />
                   ) : (
-                    <span className="text-slate-400">—</span>
+                    <span className="text-subtle-foreground">—</span>
                   )}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <dt className="flex items-center gap-2 text-slate-500">
+                <dt className="flex items-center gap-2 text-muted-foreground">
                   <Flag className="size-4" />
                   شروع
                 </dt>
-                <dd className="text-slate-800">{form.starts_on ? formatJalali(form.starts_on) : "—"}</dd>
+                <dd className="text-foreground">{form.starts_on ? formatJalali(form.starts_on) : "—"}</dd>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <dt className="flex items-center gap-2 text-slate-500">
+                <dt className="flex items-center gap-2 text-muted-foreground">
                   <CalendarClock className="size-4" />
                   مهلت
                 </dt>
-                <dd className="text-slate-800">{form.due_on ? formatJalali(form.due_on) : "—"}</dd>
+                <dd className="text-foreground">{form.due_on ? formatJalali(form.due_on) : "—"}</dd>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <dt className="flex items-center gap-2 text-slate-500">
+                <dt className="flex items-center gap-2 text-muted-foreground">
                   <Target className="size-4" />
                   ریزهدف‌ها
                 </dt>
-                <dd className="font-bold text-slate-800 tabular-nums">{form.objectives.length}</dd>
+                <dd className="font-bold text-foreground tabular-nums">{form.objectives.length}</dd>
               </div>
             </dl>
           </div>

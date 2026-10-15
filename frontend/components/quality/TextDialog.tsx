@@ -64,9 +64,9 @@ export function TextDialog({
 
   return (
     <Dialog label={title} title={title} onClose={onCancel} busy={sending}>
-      {description && <p className="text-sm leading-7 text-slate-600">{description}</p>}
+      {description && <p className="text-sm leading-7 text-soft-foreground">{description}</p>}
       <label className="block text-sm">
-        <span className="mb-1.5 block text-slate-700">{fieldLabel}</span>
+        <span className="mb-1.5 block text-soft-foreground">{fieldLabel}</span>
         <textarea
           ref={box}
           value={text}

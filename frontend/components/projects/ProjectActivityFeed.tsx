@@ -38,18 +38,18 @@ export function ProjectActivityFeed({ projectId, version }: { projectId: number;
       {events.length === 0 ? (
         <EmptyState compact icon={<Activity />} message="هنوز رویدادی ثبت نشده است." />
       ) : (
-        <ol className="relative max-h-[70vh] space-y-4 overflow-y-auto pe-1 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-slate-200">
+        <ol className="relative max-h-[70vh] space-y-4 overflow-y-auto pe-1 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-muted">
           {events.map((event) => (
             <li key={event.id} className="relative flex gap-3 text-sm">
               <span
                 aria-hidden
-                className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-white ${PROJECT_EVENT_TONE[event.kind] ?? "bg-slate-400"}`}
+                className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-card ${PROJECT_EVENT_TONE[event.kind] ?? "bg-slate-400"}`}
               />
               <div className="min-w-0">
-                <p className="text-slate-900">
+                <p className="text-foreground">
                   <span className="font-bold">{event.kind_label}</span>
-                  {event.subject_title && <span className="text-slate-700"> — {event.subject_title}</span>}
-                  <span className="text-slate-500">
+                  {event.subject_title && <span className="text-soft-foreground"> — {event.subject_title}</span>}
+                  <span className="text-muted-foreground">
                     {" "}
                     · {event.actor_name}
                     {event.actor_title ? ` (${event.actor_title})` : ""} · {formatJalaliDateTime(event.created_at)}
@@ -59,21 +59,21 @@ export function ProjectActivityFeed({ projectId, version }: { projectId: number;
                   // objective_due_changed reuses from_status/to_status to carry raw ISO dates, not a
                   // status enum, so it has no from_status_label/to_status_label to fall back on — the
                   // labels are always blank for this kind (backend history.py's _STATUS_ENUM_BY_KIND).
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     {formatJalali(event.from_status)} <ArrowLeft className="inline size-3" aria-label="به" /> {formatJalali(event.to_status)}
                   </p>
                 ) : MEETING_EVENT_KINDS.has(event.kind) && event.to_status ? (
                   // The meeting's day, as an ISO date in to_status (backend services._meeting_event).
-                  <p className="mt-0.5 text-xs text-slate-500">تاریخ جلسه: {formatJalali(event.to_status)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">تاریخ جلسه: {formatJalali(event.to_status)}</p>
                 ) : (
                   event.from_status_label &&
                   event.to_status_label && (
-                    <p className="mt-0.5 text-xs text-slate-500">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       {event.from_status_label} <ArrowLeft className="inline size-3" aria-label="به" /> {event.to_status_label}
                     </p>
                   )
                 )}
-                {event.note && <p className="mt-1 rounded-lg bg-slate-50 px-2.5 py-1 text-slate-600">{event.note}</p>}
+                {event.note && <p className="mt-1 rounded-lg bg-muted/50 px-2.5 py-1 text-soft-foreground">{event.note}</p>}
               </div>
             </li>
           ))}

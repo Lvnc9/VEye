@@ -54,7 +54,7 @@ export default function NonConformancePage() {
   return (
     <div className="space-y-6">
       <nav className="text-sm">
-        <Link href="/quality" className="group inline-flex items-center gap-1.5 text-slate-500 transition-colors hover:text-slate-900">
+        <Link href="/quality" className="group inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground">
           <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
           عدم‌انطباق‌ها
         </Link>
@@ -69,7 +69,7 @@ export default function NonConformancePage() {
               <SeverityBadge severity={nc.severity} label={nc.severity_label} />
               <NcStatusBadge status={nc.status} label={nc.status_label} />
             </div>
-            <h1 className="text-2xl font-bold leading-10 text-slate-900">{nc.title}</h1>
+            <h1 className="text-2xl font-bold leading-10 text-foreground">{nc.title}</h1>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {nc.can_triage && (
@@ -104,22 +104,22 @@ export default function NonConformancePage() {
               ["منبع", nc.source_label, <ShieldAlert key="s" />],
             ] as const
           ).map(([label, value, icon]) => (
-            <div key={label} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-200/70">
-              <span className="text-slate-400 [&_svg]:size-4">{icon}</span>
+            <div key={label} className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5 ring-1 ring-inset ring-border">
+              <span className="text-subtle-foreground [&_svg]:size-4">{icon}</span>
               <div className="min-w-0">
-                <dt className="text-xs text-slate-500">{label}</dt>
-                <dd className="truncate text-sm font-bold text-slate-800">{value}</dd>
+                <dt className="text-xs text-muted-foreground">{label}</dt>
+                <dd className="truncate text-sm font-bold text-foreground">{value}</dd>
               </div>
             </div>
           ))}
         </dl>
 
         {nc.audit && nc.audit_code && (
-          <p className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-            <ClipboardCheck className="size-4 text-slate-400" />
+          <p className="mt-4 flex flex-wrap items-center gap-2 text-sm text-soft-foreground">
+            <ClipboardCheck className="size-4 text-subtle-foreground" />
             یافتهٔ ممیزی:
             {nc.can_view_audit ? (
-              <Link href={`/quality/audits/${nc.audit}`} className="inline-flex items-center gap-2 hover:text-brand-700">
+              <Link href={`/quality/audits/${nc.audit}`} className="inline-flex items-center gap-2 hover:text-primary-hover">
                 <Code>{nc.audit_code}</Code>
                 <span>{nc.audit_title}</span>
               </Link>
@@ -133,10 +133,10 @@ export default function NonConformancePage() {
         )}
 
         {nc.related_document && nc.related_document_code && (
-          <p className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-            <FileText className="size-4 text-slate-400" />
+          <p className="mt-4 flex flex-wrap items-center gap-2 text-sm text-soft-foreground">
+            <FileText className="size-4 text-subtle-foreground" />
             مستند مرتبط:
-            <Link href={`/documents/${nc.related_document}/edit`} className="inline-flex items-center gap-2 hover:text-brand-700">
+            <Link href={`/documents/${nc.related_document}/edit`} className="inline-flex items-center gap-2 hover:text-primary-hover">
               <Code>{nc.related_document_code}</Code>
               <span>{nc.related_document_title}</span>
             </Link>

@@ -48,28 +48,28 @@ function QualityActivityFeed({
       {events.length === 0 ? (
         <EmptyState compact icon={<Activity />} message="هنوز رویدادی ثبت نشده است." />
       ) : (
-        <ol className="relative max-h-[70vh] space-y-4 overflow-y-auto pe-1 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-slate-200">
+        <ol className="relative max-h-[70vh] space-y-4 overflow-y-auto pe-1 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-muted">
           {events.map((event) => {
             const detail = qualityEventDetail(event);
             return (
               <li key={event.id} className="relative flex gap-3 text-sm">
                 <span
                   aria-hidden
-                  className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-white ${QUALITY_EVENT_TONE[event.kind] ?? "bg-slate-400"}`}
+                  className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-card ${QUALITY_EVENT_TONE[event.kind] ?? "bg-slate-400"}`}
                 />
                 <div className="min-w-0">
-                  <p className="text-slate-900">
+                  <p className="text-foreground">
                     <span className="font-bold">{event.kind_label}</span>
                     {event.subject_title && (event.kind.startsWith("action_") || (showFindingTitle && event.kind === "finding_raised")) && (
-                      <span className="text-slate-700"> — {event.subject_title}</span>
+                      <span className="text-soft-foreground"> — {event.subject_title}</span>
                     )}
-                    <span className="text-slate-500">
+                    <span className="text-muted-foreground">
                       {" "}
                       · {event.actor_name}
                       {event.actor_title ? ` (${event.actor_title})` : ""} · {formatJalaliDateTime(event.created_at)}
                     </span>
                   </p>
-                  {detail && <p className="mt-1 whitespace-pre-line text-xs leading-6 text-slate-600">{detail}</p>}
+                  {detail && <p className="mt-1 whitespace-pre-line text-xs leading-6 text-soft-foreground">{detail}</p>}
                 </div>
               </li>
             );

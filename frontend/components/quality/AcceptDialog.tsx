@@ -28,7 +28,7 @@ export function AcceptDialog({
       confirmLabel="پذیرش"
       extra={
         <label className="block text-sm">
-          <span className="mb-1.5 block text-slate-700">شدت (در صورت نیاز اصلاح کنید)</span>
+          <span className="mb-1.5 block text-soft-foreground">شدت (در صورت نیاز اصلاح کنید)</span>
           <select value={chosen} onChange={(e) => setChosen(e.target.value as NcSeverity)} className={`${selectClass} w-full`}>
             {(Object.keys(NC_SEVERITY_LABELS) as NcSeverity[]).map((value) => (
               <option key={value} value={value}>

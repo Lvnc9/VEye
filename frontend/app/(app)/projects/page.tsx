@@ -21,7 +21,7 @@ import { usePagedQuery } from "@/lib/use-paged-query";
 const PAGE_SIZE = 20;
 const select = cx(selectClass, "min-w-[8rem] flex-1 sm:flex-none");
 const toggle =
-  "flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200 transition-colors hover:bg-slate-50 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-800 has-[:checked]:ring-brand-300";
+  "flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-soft-foreground ring-1 ring-inset ring-border transition-colors hover:bg-accent/60 has-[:checked]:bg-primary/10 has-[:checked]:text-primary has-[:checked]:ring-primary/30";
 
 interface Filters {
   q: string;
@@ -123,7 +123,7 @@ export default function ProjectsPage() {
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="status" aria-label="در حال بارگذاری">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card">
+            <div key={i} className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-card">
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-2 w-full" />
               <Skeleton className="h-6 w-1/3" />
@@ -169,7 +169,7 @@ function DraftProjectCard() {
   return (
     <Link
       href="/projects/new"
-      className="flex items-center gap-3 rounded-2xl border border-dashed border-amber-300 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 transition-colors animate-fade-in hover:bg-amber-100"
+      className="flex items-center gap-3 rounded-2xl border border-dashed border-amber-300 dark:border-amber-400/25 bg-amber-50/80 dark:bg-amber-400/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-300 transition-colors animate-fade-in hover:bg-amber-100 hover:dark:bg-amber-400/15"
     >
       <FilePenLine className="size-4 text-amber-600" />
       پیش‌نویس پروژه — برای ادامه کلیک کنید

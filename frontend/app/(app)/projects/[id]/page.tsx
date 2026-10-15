@@ -30,7 +30,7 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { cx } from "@/components/ui/cx";
 
 // A status select is tinted with its status's own tone rather than the white control look.
-const select = "h-9 rounded-lg border-0 px-2.5 text-sm transition-shadow focus:outline-none focus:ring-4 focus:ring-brand-500/15";
+const select = "h-9 rounded-lg border-0 px-2.5 text-sm transition-shadow focus:outline-none focus:ring-4 focus:ring-primary/15";
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -85,7 +85,7 @@ export default function ProjectDetailPage() {
       <nav className="text-sm">
         <Link
           href="/projects"
-          className="group inline-flex items-center gap-1.5 text-slate-500 transition-colors hover:text-slate-900"
+          className="group inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
           پروژه‌ها
@@ -98,8 +98,8 @@ export default function ProjectDetailPage() {
         <div aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-brand-500 via-indigo-400 to-emerald-400 opacity-80" />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold leading-10 text-slate-900">{data.name}</h1>
-            <p className="mt-0.5 text-sm text-slate-500">{data.section_name}</p>
+            <h1 className="text-2xl font-bold leading-10 text-foreground">{data.name}</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">{data.section_name}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {data.can_edit ? (
@@ -139,7 +139,7 @@ export default function ProjectDetailPage() {
           </Alert>
         )}
 
-        {data.goal && <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-700">{data.goal}</p>}
+        {data.goal && <p className="mt-3 max-w-3xl text-sm leading-7 text-soft-foreground">{data.goal}</p>}
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <ProgressBar
@@ -148,9 +148,9 @@ export default function ProjectDetailPage() {
             className="h-2.5 min-w-40 max-w-md flex-1"
             label="پیشرفت پروژه"
           />
-          <span className="text-sm font-bold text-slate-700 tabular-nums">{progressLabel(data.progress)}</span>
+          <span className="text-sm font-bold text-soft-foreground tabular-nums">{progressLabel(data.progress)}</span>
           {data.overdue_count > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs text-rose-800 ring-1 ring-inset ring-rose-600/20">
+            <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-400/10 px-2 py-0.5 text-xs text-rose-800 dark:text-rose-300 ring-1 ring-inset ring-rose-600/20">
               <AlarmClock className="size-3.5" />
               {data.overdue_count} ریزهدف دیرکرد
             </span>
@@ -159,11 +159,11 @@ export default function ProjectDetailPage() {
 
         <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {facts.map((fact) => (
-            <div key={fact.label} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-200/70">
-              <span className="text-slate-400 [&_svg]:size-4">{fact.icon}</span>
+            <div key={fact.label} className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5 ring-1 ring-inset ring-border">
+              <span className="text-subtle-foreground [&_svg]:size-4">{fact.icon}</span>
               <div className="min-w-0">
-                <dt className="text-xs text-slate-500">{fact.label}</dt>
-                <dd className="truncate text-sm font-bold text-slate-800 tabular-nums">{fact.value}</dd>
+                <dt className="text-xs text-muted-foreground">{fact.label}</dt>
+                <dd className="truncate text-sm font-bold text-foreground tabular-nums">{fact.value}</dd>
               </div>
             </div>
           ))}

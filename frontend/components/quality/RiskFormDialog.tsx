@@ -140,7 +140,7 @@ export function RiskFormDialog({
           </select>
         </Field>
       </div>
-      <p className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ring-1 ring-inset ring-slate-200" aria-live="polite">
+      <p className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-sm text-soft-foreground ring-1 ring-inset ring-border" aria-live="polite">
         امتیاز ریسک:
         <span className="font-bold">{assessmentText(form.likelihood, form.impact)}</span>
         <RiskLevelBadge level={level} label={RISK_LEVEL_LABELS[level]} />
@@ -181,9 +181,9 @@ export function RiskFormDialog({
       </div>
 
       <div>
-        <p className="mb-1.5 text-sm text-slate-700">مسئول پیگیری (اختیاری)</p>
+        <p className="mb-1.5 text-sm text-soft-foreground">مسئول پیگیری (اختیاری)</p>
         {form.owner !== null && ownerName ? (
-          <p className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2 text-sm text-brand-900">
+          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-brand-900">
             <Avatar name={ownerName} size="sm" />
             {ownerName}
             <button type="button" onClick={() => set({ owner: null })} className="ms-auto text-xs underline">

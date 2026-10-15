@@ -60,16 +60,16 @@ export function DocumentLinksPanel({ projectId, canEdit }: { projectId: number; 
           {rows.map((link) => (
             <li
               key={link.id}
-              className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm transition-colors hover:border-slate-300"
+              className="group flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-sm transition-colors hover:border-input"
             >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <FileText className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <Link href={`/documents/${link.document}/edit`} className="block truncate font-bold text-slate-900 transition-colors hover:text-brand-700">
+                <Link href={`/documents/${link.document}/edit`} className="block truncate font-bold text-foreground transition-colors hover:text-primary-hover">
                   {link.document_title}
                 </Link>
-                <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <Code>{link.document_full_code}</Code>
                   {link.caption}
                 </span>
@@ -85,7 +85,7 @@ export function DocumentLinksPanel({ projectId, canEdit }: { projectId: number; 
       )}
 
       {canEdit && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 border-t border-border pt-4">
           <DocumentPicker
             id="link-document-search"
             label={

@@ -50,13 +50,13 @@ export function MemberPicker({
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="mb-2 text-xs text-slate-500">اعضای بخش</h4>
+        <h4 className="mb-2 text-xs text-muted-foreground">اعضای بخش</h4>
         {seeded.loading ? (
           <SkeletonLines rows={2} />
         ) : seeded.error ? (
           <p className="text-xs text-rose-600">{seeded.error}</p>
         ) : (seeded.data?.results.length ?? 0) === 0 ? (
-          <p className="text-xs text-slate-500">این بخش هنوز عضوی ندارد.</p>
+          <p className="text-xs text-muted-foreground">این بخش هنوز عضوی ندارد.</p>
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2">
             {seeded.data!.results.map((membership) => {
@@ -66,7 +66,7 @@ export function MemberPicker({
                   key={membership.user}
                   className={cx(
                     "flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-[border-color,background-color] duration-150",
-                    checked ? "border-brand-300 bg-brand-50/60" : "border-slate-200 bg-white hover:border-slate-300",
+                    checked ? "border-primary/30 bg-brand-50/60" : "border-border bg-card hover:border-input",
                   )}
                 >
                   <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">
@@ -79,14 +79,14 @@ export function MemberPicker({
                     <span className="relative shrink-0 rounded-full peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500">
                       <Avatar name={membership.user_name} size="sm" />
                       {checked && (
-                        <span className="absolute -bottom-0.5 -left-0.5 flex size-3.5 items-center justify-center rounded-full bg-brand-600 text-white ring-2 ring-white animate-pop">
+                        <span className="absolute -bottom-0.5 -left-0.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-white ring-2 ring-card animate-pop">
                           <Check className="size-2.5" />
                         </span>
                       )}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-slate-900">{membership.user_name}</span>
-                      <span className="block truncate text-xs text-slate-500">{membership.user_title}</span>
+                      <span className="block truncate text-foreground">{membership.user_name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{membership.user_title}</span>
                     </span>
                   </label>
                   {checked && (
@@ -116,14 +116,14 @@ export function MemberPicker({
 
       {members.length > 0 && (
         <div>
-          <h4 className="mb-2 text-xs text-slate-500">اعضای انتخاب‌شده ({members.length.toLocaleString("fa-IR")})</h4>
+          <h4 className="mb-2 text-xs text-muted-foreground">اعضای انتخاب‌شده ({members.length.toLocaleString("fa-IR")})</h4>
           <ul className="flex flex-wrap gap-2">
             {members.map((member) => (
-              <li key={member.user} className="flex items-center gap-1.5 rounded-full bg-white py-1 pe-1 ps-1 text-xs text-slate-700 ring-1 ring-inset ring-slate-200 animate-fade-in">
+              <li key={member.user} className="flex items-center gap-1.5 rounded-full bg-card py-1 pe-1 ps-1 text-xs text-soft-foreground ring-1 ring-inset ring-border animate-fade-in">
                 <Avatar name={member.name} size="xs" />
                 {member.name}
                 {member.role === "MANAGER" && (
-                  <span className="inline-flex items-center gap-0.5 text-amber-700">
+                  <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-300">
                     <Crown className="size-3" />
                     مدیر
                   </span>
@@ -132,7 +132,7 @@ export function MemberPicker({
                   type="button"
                   aria-label={`حذف ${member.name}`}
                   onClick={() => onChange(members.filter((m) => m.user !== member.user))}
-                  className="flex size-5 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-800"
+                  className="flex size-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <X className="size-3.5" />
                 </button>

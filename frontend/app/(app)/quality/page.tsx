@@ -34,7 +34,7 @@ import { usePagedQuery } from "@/lib/use-paged-query";
 const PAGE_SIZE = 20;
 const select = cx(selectClass, "min-w-[8rem] flex-1 sm:flex-none");
 const toggle =
-  "flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200 transition-colors hover:bg-slate-50 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-800 has-[:checked]:ring-brand-300";
+  "flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-soft-foreground ring-1 ring-inset ring-border transition-colors hover:bg-accent/60 has-[:checked]:bg-primary/10 has-[:checked]:text-primary has-[:checked]:ring-primary/30";
 
 const MINE_OPTIONS: { value: NcMine; label: string }[] = [
   { value: "", label: "همهٔ مواردی که می‌بینم" },
@@ -138,7 +138,7 @@ export default function QualityPage() {
       {loading ? (
         <Card flush role="status" aria-label="در حال بارگذاری">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="space-y-2.5 border-b border-slate-100 px-5 py-4 last:border-0">
+            <div key={i} className="space-y-2.5 border-b border-border px-5 py-4 last:border-0">
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-3 w-1/3" />
             </div>
@@ -153,7 +153,7 @@ export default function QualityPage() {
         />
       ) : (
         <Card flush>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-border">
             {rows.map((nc) => (
               <NcListItem key={nc.id} nc={nc} />
             ))}

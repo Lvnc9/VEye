@@ -75,14 +75,14 @@ export function CommentsPanel({ projectId }: { projectId: number }) {
         icon={<StickyNote />}
         actions={
           rows.length > 0 && (
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600 tabular-nums">{rows.length}</span>
+            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-soft-foreground tabular-nums">{rows.length}</span>
           )
         }
       />
       {error && <ErrorBanner message={error} />}
       <form onSubmit={onFormSubmit} className="mb-5 flex items-start gap-3">
         {user && <Avatar name={user.full_name} className="mt-1" />}
-        <div className="min-w-0 flex-1 rounded-2xl border border-slate-300 bg-white shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15">
+        <div className="min-w-0 flex-1 rounded-2xl border border-input bg-card shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15">
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -91,10 +91,10 @@ export function CommentsPanel({ projectId }: { projectId: number }) {
             aria-label="متن یادداشت"
             maxLength={4000}
             rows={2}
-            className="block w-full resize-none rounded-t-2xl bg-transparent px-3.5 pt-3 text-sm leading-7 text-slate-900 placeholder:text-slate-400 focus:outline-none"
+            className="block w-full resize-none rounded-t-2xl bg-transparent px-3.5 pt-3 text-sm leading-7 text-foreground placeholder:text-subtle-foreground focus:outline-none"
           />
           <div className="flex items-center justify-between gap-2 px-2 pb-2">
-            <span className="ps-1.5 text-[11px] text-slate-400">Ctrl + Enter</span>
+            <span className="ps-1.5 text-[11px] text-subtle-foreground">Ctrl + Enter</span>
             <Button type="submit" variant="primary" size="sm" icon={<SendHorizontal className="rtl-flip" />} disabled={!body.trim()} loading={posting}>
               ثبت
             </Button>
@@ -112,13 +112,13 @@ export function CommentsPanel({ projectId }: { projectId: number }) {
           {rows.map((comment) => (
             <li key={comment.id} className="group flex items-start gap-3 text-sm animate-fade-in">
               <Avatar name={comment.author_name} size="sm" className="mt-0.5" />
-              <div className="min-w-0 flex-1 rounded-2xl rounded-tr-md bg-slate-50 px-3.5 py-2.5 ring-1 ring-inset ring-slate-200/70">
-                <p className="flex flex-wrap items-baseline gap-x-2 text-slate-900">
+              <div className="min-w-0 flex-1 rounded-2xl rounded-tr-md bg-muted/50 px-3.5 py-2.5 ring-1 ring-inset ring-border">
+                <p className="flex flex-wrap items-baseline gap-x-2 text-foreground">
                   <span className="font-bold">{comment.author_name}</span>
-                  {comment.author_title && <span className="text-xs text-slate-500">{comment.author_title}</span>}
-                  <span className="text-xs text-slate-500">{formatJalaliDateTime(comment.created_at)}</span>
+                  {comment.author_title && <span className="text-xs text-muted-foreground">{comment.author_title}</span>}
+                  <span className="text-xs text-muted-foreground">{formatJalaliDateTime(comment.created_at)}</span>
                 </p>
-                <p className="mt-1 whitespace-pre-wrap leading-7 text-slate-700">{comment.body}</p>
+                <p className="mt-1 whitespace-pre-wrap leading-7 text-soft-foreground">{comment.body}</p>
               </div>
               {comment.can_delete && (
                 <IconButton

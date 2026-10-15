@@ -114,7 +114,7 @@ export default function AuditsPage() {
       {loading ? (
         <Card flush role="status" aria-label="در حال بارگذاری">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="space-y-2.5 border-b border-slate-100 px-5 py-4 last:border-0">
+            <div key={i} className="space-y-2.5 border-b border-border px-5 py-4 last:border-0">
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-3 w-1/3" />
             </div>
@@ -129,7 +129,7 @@ export default function AuditsPage() {
         />
       ) : (
         <Card flush>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-border">
             {rows.map((audit) => (
               <AuditListItem key={audit.id} audit={audit} today={today} />
             ))}

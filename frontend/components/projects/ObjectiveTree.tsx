@@ -31,7 +31,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { IconButton } from "@/components/ui/IconButton";
 import { cx } from "@/components/ui/cx";
 
-const select = "h-7 rounded-lg border-0 px-2 text-xs transition-shadow focus:outline-none focus:ring-4 focus:ring-brand-500/15 disabled:opacity-60";
+const select = "h-7 rounded-lg border-0 px-2 text-xs transition-shadow focus:outline-none focus:ring-4 focus:ring-primary/15 disabled:opacity-60";
 const input = `${controlClass} w-full px-3 py-2 text-sm`;
 
 /** «اهداف» as a tree: each objective is the root, its assignees are the leaves (docs/12 §D). Drawn
@@ -121,15 +121,15 @@ export function ObjectiveTree({
           {objectives.map((objective, index) => (
             <li
               key={objective.id}
-              className={`rounded-xl border p-3.5 transition-colors ${objective.is_overdue ? "border-rose-200 bg-rose-50/60" : "border-slate-200 hover:border-slate-300"}`}
+              className={`rounded-xl border p-3.5 transition-colors ${objective.is_overdue ? "border-rose-200 dark:border-rose-400/25 bg-rose-50/60 dark:bg-rose-400/10" : "border-border hover:border-input"}`}
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-bold text-slate-900">{objective.title}</p>
-                  {objective.description && <p className="mt-0.5 text-xs text-slate-600">{objective.description}</p>}
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="font-bold text-foreground">{objective.title}</p>
+                  {objective.description && <p className="mt-0.5 text-xs text-soft-foreground">{objective.description}</p>}
+                  <p className="mt-1 text-xs text-muted-foreground">
                     مهلت: {formatJalali(objective.due_on)}
-                    {objective.is_overdue && <span className="mr-1 font-medium text-rose-700">(دیرکرد)</span>}
+                    {objective.is_overdue && <span className="mr-1 font-medium text-rose-700 dark:text-rose-300">(دیرکرد)</span>}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
@@ -140,7 +140,7 @@ export function ObjectiveTree({
                         aria-label="جابه‌جایی به بالا"
                         disabled={index === 0}
                         onClick={() => move(index, -1)}
-                        className="flex h-4 w-6 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30"
+                        className="flex h-4 w-6 items-center justify-center rounded text-subtle-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30"
                       >
                         <ChevronUp className="size-3.5" />
                       </button>
@@ -149,7 +149,7 @@ export function ObjectiveTree({
                         aria-label="جابه‌جایی به پایین"
                         disabled={index === objectives.length - 1}
                         onClick={() => move(index, 1)}
-                        className="flex h-4 w-6 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30"
+                        className="flex h-4 w-6 items-center justify-center rounded text-subtle-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30"
                       >
                         <ChevronDown className="size-3.5" />
                       </button>
@@ -180,10 +180,10 @@ export function ObjectiveTree({
               </div>
 
               {objective.assignees.length > 0 && (
-                <ul className="relative mt-3 me-3 space-y-3 border-s-2 border-slate-200 ps-4">
+                <ul className="relative mt-3 me-3 space-y-3 border-s-2 border-border ps-4">
                   {objectiveAssigneeRows(objective, user?.id ?? null).map((row) => (
                     <li key={row.user} className="relative">
-                      <span aria-hidden className="absolute top-4 h-px w-4 -start-4 bg-slate-200" />
+                      <span aria-hidden className="absolute top-4 h-px w-4 -start-4 bg-muted" />
                       <AssigneeLeaf projectId={project.id} objective={objective} row={row} onChanged={onChanged} onError={setError} />
                     </li>
                   ))}
@@ -246,11 +246,11 @@ function AssigneeLeaf({
   const [historyOpen, setHistoryOpen] = useState(false);
 
   return (
-    <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-inset ring-slate-200/70">
-      <p className="flex items-center gap-2 text-sm text-slate-800">
+    <div className="rounded-xl bg-muted/50 p-3 ring-1 ring-inset ring-border">
+      <p className="flex items-center gap-2 text-sm text-foreground">
         <Avatar name={row.name} size="xs" />
         <span className="font-bold">{row.name}</span>
-        <span className="text-xs text-slate-500">{row.title}</span>
+        <span className="text-xs text-muted-foreground">{row.title}</span>
       </p>
 
       {editingLatest && row.latestUpdate ? (
@@ -267,12 +267,12 @@ function AssigneeLeaf({
           onError={onError}
         />
       ) : row.latestUpdate ? (
-        <div className="mt-2 rounded-lg bg-white px-3 py-2 ring-1 ring-inset ring-slate-200/70">
-          <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{row.latestUpdate.body}</p>
-          <p className="mt-0.5 text-xs text-slate-500">{formatJalaliDateTime(row.latestUpdate.created_at)}</p>
+        <div className="mt-2 rounded-lg bg-card px-3 py-2 ring-1 ring-inset ring-border">
+          <p className="whitespace-pre-wrap text-sm leading-7 text-soft-foreground">{row.latestUpdate.body}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{formatJalaliDateTime(row.latestUpdate.created_at)}</p>
         </div>
       ) : (
-        <p className="mt-1 text-xs text-slate-500">هنوز گزارشی ثبت نشده است.</p>
+        <p className="mt-1 text-xs text-muted-foreground">هنوز گزارشی ثبت نشده است.</p>
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">
@@ -470,24 +470,24 @@ function UpdateHistory({
   }
 
   return (
-    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 animate-fade-in">
+    <div className="mt-3 space-y-2 border-t border-border pt-3 animate-fade-in">
       {error && <p className="text-xs text-rose-600">{error}</p>}
       {rows === null ? (
-        <p className="text-xs text-slate-500">در حال بارگذاری...</p>
+        <p className="text-xs text-muted-foreground">در حال بارگذاری...</p>
       ) : rows.length === 0 ? (
-        <p className="text-xs text-slate-500">سابقهٔ دیگری نیست.</p>
+        <p className="text-xs text-muted-foreground">سابقهٔ دیگری نیست.</p>
       ) : (
         <ul className="space-y-2">
           {rows.map((row) => (
-            <li key={row.id} className="relative ps-4 text-sm before:absolute before:top-2.5 before:right-0 before:size-1.5 before:rounded-full before:bg-slate-300">
-              <p className="whitespace-pre-wrap leading-7 text-slate-700">{row.body}</p>
-              <p className="mt-0.5 text-xs text-slate-500">{formatJalaliDateTime(row.created_at)}</p>
+            <li key={row.id} className="relative ps-4 text-sm before:absolute before:top-2.5 before:right-0 before:size-1.5 before:rounded-full before:bg-border">
+              <p className="whitespace-pre-wrap leading-7 text-soft-foreground">{row.body}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{formatJalaliDateTime(row.created_at)}</p>
             </li>
           ))}
         </ul>
       )}
       {next && (
-        <button type="button" onClick={loadMore} disabled={loadingMore} className="text-xs text-brand-700 underline-offset-4 hover:underline">
+        <button type="button" onClick={loadMore} disabled={loadingMore} className="text-xs text-primary underline-offset-4 hover:underline">
           {loadingMore ? "در حال بارگذاری..." : "بارگذاری بیشتر"}
         </button>
       )}
@@ -540,16 +540,16 @@ function AddObjectiveForm({
   }
 
   return (
-    <form onSubmit={submit} className="mb-5 space-y-3 rounded-2xl border border-dashed border-brand-200 bg-brand-50/30 p-4 animate-fade-in">
+    <form onSubmit={submit} className="mb-5 space-y-3 rounded-2xl border border-dashed border-primary/30 bg-brand-50/30 p-4 animate-fade-in">
       {error && <ErrorBanner message={error} />}
       <div>
-        <label className="mb-1.5 block text-xs text-slate-600" htmlFor="new-objective-title">
+        <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="new-objective-title">
           عنوان
         </label>
         <input id="new-objective-title" value={title} onChange={(e) => setTitle(e.target.value)} className={input} />
       </div>
       <div>
-        <label className="mb-1.5 block text-xs text-slate-600" htmlFor="new-objective-description">
+        <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="new-objective-description">
           شرح (اختیاری)
         </label>
         <textarea
@@ -561,9 +561,9 @@ function AddObjectiveForm({
         />
       </div>
       <div>
-        <span className="mb-1 block text-xs text-slate-600">مسئولان</span>
+        <span className="mb-1 block text-xs text-soft-foreground">مسئولان</span>
         {project.members.length === 0 ? (
-          <p className="text-xs text-slate-500">این پروژه هنوز عضوی ندارد.</p>
+          <p className="text-xs text-muted-foreground">این پروژه هنوز عضوی ندارد.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {project.members.map((member: ProjectMember) => {
@@ -577,7 +577,7 @@ function AddObjectiveForm({
                   onClick={() => toggle(member.user)}
                   className={cx(
                     "flex items-center gap-2 rounded-full py-1 ps-1 pe-3 text-xs ring-1 ring-inset transition-[background-color,box-shadow] duration-150 active:scale-[0.97]",
-                    on ? "bg-brand-700 text-white ring-brand-700" : "bg-white text-slate-700 ring-slate-200 hover:ring-slate-300",
+                    on ? "bg-primary text-white ring-brand-700" : "bg-card text-soft-foreground ring-border hover:ring-slate-300",
                   )}
                 >
                   {on ? (
@@ -596,13 +596,13 @@ function AddObjectiveForm({
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <div>
-          <label className="mb-1.5 block text-xs text-slate-600" htmlFor="new-objective-due">
+          <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="new-objective-due">
             مهلت
           </label>
           <JalaliDatePicker id="new-objective-due" value={dueOn} onChange={(iso) => setDueOn(iso ?? "")} required />
         </div>
         <div className="w-20">
-          <label className="mb-1.5 block text-xs text-slate-600" htmlFor="new-objective-weight">
+          <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="new-objective-weight">
             وزن
           </label>
           <input
@@ -617,7 +617,7 @@ function AddObjectiveForm({
           />
         </div>
       </div>
-      <p id="new-objective-weight-hint" className="text-xs text-slate-500">
+      <p id="new-objective-weight-hint" className="text-xs text-muted-foreground">
         وزن: سهم این ریز هدف در درصد پیشرفت پروژه (۱ تا ۱۰۰). اگر همه ۱ بمانند، همه هم‌ارزش‌اند.
       </p>
       <div className="flex justify-end gap-2">

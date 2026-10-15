@@ -37,7 +37,7 @@ import { usePagedQuery } from "@/lib/use-paged-query";
 const PAGE_SIZE = 20;
 const select = cx(selectClass, "min-w-[8rem] flex-1 sm:flex-none");
 const toggle =
-  "flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200 transition-colors hover:bg-slate-50 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-800 has-[:checked]:ring-brand-300";
+  "flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-soft-foreground ring-1 ring-inset ring-border transition-colors hover:bg-accent/60 has-[:checked]:bg-primary/10 has-[:checked]:text-primary has-[:checked]:ring-primary/30";
 
 const MINE_OPTIONS: { value: RiskMine; label: string }[] = [
   { value: "", label: "همهٔ ریسک‌هایی که می‌بینم" },
@@ -96,7 +96,7 @@ export default function RisksPage() {
           ) : (
             <RiskHeatMap matrix={matrix.data} selected={cell} onSelect={(picked) => update({ likelihood: picked?.likelihood ?? null, impact: picked?.impact ?? null })} />
           )}
-          <p className="mt-3 text-xs leading-6 text-slate-500">ریسک‌های بسته‌شده در نقشه شمرده نمی‌شوند. با زدن یک خانه، فهرست به همان خانه محدود می‌شود.</p>
+          <p className="mt-3 text-xs leading-6 text-muted-foreground">ریسک‌های بسته‌شده در نقشه شمرده نمی‌شوند. با زدن یک خانه، فهرست به همان خانه محدود می‌شود.</p>
         </Card>
 
         <div className="min-w-0 space-y-4">
@@ -136,7 +136,7 @@ export default function RisksPage() {
               زمان بازنگری رسیده
             </label>
             {cell && (
-              <span className="inline-flex h-10 items-center gap-2 rounded-lg bg-slate-900 px-3 text-sm text-white">
+              <span className="inline-flex h-10 items-center gap-2 rounded-lg bg-foreground px-3 text-sm text-background">
                 احتمال {toPersianDigits(cell.likelihood)} · اثر {toPersianDigits(cell.impact)}
                 <button type="button" aria-label="برداشتن خانهٔ انتخاب‌شده" onClick={() => update({ likelihood: null, impact: null })} className="rounded-full p-0.5 hover:bg-white/20">
                   <X className="size-4" />
@@ -163,7 +163,7 @@ export default function RisksPage() {
           {loading ? (
             <Card flush role="status" aria-label="در حال بارگذاری">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="space-y-2.5 border-b border-slate-100 px-5 py-4 last:border-0">
+                <div key={i} className="space-y-2.5 border-b border-border px-5 py-4 last:border-0">
                   <Skeleton className="h-4 w-2/3" />
                   <Skeleton className="h-3 w-1/3" />
                 </div>
@@ -178,7 +178,7 @@ export default function RisksPage() {
             />
           ) : (
             <Card flush>
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-border">
                 {rows.map((risk) => (
                   <RiskListItem key={risk.id} risk={risk} />
                 ))}

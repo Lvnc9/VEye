@@ -114,15 +114,15 @@ export function ActionsPanel({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-3">
               <ProgressBar value={actionsProgress(nc)} className="h-2.5 min-w-40 max-w-md flex-1" label="پیشرفت اقدام‌ها" />
-              <span className="text-sm font-bold text-slate-700">{actionsSummary(nc)}</span>
+              <span className="text-sm font-bold text-soft-foreground">{actionsSummary(nc)}</span>
               {nc.actions_overdue > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs text-rose-800 ring-1 ring-inset ring-rose-600/20">
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-400/10 px-2 py-0.5 text-xs text-rose-800 dark:text-rose-300 ring-1 ring-inset ring-rose-600/20">
                   <AlarmClock className="size-3.5" />
                   {toPersianDigits(nc.actions_overdue)} اقدام دیرکرد
                 </span>
               )}
             </div>
-            {hint && <p className="text-xs text-slate-500">{hint}</p>}
+            {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
           </div>
 
           {error && <ErrorBanner message={error} />}
@@ -214,9 +214,9 @@ function ActionRow({
   const buttons = statusButtons(action);
   const cancelled = action.status === "CANCELLED";
   return (
-    <li className={cx("space-y-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3", cancelled && "bg-slate-50 opacity-75")}>
+    <li className={cx("space-y-2.5 rounded-xl border border-border bg-card px-4 py-3", cancelled && "bg-muted/50 opacity-75")}>
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h4 className={cx("min-w-0 flex-1 basis-48 font-bold text-slate-900", cancelled && "line-through")}>{action.title}</h4>
+        <h4 className={cx("min-w-0 flex-1 basis-48 font-bold text-foreground", cancelled && "line-through")}>{action.title}</h4>
         <span className="flex flex-wrap items-center gap-1.5">
           {action.is_overdue && (
             <Badge tone="danger">
@@ -230,24 +230,24 @@ function ActionRow({
         </span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <Avatar name={action.assignee_name} size="xs" />
           {action.assignee_name}
           {!action.assignee_is_active && (
-            <span className="inline-flex items-center gap-0.5 text-amber-700">
+            <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-300">
               <UserX className="size-3.5" />
               غیرفعال
             </span>
           )}
         </span>
-        <span className={cx("inline-flex items-center gap-1", action.is_overdue && "font-bold text-rose-700")}>
+        <span className={cx("inline-flex items-center gap-1", action.is_overdue && "font-bold text-rose-700 dark:text-rose-300")}>
           <CalendarClock className="size-3.5" />
           مهلت: {formatJalali(action.due_on)}
         </span>
         {action.completed_at && action.status !== "VERIFIED" && <span>انجام: {formatJalali(action.completed_at)}</span>}
         {action.status === "VERIFIED" && action.verified_by_name && (
-          <span className="inline-flex items-center gap-1 text-emerald-700">
+          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
             <BadgeCheck className="size-3.5" />
             تایید توسط {action.verified_by_name}
             {action.verified_at ? ` · ${formatJalali(action.verified_at)}` : ""}
@@ -261,14 +261,14 @@ function ActionRow({
         )}
       </div>
 
-      {action.description && <p className="whitespace-pre-line text-sm leading-7 text-slate-700">{action.description}</p>}
+      {action.description && <p className="whitespace-pre-line text-sm leading-7 text-soft-foreground">{action.description}</p>}
       {action.verification_note && (
-        <p className="rounded-lg bg-emerald-50/70 px-3 py-2 text-xs leading-6 text-emerald-900 ring-1 ring-inset ring-emerald-200">
+        <p className="rounded-lg bg-emerald-50/70 dark:bg-emerald-400/10 px-3 py-2 text-xs leading-6 text-emerald-900 dark:text-emerald-300 ring-1 ring-inset ring-emerald-200">
           {action.verification_note}
         </p>
       )}
       {action.cancel_reason && (
-        <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs leading-6 text-slate-700">دلیل لغو: {action.cancel_reason}</p>
+        <p className="rounded-lg bg-muted px-3 py-2 text-xs leading-6 text-soft-foreground">دلیل لغو: {action.cancel_reason}</p>
       )}
 
       {(buttons.length > 0 || action.can_verify || action.can_edit || action.can_cancel) && (

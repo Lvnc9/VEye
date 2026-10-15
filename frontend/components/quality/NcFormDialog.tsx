@@ -157,8 +157,8 @@ export function NcFormDialog({
       </div>
 
       {form.related_document !== null && documentLabel ? (
-        <p className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm ring-1 ring-inset ring-slate-200">
-          <span className="text-slate-500">مستند مرتبط:</span>
+        <p className="flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-sm ring-1 ring-inset ring-border">
+          <span className="text-muted-foreground">مستند مرتبط:</span>
           <Code>{documentLabel.split(" — ")[0]}</Code>
           <span className="min-w-0 truncate">{documentLabel.split(" — ").slice(1).join(" — ")}</span>
           <button
@@ -168,7 +168,7 @@ export function NcFormDialog({
               set({ related_document: null });
               setDocumentLabel(null);
             }}
-            className="ms-auto flex size-6 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+            className="ms-auto flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <X className="size-4" />
           </button>

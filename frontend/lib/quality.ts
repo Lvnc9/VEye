@@ -673,10 +673,10 @@ export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
 
 /** Green → amber → orange → red: `cell` for the heat map, `chip` for a badge beside a title. */
 export const RISK_LEVEL_STYLE: Record<RiskLevel, { cell: string; chip: string }> = {
-  low: { cell: "bg-emerald-100 text-emerald-900", chip: "bg-emerald-50 text-emerald-800 ring-emerald-600/20" },
-  medium: { cell: "bg-amber-100 text-amber-900", chip: "bg-amber-50 text-amber-800 ring-amber-600/20" },
-  high: { cell: "bg-orange-200 text-orange-950", chip: "bg-orange-50 text-orange-800 ring-orange-600/20" },
-  critical: { cell: "bg-rose-200 text-rose-950", chip: "bg-rose-50 text-rose-800 ring-rose-600/20" },
+  low: { cell: "bg-emerald-100 dark:bg-emerald-400/15 text-emerald-900 dark:text-emerald-300", chip: "bg-emerald-50 dark:bg-emerald-400/10 text-emerald-800 dark:text-emerald-300 ring-emerald-600/20" },
+  medium: { cell: "bg-amber-100 dark:bg-amber-400/15 text-amber-900 dark:text-amber-300", chip: "bg-amber-50 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300 ring-amber-600/20" },
+  high: { cell: "bg-orange-200 text-orange-950", chip: "bg-orange-50 dark:bg-orange-400/10 text-orange-800 dark:text-orange-300 ring-orange-600/20" },
+  critical: { cell: "bg-rose-200 text-rose-950", chip: "bg-rose-50 dark:bg-rose-400/10 text-rose-800 dark:text-rose-300 ring-rose-600/20" },
 };
 
 export const LIKELIHOOD_LABELS: Record<number, string> = { 1: "بسیار کم", 2: "کم", 3: "متوسط", 4: "زیاد", 5: "بسیار زیاد" };

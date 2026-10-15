@@ -15,10 +15,10 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 };
 
 export const PROJECT_STATUS_TONE: Record<ProjectStatus, string> = {
-  ACTIVE: "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-600/20",
-  ON_HOLD: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/25",
-  DONE: "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-500/15",
-  CANCELLED: "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-600/20",
+  ACTIVE: "bg-emerald-50 dark:bg-emerald-400/10 text-emerald-800 dark:text-emerald-300 ring-1 ring-inset ring-emerald-600/20",
+  ON_HOLD: "bg-amber-50 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300 ring-1 ring-inset ring-amber-600/25",
+  DONE: "bg-muted text-soft-foreground ring-1 ring-inset ring-slate-500/15",
+  CANCELLED: "bg-rose-50 dark:bg-rose-400/10 text-rose-800 dark:text-rose-300 ring-1 ring-inset ring-rose-600/20",
 };
 
 export const OBJECTIVE_STATUS_LABELS: Record<ObjectiveStatus, string> = {
@@ -30,11 +30,11 @@ export const OBJECTIVE_STATUS_LABELS: Record<ObjectiveStatus, string> = {
 };
 
 export const OBJECTIVE_STATUS_TONE: Record<ObjectiveStatus, string> = {
-  TODO: "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-500/15",
-  IN_PROGRESS: "bg-brand-50 text-brand-800 ring-1 ring-inset ring-brand-600/20",
-  BLOCKED: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/25",
-  DONE: "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-600/20",
-  CANCELLED: "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-600/20",
+  TODO: "bg-muted text-soft-foreground ring-1 ring-inset ring-slate-500/15",
+  IN_PROGRESS: "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20",
+  BLOCKED: "bg-amber-50 dark:bg-amber-400/10 text-amber-800 dark:text-amber-300 ring-1 ring-inset ring-amber-600/25",
+  DONE: "bg-emerald-50 dark:bg-emerald-400/10 text-emerald-800 dark:text-emerald-300 ring-1 ring-inset ring-emerald-600/20",
+  CANCELLED: "bg-rose-50 dark:bg-rose-400/10 text-rose-800 dark:text-rose-300 ring-1 ring-inset ring-rose-600/20",
 };
 
 export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
@@ -247,7 +247,7 @@ export function progressLabel(progress: number | null): string {
 
 /** Tailwind classes for the progress bar's fill, by how far along it is. */
 export function progressBarTone(progress: number | null): string {
-  if (progress === null) return "bg-slate-200";
+  if (progress === null) return "bg-slate-200 dark:bg-slate-700";
   if (progress >= 100) return "bg-green-600";
   if (progress >= 50) return "bg-sky-600";
   return "bg-amber-500";

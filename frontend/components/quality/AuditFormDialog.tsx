@@ -126,11 +126,11 @@ export function AuditFormDialog({
       </div>
 
       <div>
-        <p className="mb-1.5 text-sm text-slate-700">
+        <p className="mb-1.5 text-sm text-soft-foreground">
           ممیز اصلی <span aria-hidden className="text-rose-600">*</span>
         </p>
         {form.lead_auditor !== null && auditorName ? (
-          <p className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2 text-sm text-brand-900">
+          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-brand-900">
             <Avatar name={auditorName} size="sm" />
             {auditorName}
             <button type="button" onClick={() => set({ lead_auditor: null })} className="ms-auto text-xs underline">
@@ -141,7 +141,7 @@ export function AuditFormDialog({
           <PersonPicker id="audit-auditor" ariaLabel="جست‌وجوی ممیز اصلی" pickLabel="انتخاب" onPick={pick} />
         )}
         {shown("lead_auditor") && (
-          <p role="alert" className="mt-1.5 text-xs text-rose-700">
+          <p role="alert" className="mt-1.5 text-xs text-rose-700 dark:text-rose-300">
             {shown("lead_auditor")}
           </p>
         )}

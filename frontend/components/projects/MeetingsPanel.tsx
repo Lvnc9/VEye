@@ -104,7 +104,7 @@ export function MeetingsPanel({
           <div className="-mx-5 hidden overflow-x-auto md:block sm:-mx-6">
           <table className="w-full border-collapse text-start text-sm">
             <thead>
-              <tr className="border-y border-slate-100 bg-slate-50/80 text-xs text-slate-500">
+              <tr className="border-y border-border bg-muted/50 text-xs text-muted-foreground">
                 <th className="py-2.5 ps-5 pe-3 font-normal sm:ps-6">تاریخ</th>
                 <th className="py-2.5 pe-3 font-normal">ساعت</th>
                 <th className="py-2.5 pe-3 font-normal">عنوان</th>
@@ -113,37 +113,37 @@ export function MeetingsPanel({
                 <th className="py-2.5 pe-5 font-normal sm:pe-6" aria-hidden />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {rows.map((meeting) => (
-                <tr key={meeting.id} className="align-top transition-colors hover:bg-slate-50/60">
+                <tr key={meeting.id} className="align-top transition-colors hover:bg-accent/60">
                   <td className="py-3 ps-5 pe-3 whitespace-nowrap sm:ps-6">
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2 py-1 text-xs font-bold text-brand-800 ring-1 ring-inset ring-brand-600/15">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2 py-1 text-xs font-bold text-primary ring-1 ring-inset ring-primary/15">
                       <CalendarDays className="size-3.5" />
                       {formatJalali(meeting.held_on)}
                     </span>
                   </td>
-                  <td className="py-3 pe-3 whitespace-nowrap text-slate-700">
+                  <td className="py-3 pe-3 whitespace-nowrap text-soft-foreground">
                     {meeting.start_time ? (
                       <span className="inline-flex items-center gap-1 latn">
-                        <Clock className="size-3.5 text-slate-400" />
+                        <Clock className="size-3.5 text-subtle-foreground" />
                         {meeting.start_time}
                       </span>
                     ) : (
-                      <span className="text-slate-300">—</span>
+                      <span className="text-subtle-foreground">—</span>
                     )}
                   </td>
                   <td className="py-3 pe-3">
-                    <p className="font-bold text-slate-900">{meeting.title}</p>
-                    {meeting.description && <p className="mt-0.5 text-xs leading-6 text-slate-500">{meeting.description}</p>}
+                    <p className="font-bold text-foreground">{meeting.title}</p>
+                    {meeting.description && <p className="mt-0.5 text-xs leading-6 text-muted-foreground">{meeting.description}</p>}
                   </td>
-                  <td className="py-3 pe-3 text-slate-700">
+                  <td className="py-3 pe-3 text-soft-foreground">
                     {meeting.location ? (
                       <span className="inline-flex items-center gap-1">
-                        <MapPin className="size-3.5 text-slate-400" />
+                        <MapPin className="size-3.5 text-subtle-foreground" />
                         {meeting.location}
                       </span>
                     ) : (
-                      <span className="text-slate-300">—</span>
+                      <span className="text-subtle-foreground">—</span>
                     )}
                   </td>
                   <td className="min-w-48 py-3 pe-3">
@@ -160,9 +160,9 @@ export function MeetingsPanel({
 
           <ul className="space-y-3 md:hidden">
             {rows.map((meeting) => (
-              <li key={meeting.id} className="rounded-2xl border border-slate-200 p-4">
-                <p className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                  <span className="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2 py-0.5 font-bold text-brand-800">
+              <li key={meeting.id} className="rounded-2xl border border-border p-4">
+                <p className="flex flex-wrap items-center gap-2 text-xs text-soft-foreground">
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2 py-0.5 font-bold text-primary">
                     <CalendarDays className="size-3.5" />
                     {formatJalali(meeting.held_on)}
                   </span>
@@ -179,12 +179,12 @@ export function MeetingsPanel({
                     </span>
                   )}
                 </p>
-                <p className="mt-2 font-bold text-slate-900">{meeting.title}</p>
-                {meeting.description && <p className="mt-0.5 text-sm text-slate-600">{meeting.description}</p>}
+                <p className="mt-2 font-bold text-foreground">{meeting.title}</p>
+                {meeting.description && <p className="mt-0.5 text-sm text-soft-foreground">{meeting.description}</p>}
                 <div className="mt-3">
                   <AttendeeSummary meeting={meeting} />
                 </div>
-                <div className="mt-3 border-t border-slate-100 pt-3">
+                <div className="mt-3 border-t border-border pt-3">
                   <MeetingActions projectId={projectId} meeting={meeting} onChanged={refresh} onError={setError} onEdit={() => setEditing(meeting)} />
                 </div>
               </li>
@@ -203,20 +203,20 @@ function AttendeeSummary({ meeting }: { meeting: ProjectMeeting }) {
     <div className="space-y-1.5 text-xs">
       <div className="flex items-center gap-2">
         <ProgressBar value={ratio} tone="bg-emerald-500" className="h-1.5 flex-1" />
-        <span className="shrink-0 text-slate-600 tabular-nums">
+        <span className="shrink-0 text-soft-foreground tabular-nums">
           {meeting.acknowledged_count} از {meeting.attendee_count} دیده‌اند
         </span>
       </div>
-      <p className="flex items-start gap-1 text-slate-600">
+      <p className="flex items-start gap-1 text-soft-foreground">
         <Eye className="mt-0.5 size-3.5 shrink-0 text-emerald-500" />
         <span>
-          <span className="text-slate-500">اعضای متوجه‌شده:</span> {acknowledged.length > 0 ? acknowledged.map((a) => a.name).join("، ") : "—"}
+          <span className="text-muted-foreground">اعضای متوجه‌شده:</span> {acknowledged.length > 0 ? acknowledged.map((a) => a.name).join("، ") : "—"}
         </span>
       </p>
-      <p className="flex items-start gap-1 text-slate-600">
-        <EyeOff className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
+      <p className="flex items-start gap-1 text-soft-foreground">
+        <EyeOff className="mt-0.5 size-3.5 shrink-0 text-subtle-foreground" />
         <span>
-          <span className="text-slate-500">هنوز ندیده‌اند:</span> {pending.length > 0 ? pending.map((a) => a.name).join("، ") : "—"}
+          <span className="text-muted-foreground">هنوز ندیده‌اند:</span> {pending.length > 0 ? pending.map((a) => a.name).join("، ") : "—"}
         </span>
       </p>
     </div>
@@ -344,28 +344,28 @@ function MeetingForm({
   }
 
   return (
-    <div className="mb-5 space-y-4 rounded-2xl border border-dashed border-brand-200 bg-brand-50/30 p-4 animate-fade-in">
+    <div className="mb-5 space-y-4 rounded-2xl border border-dashed border-primary/30 bg-brand-50/30 p-4 animate-fade-in">
       {error && <ErrorBanner message={error} />}
       {isEdit && (
-        <p className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-800">
+        <p className="rounded-xl border border-amber-200 dark:border-amber-400/25 bg-amber-50/80 dark:bg-amber-400/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
           تغییر تاریخ، ساعت یا مکان، همهٔ «مشاهده شد»های ثبت‌شده را پاک می‌کند.
         </p>
       )}
       <div>
-        <label className="mb-1.5 block text-xs text-slate-600" htmlFor="meeting-title">
+        <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="meeting-title">
           عنوان
         </label>
         <input id="meeting-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} className={input} />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-xs text-slate-600" htmlFor="meeting-date">
+          <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="meeting-date">
             تاریخ
           </label>
           <JalaliDatePicker id="meeting-date" value={heldOn} onChange={(iso) => setHeldOn(iso ?? "")} required />
         </div>
         <div>
-          <label className="mb-1.5 block text-xs text-slate-600" htmlFor="meeting-time">
+          <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="meeting-time">
             ساعت (اختیاری)
           </label>
           <input
@@ -378,21 +378,21 @@ function MeetingForm({
         </div>
       </div>
       <div>
-        <label className="mb-1.5 block text-xs text-slate-600" htmlFor="meeting-location">
+        <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="meeting-location">
           مکان (اختیاری)
         </label>
         <input id="meeting-location" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={255} className={input} />
       </div>
       <div>
-        <label className="mb-1.5 block text-xs text-slate-600" htmlFor="meeting-description">
+        <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="meeting-description">
           توضیحات (اختیاری)
         </label>
         <textarea id="meeting-description" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={input} />
       </div>
       <div>
-        <span className="mb-1.5 block text-xs text-slate-600">اعضای دعوت‌شده</span>
+        <span className="mb-1.5 block text-xs text-soft-foreground">اعضای دعوت‌شده</span>
         {members.length === 0 ? (
-          <p className="text-xs text-slate-500">این پروژه هنوز عضوی ندارد.</p>
+          <p className="text-xs text-muted-foreground">این پروژه هنوز عضوی ندارد.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {members.map((member) => {
@@ -406,7 +406,7 @@ function MeetingForm({
                   onClick={() => toggle(member.user)}
                   className={cx(
                     "flex items-center gap-2 rounded-full py-1 ps-1 pe-3 text-xs ring-1 ring-inset transition-[background-color,box-shadow] duration-150 active:scale-[0.97]",
-                    on ? "bg-brand-700 text-white ring-brand-700" : "bg-white text-slate-700 ring-slate-200 hover:ring-slate-300",
+                    on ? "bg-primary text-white ring-brand-700" : "bg-card text-soft-foreground ring-border hover:ring-slate-300",
                   )}
                 >
                   {on ? (

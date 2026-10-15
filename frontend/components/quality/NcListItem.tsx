@@ -15,17 +15,17 @@ export function NcListItem({ nc }: { nc: NonConformance }) {
     <li>
       <Link
         href={`/quality/${nc.id}`}
-        className="block space-y-2.5 px-4 py-3.5 transition-colors hover:bg-slate-50 focus-visible:bg-slate-50 sm:px-5"
+        className="block space-y-2.5 px-4 py-3.5 transition-colors hover:bg-accent/60 focus-visible:bg-muted/50 sm:px-5"
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <Code>{nc.code}</Code>
-          <span className="min-w-0 flex-1 basis-48 font-bold text-slate-900">{nc.title}</span>
+          <span className="min-w-0 flex-1 basis-48 font-bold text-foreground">{nc.title}</span>
           <span className="flex flex-wrap items-center gap-1.5">
             <SeverityBadge severity={nc.severity} label={nc.severity_label} />
             <NcStatusBadge status={nc.status} label={nc.status_label} />
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <Building2 className="size-3.5" />
             {nc.owner_node_name}
@@ -40,9 +40,9 @@ export function NcListItem({ nc }: { nc: NonConformance }) {
         {nc.status === "IN_PROGRESS" && (
           <div className="flex flex-wrap items-center gap-3">
             <ProgressBar value={progress} className="h-1.5 w-40" label="پیشرفت اقدام‌ها" />
-            <span className="text-xs text-slate-600">{actionsSummary(nc)}</span>
+            <span className="text-xs text-soft-foreground">{actionsSummary(nc)}</span>
             {nc.actions_overdue > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs text-rose-800 ring-1 ring-inset ring-rose-600/20">
+              <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-400/10 px-2 py-0.5 text-xs text-rose-800 dark:text-rose-300 ring-1 ring-inset ring-rose-600/20">
                 <AlarmClock className="size-3.5" />
                 {toPersianDigits(nc.actions_overdue)} اقدام دیرکرد
               </span>

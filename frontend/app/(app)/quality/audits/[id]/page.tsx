@@ -87,7 +87,7 @@ export default function AuditPage() {
   return (
     <div className="space-y-6">
       <nav className="text-sm">
-        <Link href="/quality/audits" className="group inline-flex items-center gap-1.5 text-slate-500 transition-colors hover:text-slate-900">
+        <Link href="/quality/audits" className="group inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground">
           <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
           ممیزی‌ها
         </Link>
@@ -101,13 +101,13 @@ export default function AuditPage() {
               <Code>{audit.code}</Code>
               <AuditStatusBadge status={audit.status} label={audit.status_label} />
               {late && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs text-rose-800 ring-1 ring-inset ring-rose-600/20">
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-400/10 px-2 py-0.5 text-xs text-rose-800 dark:text-rose-300 ring-1 ring-inset ring-rose-600/20">
                   <AlarmClock className="size-3.5" />
                   از تاریخ برنامه گذشته
                 </span>
               )}
             </div>
-            <h1 className="text-2xl font-bold leading-10 text-slate-900">{audit.title}</h1>
+            <h1 className="text-2xl font-bold leading-10 text-foreground">{audit.title}</h1>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {audit.can_start && (
@@ -151,17 +151,17 @@ export default function AuditPage() {
               [when[0], when[1], <CalendarRange key="w" />],
             ] as const
           ).map(([label, value, icon]) => (
-            <div key={label} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-200/70">
-              <span className="text-slate-400 [&_svg]:size-4">{icon}</span>
+            <div key={label} className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5 ring-1 ring-inset ring-border">
+              <span className="text-subtle-foreground [&_svg]:size-4">{icon}</span>
               <div className="min-w-0">
-                <dt className="text-xs text-slate-500">{label}</dt>
-                <dd className="truncate text-sm font-bold text-slate-800">{value}</dd>
+                <dt className="text-xs text-muted-foreground">{label}</dt>
+                <dd className="truncate text-sm font-bold text-foreground">{value}</dd>
               </div>
             </div>
           ))}
         </dl>
         {!audit.lead_auditor_is_active && audit.can_change_auditor && (
-          <p className="mt-3 text-xs text-amber-700">ممیز اصلی غیرفعال شده است؛ ممیز دیگری را جایگزین کنید.</p>
+          <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">ممیز اصلی غیرفعال شده است؛ ممیز دیگری را جایگزین کنید.</p>
         )}
         {error && (
           <div className="mt-4">

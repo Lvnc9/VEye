@@ -108,11 +108,11 @@ export function ActionFormDialog({
       </Field>
 
       <div>
-        <p className="mb-1.5 text-sm text-slate-700">
+        <p className="mb-1.5 text-sm text-soft-foreground">
           مسئول انجام <span aria-hidden className="text-rose-600">*</span>
         </p>
         {form.assignee !== null && assigneeName ? (
-          <p className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2 text-sm text-brand-900">
+          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-brand-900">
             <Avatar name={assigneeName} size="sm" />
             {assigneeName}
             <button type="button" onClick={() => set({ assignee: null })} className="ms-auto text-xs underline">
@@ -123,7 +123,7 @@ export function ActionFormDialog({
           <PersonPicker id="action-assignee" ariaLabel="جست‌وجوی مسئول انجام" pickLabel="انتخاب" onPick={pick} />
         )}
         {shown("assignee") && (
-          <p role="alert" className="mt-1.5 text-xs text-rose-700">
+          <p role="alert" className="mt-1.5 text-xs text-rose-700 dark:text-rose-300">
             {shown("assignee")}
           </p>
         )}
