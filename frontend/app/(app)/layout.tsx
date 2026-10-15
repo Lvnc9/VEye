@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { apiPost } from "@/lib/api-client";
 import { SetupBanner } from "@/components/SetupBanner";
+import { ForcedPasswordScreen } from "@/components/account/ForcedPasswordScreen";
 import { Avatar } from "@/components/ui/Avatar";
 import { CountBadge } from "@/components/ui/Badge";
 import { BrandMark } from "@/components/ui/BrandMark";
@@ -271,7 +272,14 @@ function TopBar({ inbox, open, onOpen }: { inbox: InboxSummary | null; open: boo
   );
 }
 
+/** While HR's password stands (Phase 20) the API answers nothing else, so neither does the app. */
 function Shell({ children }: { children: React.ReactNode }) {
+  const { user } = useCurrentUser();
+  if (user?.must_change_password) return <ForcedPasswordScreen />;
+  return <AppShell>{children}</AppShell>;
+}
+
+function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const inbox = useInboxSummary(); // one poll, shared by the sidebar and the top bar
 

@@ -1,7 +1,19 @@
 "use client";
 
 import type { ComponentType } from "react";
-import { BadgeCheck, Building2, CalendarDays, Crown, IdCard, KeyRound, Layers, Phone, ShieldCheck, UserRound } from "lucide-react";
+import {
+  BadgeCheck,
+  Building2,
+  CalendarDays,
+  Crown,
+  IdCard,
+  KeyRound,
+  Layers,
+  LockKeyhole,
+  Phone,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 import { ACCESS_LEVEL_LABELS, ACCESS_ROLL_LABELS, CAPABILITY_LABELS } from "@/lib/types";
 import { ORG_KIND_LABELS } from "@/lib/organization";
 import { formatJalali } from "@/lib/jalali";
@@ -11,9 +23,12 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Card, CardHeader, cardClass } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cx } from "@/components/ui/cx";
+import { useToast } from "@/components/ui/Toast";
+import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
 
 export default function AccountPage() {
-  const { user, loading } = useCurrentUser();
+  const { user, loading, replaceUser } = useCurrentUser();
+  const toast = useToast();
 
   if (loading) return <LoadingBanner label="در حال بارگذاری حساب..." />;
   if (!user) return <ErrorBanner message="پروفایل شما بارگذاری نشد." />;
@@ -61,22 +76,34 @@ export default function AccountPage() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Card flush className="overflow-hidden" aria-label="مشخصات">
-          <div className="px-5 pt-5 sm:px-6">
-            <CardHeader title="مشخصات" icon={<UserRound />} />
-          </div>
-          <dl className="divide-y divide-slate-100 border-t border-slate-100">
-            {rows.map(({ label, value, icon: Icon, latin }) => (
-              <div key={label} className="flex items-center justify-between gap-4 px-5 py-3 text-sm sm:px-6">
-                <dt className="flex items-center gap-2 text-slate-500">
-                  <Icon className="size-4 text-slate-400" />
-                  {label}
-                </dt>
-                <dd className={cx("text-end font-bold text-slate-900", latin && "latn")}>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
+        <div className="space-y-6">
+          <Card flush className="overflow-hidden" aria-label="مشخصات">
+            <div className="px-5 pt-5 sm:px-6">
+              <CardHeader title="مشخصات" icon={<UserRound />} />
+            </div>
+            <dl className="divide-y divide-slate-100 border-t border-slate-100">
+              {rows.map(({ label, value, icon: Icon, latin }) => (
+                <div key={label} className="flex items-center justify-between gap-4 px-5 py-3 text-sm sm:px-6">
+                  <dt className="flex items-center gap-2 text-slate-500">
+                    <Icon className="size-4 text-slate-400" />
+                    {label}
+                  </dt>
+                  <dd className={cx("text-end font-bold text-slate-900", latin && "latn")}>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
+
+          <Card aria-label="تغییر رمز عبور">
+            <CardHeader title="تغییر رمز عبور" icon={<LockKeyhole />} />
+            <ChangePasswordForm
+              onChanged={(next) => {
+                replaceUser(next);
+                toast({ tone: "success", title: "رمز عبور شما تغییر کرد." });
+              }}
+            />
+          </Card>
+        </div>
 
         <div className="space-y-6">
           <Card aria-label="جایگاه در سازمان">

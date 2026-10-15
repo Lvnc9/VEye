@@ -8,12 +8,16 @@ interface CurrentUserState {
   user: User | null;
   loading: boolean;
   can: (capability: Capability) => boolean;
+  /** Take a fresh copy of the signed-in user an endpoint just returned (e.g. after a password change),
+   *  keeping the `/auth/me/`-only fields (company, memberships) the endpoint does not repeat. */
+  replaceUser: (next: User) => void;
 }
 
 const CurrentUserContext = createContext<CurrentUserState>({
   user: null,
   loading: true,
   can: () => false,
+  replaceUser: () => {},
 });
 
 /**
@@ -48,7 +52,12 @@ export function CurrentUserProvider({ children }: { children: React.ReactNode })
 
   return (
     <CurrentUserContext.Provider
-      value={{ user, loading, can: (capability) => hasCapability(user, capability) }}
+      value={{
+        user,
+        loading,
+        can: (capability) => hasCapability(user, capability),
+        replaceUser: (next) => setUser((previous) => ({ ...previous, ...next })),
+      }}
     >
       {children}
     </CurrentUserContext.Provider>

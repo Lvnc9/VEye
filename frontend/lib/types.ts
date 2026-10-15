@@ -94,6 +94,9 @@ export interface User {
   /** The one technical account that runs first-time setup (Phase 10): org + personnel only, never signs. */
   is_developer: boolean;
   date_joined: string;
+  /** Phase 20: someone else chose this password (HR registered or reset it) — the app shows only the
+   *  change-password screen until the person picks their own. */
+  must_change_password: boolean;
   /** Only on `GET /auth/me/`: the company (null before setup) and the caller's own places in it. */
   company?: MeCompany | null;
   memberships?: MeMembership[];

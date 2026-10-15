@@ -49,6 +49,21 @@ def blacklist_jti(jti: str, ttl_seconds: int) -> None:
     cache.set(blacklist_key(jti), True, timeout=ttl_seconds)
 
 
+# Phase 20: what a person whose password someone else chose may still reach — read who they are,
+# choose their own password, and sign out. Everything else answers 403 `password_change_required`.
+PASSWORD_CHANGE_ALLOWED_ROUTES = frozenset({"auth-me", "auth-password", "auth-logout", "auth-refresh"})
+
+
+def token_predates_revocation(user, token) -> bool:
+    """True when `token` was issued before the person's sessions were last revoked (a password change,
+    an HR reset, «خروج از سایر دستگاه‌ها»). Shared by every request and by the refresh endpoint."""
+    cutoff = user.sessions_valid_after
+    if cutoff is None:
+        return False
+    issued_at = token.get("iat")
+    return issued_at is None or int(issued_at) < int(cutoff.timestamp())
+
+
 class CookieJWTAuthentication(JWTAuthentication):
     def authenticate(self, request):
         raw_token = self._get_raw_token(request)
@@ -57,8 +72,20 @@ class CookieJWTAuthentication(JWTAuthentication):
 
         validated_token = self.get_validated_token(raw_token)
         user = self.get_user(validated_token)
+        if token_predates_revocation(user, validated_token):
+            raise exceptions.AuthenticationFailed(
+                {"detail": "نشست شما پایان یافته است؛ دوباره وارد شوید.", "code": "session_revoked"}
+            )
 
         self.enforce_csrf(request)
+
+        if user.must_change_password:
+            match = getattr(request, "resolver_match", None)
+            if match is None or match.url_name not in PASSWORD_CHANGE_ALLOWED_ROUTES:
+                # The code travels in the body: the app shell reads it to show the change-password screen.
+                raise exceptions.PermissionDenied(
+                    {"detail": "پیش از ادامه باید رمز عبور خود را تغییر دهید.", "code": "password_change_required"}
+                )
 
         return user, validated_token
 

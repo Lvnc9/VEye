@@ -1,6 +1,7 @@
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
+from django.utils import timezone
 
 
 class AccessRoll(models.TextChoices):
@@ -151,6 +152,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     # through the personnel API; created only by the setup bootstrap.
     is_developer = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
+    # Phase 20: set when someone else chose this person's password (HR registering them or resetting
+    # it). Until they pick their own, the API refuses everything but that (authentication.py).
+    must_change_password = models.BooleanField(default=False)
+    # Phase 20: tokens issued before this instant are refused — a password change, an HR reset and
+    # «خروج از سایر دستگاه‌ها» move it forward. Whole seconds, because a JWT's `iat` is.
+    sessions_valid_after = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
 
@@ -181,6 +188,11 @@ class User(AbstractBaseUser, PermissionsMixin):
                 name="uniq_developer_account",
             ),
         ]
+
+    def revoke_sessions(self) -> None:
+        """Make every token issued so far invalid (the caller saves). A token minted later in the
+        same second still passes, which is what lets the caller hand this browser a fresh pair."""
+        self.sessions_valid_after = timezone.now().replace(microsecond=0)
 
     def __str__(self):
         return f"{self.full_name} ({self.national_code})"

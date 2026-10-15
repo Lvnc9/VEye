@@ -7,6 +7,8 @@ Phase-level history of VEye V2. **Every commit that changes behaviour adds a lin
 > git history is per-slice from Phase 6 on.
 
 ## [Unreleased]
+### Phase 20 — account security and reliability (owner's decisions 2026-10-15)
+- **Choose your own password, and a forced change after HR sets one (slice 1).** `POST /auth/password/` (current + new; Django's validators with Persian messages; rate-limited) signs out every other device and re-issues this browser's cookies; a «تغییر رمز عبور» card on `/account`. A password HR sets — registering someone or the new **«بازنشانی رمز عبور»** card on `/personnel/register` — is now validated (it never was) and marks the person `must_change_password`: until they choose their own, the API answers 403 `password_change_required` to everything but me/password/logout/refresh and the app shows only a change-password screen. A reset also signs the person out everywhere (`User.sessions_valid_after`: older tokens are refused on every request and on refresh). `last_login` is now recorded on sign-in.
 ### License (owner's decision 2026-10-10)
 - **VEye is proprietary — all rights reserved.** A `LICENSE` file says so: the source is public for viewing only; using, installing, hosting, copying or redistributing it needs the owner's written permission (contact via github.com/Lvnc9). The README gains a License section (English + Persian), a badge, and a note above Quick start. Chosen by the owner over AGPL-3.0 / MIT / Apache-2.0.
 ### README, teaser and production deployment (owner's request 2026-10-10)

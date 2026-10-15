@@ -505,3 +505,166 @@ class DeveloperProtectionApiTests(TestCase):
         person = make_user("7100000003", AccessRoll.GUILD, AccessLevel.LEVEL_2)
         self.client.force_authenticate(user=self.ceo)
         self.assertEqual(self.client.patch(self.detail(person), {"is_active": False}, format="json").status_code, 200)
+
+
+def _issued_earlier(seconds=5):
+    """Tokens minted a few seconds in the past. A revocation in the same second as a login lets that
+    login's tokens through (the cutoff is whole seconds, like `iat`); aging them keeps tests exact."""
+    from datetime import timedelta
+
+    from rest_framework_simplejwt.utils import aware_utcnow
+
+    return mock.patch(
+        "rest_framework_simplejwt.tokens.aware_utcnow", return_value=aware_utcnow() - timedelta(seconds=seconds)
+    )
+
+
+@override_settings(CACHES=LOCMEM_CACHE, RATELIMIT_ENABLE=False)
+class PasswordChangeTests(TestCase):
+    """Phase 20: choosing your own password; a password someone else chose must be replaced."""
+
+    def setUp(self):
+        self.password = "correct-horse-battery"
+        self.user = make_user("8100000001", AccessRoll.GUILD, AccessLevel.LEVEL_2, password=self.password)
+        self.hr = make_user("8100000002", AccessRoll.EMPLOYER, AccessLevel.LEVEL_1)
+        self.client = APIClient(enforce_csrf_checks=False)
+
+    def sign_in(self, client, user, password):
+        with _issued_earlier():
+            response = client.post(
+                reverse("auth-login"), {"national_code": user.national_code, "password": password}, format="json"
+            )
+        self.assertEqual(response.status_code, 200, response.content)
+        return response
+
+    def change(self, client, current, new):
+        return client.post(
+            reverse("auth-password"), {"current_password": current, "new_password": new}, format="json"
+        )
+
+    def test_changing_your_own_password(self):
+        self.sign_in(self.client, self.user, self.password)
+        response = self.change(self.client, self.password, "a-fresh-secret-42")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("a-fresh-secret-42"))
+        self.assertFalse(response.json()["must_change_password"])
+        # The response re-issued this browser's cookies, so it stays signed in.
+        self.assertEqual(self.client.get(reverse("auth-me")).status_code, 200)
+
+    def test_the_current_password_must_be_right(self):
+        self.sign_in(self.client, self.user, self.password)
+        response = self.change(self.client, "not-my-password", "a-fresh-secret-42")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("current_password", response.json())
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.password))
+
+    def test_the_new_password_must_differ_and_be_strong(self):
+        self.sign_in(self.client, self.user, self.password)
+        for weak in (self.password, "12345678", "abc"):
+            response = self.change(self.client, self.password, weak)
+            self.assertEqual(response.status_code, 400, weak)
+            self.assertIn("new_password", response.json())
+
+    def test_changing_signs_out_every_other_device(self):
+        other = APIClient(enforce_csrf_checks=False)
+        self.sign_in(other, self.user, self.password)
+        self.sign_in(self.client, self.user, self.password)
+        self.assertEqual(self.change(self.client, self.password, "a-fresh-secret-42").status_code, 200)
+        self.assertEqual(other.get(reverse("auth-me")).status_code, 401)
+        self.assertEqual(other.post(reverse("auth-refresh")).status_code, 401)
+
+    def test_anonymous_cannot_change_a_password(self):
+        self.assertEqual(self.change(self.client, self.password, "a-fresh-secret-42").status_code, 401)
+
+    def test_login_records_last_login(self):
+        self.assertIsNone(self.user.last_login)
+        self.sign_in(self.client, self.user, self.password)
+        self.user.refresh_from_db()
+        self.assertIsNotNone(self.user.last_login)
+
+    # --- a password someone else chose ---
+
+    def register(self, password="first-secret-77"):
+        hr = APIClient(enforce_csrf_checks=False)
+        hr.force_authenticate(user=self.hr)
+        response = hr.post(
+            reverse("personnel-list"),
+            {
+                "national_code": "8100000009",
+                "full_name": "نیروی تازه",
+                "access_roll": AccessRoll.GUILD,
+                "access_level": AccessLevel.LEVEL_3,
+                "password": password,
+            },
+            format="json",
+        )
+        return response
+
+    def test_a_registered_person_must_choose_their_own_password(self):
+        response = self.register()
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertTrue(response.json()["must_change_password"])
+        person = User.objects.get(national_code="8100000009")
+        self.assertTrue(person.must_change_password)
+
+        login = self.sign_in(self.client, person, "first-secret-77")
+        self.assertTrue(login.json()["must_change_password"])
+        self.assertTrue(self.client.get(reverse("auth-me")).json()["must_change_password"])
+        blocked = self.client.get(reverse("personnel-list"))
+        self.assertEqual(blocked.status_code, 403)
+        self.assertEqual(blocked.json()["code"], "password_change_required")
+
+        self.assertEqual(self.change(self.client, "first-secret-77", "my-own-secret-99").status_code, 200)
+        self.assertEqual(self.client.get(reverse("personnel-list")).status_code, 200)
+        person.refresh_from_db()
+        self.assertFalse(person.must_change_password)
+
+    def test_registration_refuses_a_weak_password(self):
+        response = self.register(password="12345678")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("password", response.json())
+        self.assertFalse(User.objects.filter(national_code="8100000009").exists())
+
+    def test_an_hr_reset_forces_a_change_and_signs_the_person_out(self):
+        self.sign_in(self.client, self.user, self.password)
+        hr = APIClient(enforce_csrf_checks=False)
+        hr.force_authenticate(user=self.hr)
+        response = hr.patch(
+            reverse("personnel-detail", args=[self.user.pk]), {"password": "reset-by-hr-55"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.must_change_password)
+        self.assertTrue(self.user.check_password("reset-by-hr-55"))
+        self.assertEqual(self.client.get(reverse("auth-me")).status_code, 401)
+        self.assertEqual(self.client.post(reverse("auth-refresh")).status_code, 401)
+
+    def test_an_hr_reset_refuses_a_weak_password(self):
+        hr = APIClient(enforce_csrf_checks=False)
+        hr.force_authenticate(user=self.hr)
+        response = hr.patch(reverse("personnel-detail", args=[self.user.pk]), {"password": "8100000001"}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.password))
+
+    def test_editing_your_own_password_through_the_directory_is_not_a_reset(self):
+        developer = make_developer()
+        client = APIClient(enforce_csrf_checks=False)
+        client.force_authenticate(user=developer)
+        response = client.patch(
+            reverse("personnel-detail", args=[developer.pk]), {"password": "developer-own-77"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        developer.refresh_from_db()
+        self.assertFalse(developer.must_change_password)
+        self.assertIsNone(developer.sessions_valid_after)
+
+    def test_editing_other_fields_does_not_force_a_change(self):
+        hr = APIClient(enforce_csrf_checks=False)
+        hr.force_authenticate(user=self.hr)
+        hr.patch(reverse("personnel-detail", args=[self.user.pk]), {"mobile_phone": "09120000001"}, format="json")
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.must_change_password)
+        self.assertIsNone(self.user.sessions_valid_after)

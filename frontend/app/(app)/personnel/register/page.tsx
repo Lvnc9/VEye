@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Building2, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { PersonnelForm } from "@/components/personnel/PersonnelForm";
+import { ResetPasswordCard } from "@/components/personnel/ResetPasswordCard";
 import { UnassignedPeople } from "@/components/personnel/UnassignedPeople";
 import { Avatar } from "@/components/ui/Avatar";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -109,6 +110,8 @@ export default function PersonnelRegisterPage() {
       </div>
 
       <UnassignedPeople nodes={nodes} reload={reload} onPlaced={() => setReload((n) => n + 1)} />
+
+      <ResetPasswordCard />
     </div>
   );
 }

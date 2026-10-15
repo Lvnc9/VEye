@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.models import update_last_login
 from django.db import transaction
 from django.db.models import ProtectedError
 from django.middleware.csrf import get_token
@@ -20,9 +21,9 @@ from django.conf import settings
 from apps.core.exceptions import ConflictError
 from apps.core.permissions import HasCapability
 
-from .authentication import blacklist_jti, is_blacklisted
+from .authentication import blacklist_jti, is_blacklisted, token_predates_revocation
 from .models import Capability, User
-from .serializers import LoginSerializer, PlacementSerializer, UserSerializer
+from .serializers import LoginSerializer, PasswordChangeSerializer, PlacementSerializer, UserSerializer
 
 # NOTE on CSRF (see also apps/accounts/authentication.py docstring):
 # - LoginView is deliberately left without an explicit csrf_protect: at
@@ -55,6 +56,12 @@ def set_jwt_cookies(response: Response, access_token: str, refresh_token: str) -
     response.set_cookie(settings.JWT_REFRESH_COOKIE_NAME, refresh_token, **_cookie_kwargs(refresh_lifetime))
 
 
+def issue_session(response: Response, user) -> None:
+    """A fresh token pair for `user`, as this browser's cookies."""
+    refresh = RefreshToken.for_user(user)
+    set_jwt_cookies(response, str(refresh.access_token), str(refresh))
+
+
 def _clear_jwt_cookies(response: Response) -> None:
     response.delete_cookie(settings.JWT_ACCESS_COOKIE_NAME, path=settings.JWT_COOKIE_PATH)
     response.delete_cookie(settings.JWT_REFRESH_COOKIE_NAME, path=settings.JWT_COOKIE_PATH)
@@ -80,11 +87,11 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        refresh = RefreshToken.for_user(user)
-        access = refresh.access_token
-
+        # SimpleJWT's UPDATE_LAST_LOGIN only acts inside its own login serializers, which this view
+        # does not use — so `last_login` stayed empty until Phase 20.
+        update_last_login(None, user)
         response = Response(session_user_data(user), status=status.HTTP_200_OK)
-        set_jwt_cookies(response, str(access), str(refresh))
+        issue_session(response, user)
         # Forces CsrfViewMiddleware to emit a fresh, readable csrftoken cookie
         # on this response (skeleton.md §4).
         get_token(request)
@@ -118,6 +125,12 @@ class RefreshView(APIView):
 
         if not user.is_active:
             return Response({"detail": "User inactive."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if token_predates_revocation(user, old_refresh):
+            return Response(
+                {"detail": "نشست شما پایان یافته است؛ دوباره وارد شوید.", "code": "session_revoked"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
         new_refresh = RefreshToken.for_user(user)
         new_access = new_refresh.access_token
@@ -154,6 +167,30 @@ class LogoutView(APIView):
 
         response = Response({"detail": "Logged out."}, status=status.HTTP_200_OK)
         _clear_jwt_cookies(response)
+        return response
+
+
+class PasswordChangeView(APIView):
+    """Choose your own password (Phase 20). Every other device is signed out; this browser gets a fresh
+    pair of cookies so it stays signed in. Clears `must_change_password`. Rate-limited per person like
+    the login page, since it checks the current password."""
+
+    permission_classes = [IsAuthenticated]
+
+    @method_decorator(
+        ratelimit(key="user", rate=lambda group, request: settings.LOGIN_RATELIMIT_RATE, method="POST", block=True)
+    )
+    def post(self, request):
+        serializer = PasswordChangeSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        user = request.user
+        user.set_password(serializer.validated_data["new_password"])
+        user.must_change_password = False
+        user.revoke_sessions()
+        user.save(update_fields=["password", "must_change_password", "sessions_valid_after"])
+
+        response = Response(session_user_data(user), status=status.HTTP_200_OK)
+        issue_session(response, user)
         return response
 
 
