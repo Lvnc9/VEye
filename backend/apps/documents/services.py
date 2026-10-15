@@ -142,6 +142,26 @@ def create_revision(*, user, document_id: int) -> Document:
 
 
 @transaction.atomic
+def set_review_interval(*, user, document_id: int, months) -> Document:
+    """Phase 21: how many months between periodic reviews (0 = none). Set while the document is a draft, by
+    someone who may write it; approval starts the clock from it."""
+    from .review import MAX_INTERVAL_MONTHS
+
+    if not isinstance(months, int) or isinstance(months, bool) or not 0 <= months <= MAX_INTERVAL_MONTHS:
+        raise ValidationError({"months": [f"فاصلهٔ بازنگری باید عددی از ۰ تا {MAX_INTERVAL_MONTHS} ماه باشد."]})
+    try:
+        document = Document.objects.select_for_update().get(pk=document_id)
+    except Document.DoesNotExist:
+        raise NotFound("مستند یافت نشد.")
+    authority.DocumentAuthority(user).require_author(document)
+    if not document.is_editable:
+        raise ConflictError("فاصلهٔ بازنگری فقط تا زمانی که مستند پیش‌نویس است قابل تغییر است.", code="content_locked")
+    document.review_interval_months = months
+    document.save(update_fields=["review_interval_months", "updated_at"])
+    return document
+
+
+@transaction.atomic
 def set_owner_node(*, user, document_id: int, node_id: int) -> Document:
     """Give a draft its owner node (or move it): only while it is a DRAFT, and only to a node the user
     may pick — one they lead or that lies below one they lead (the مدیر عامل: any active node)."""

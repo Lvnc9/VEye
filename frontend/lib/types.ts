@@ -257,6 +257,14 @@ export interface DocumentRow {
   workflow: WorkflowState;
   /** Why a DRAFT came back (مرجوع). Only on single-document payloads, not register rows. */
   return_note?: ReturnNote | null;
+  /** Phase 21 periodic review: months between reviews (0 = none). */
+  review_interval_months: number;
+  /** The next review's date (ISO), only while the document is in force. */
+  review_due_on: string | null;
+  /** "overdue" — the date passed; "due" — within the 30-day notice window. */
+  review_state: ReviewState | null;
+  /** «بازنگری شد — بدون تغییر»: in force, and this person may write it. */
+  can_mark_reviewed: boolean;
   content_saved_at: string | null;
   created_at: string;
 }
@@ -289,6 +297,7 @@ export type DocumentEventKind =
   | "approved"
   | "returned"
   | "withdrawn"
+  | "reviewed"
   | "superseded"
   | "imported";
 
@@ -360,7 +369,11 @@ export interface DocumentFilters {
   group?: DocumentGroup | "";
   category?: DocumentCategory | "";
   status?: DocumentStatus | "";
+  /** Phase 21: "due" (due within 30 days or overdue) or "overdue". */
+  review?: ReviewState | "";
 }
+
+export type ReviewState = "due" | "overdue";
 
 // ---------------------------------------------------------------------------
 // Document designer

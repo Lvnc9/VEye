@@ -51,6 +51,8 @@ export interface DocumentDefaults {
   doc_footnote2: string;
   form_subtitle: string;
   form_show_letter_box: boolean;
+  /** Phase 21: a new document's months between periodic reviews (0 = none). */
+  doc_review_months: number;
 }
 
 export interface Company {

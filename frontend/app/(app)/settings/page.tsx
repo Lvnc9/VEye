@@ -16,6 +16,7 @@ import { FormSection } from "@/components/ui/FormSection";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cx } from "@/components/ui/cx";
 import { BackupsCard } from "@/components/settings/BackupsCard";
+import { intervalChoices, reviewIntervalLabel } from "@/lib/review";
 
 /**
  * «تنظیمات». V_1.0 had the button but never wired it (main.py:938). It now holds
@@ -141,6 +142,28 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
               className="relative h-5 w-9 shrink-0 rounded-full bg-slate-300 transition-colors duration-200 peer-checked:bg-brand-600 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500 after:absolute after:top-0.5 after:right-0.5 after:size-4 after:rounded-full after:bg-white after:shadow after:transition-transform after:duration-200 peer-checked:after:-translate-x-4"
             />
             <span className="text-slate-700">شماره / تاریخ / پیوست در بالای صفحهٔ اول</span>
+          </label>
+        </FormSection>
+
+        <FormSection
+          step={4}
+          title="بازنگری دوره‌ای"
+          description="هر مستند تحت کنترل پس از این فاصله دوباره مرور می‌شود؛ یک ماه پیش از موعد به نویسندگانش یادآوری می‌شود."
+        >
+          <label className="block">
+            <FieldLabel>فاصلهٔ بازنگری مستند تازه</FieldLabel>
+            <select
+              value={draft.doc_review_months}
+              disabled={!canEdit || saving}
+              onChange={(event) => set({ doc_review_months: Number(event.target.value) })}
+              className={cx(inputClass, "sm:w-64")}
+            >
+              {intervalChoices(draft.doc_review_months).map((months) => (
+                <option key={months} value={months}>
+                  {reviewIntervalLabel(months)}
+                </option>
+              ))}
+            </select>
           </label>
         </FormSection>
 

@@ -56,6 +56,7 @@ describe("EVENT_KIND_LABELS", () => {
       "approved",
       "returned",
       "withdrawn",
+      "reviewed",
       "superseded",
       "imported",
     ]);

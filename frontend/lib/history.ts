@@ -31,6 +31,7 @@ export const EVENT_KIND_LABELS: Record<DocumentEventKind, string> = {
   approved: "تصویب شد",
   returned: "مرجوع شد",
   withdrawn: "بازپس گرفته شد",
+  reviewed: "بازنگری شد — بدون تغییر",
   superseded: "منسوخ شد (جایگزین شد)",
   imported: "وارد شده از نسخهٔ ۱",
 };
@@ -42,6 +43,7 @@ export const EVENT_KIND_TONE: Record<DocumentEventKind, string> = {
   approved: "bg-emerald-500",
   returned: "bg-rose-500",
   withdrawn: "bg-orange-400",
+  reviewed: "bg-teal-500",
   superseded: "bg-slate-400",
   imported: "bg-violet-400",
 };

@@ -13,7 +13,16 @@ import { OwnerNodeSelect, useOwnerNodeChoices } from "@/components/OwnerNodeSele
 import { ErrorBanner, LoadingBanner } from "@/components/StatusBanner";
 import { apiPost, ApiError } from "@/lib/api-client";
 import type { DesignerDocument } from "./useDesignerDocument";
-import { ArrowRight, Eye, Redo2, RotateCcw, Save, Undo2 } from "lucide-react";
+import { ArrowRight, CalendarClock, ClipboardCheck, Eye, Redo2, RotateCcw, Save, Undo2 } from "lucide-react";
+import { ReviewDialog } from "@/components/ReviewDialog";
+import {
+  intervalChoices,
+  markReviewed,
+  REVIEW_STATE_LABELS,
+  reviewIntervalLabel,
+  setReviewInterval,
+} from "@/lib/review";
+import { selectClass } from "@/components/ui/Field";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { cardClass } from "@/components/ui/Card";
@@ -39,6 +48,23 @@ export function DesignerShell<S>({
   const { choices: ownerChoices } = useOwnerNodeChoices();
   const [ownerError, setOwnerError] = useState<string | null>(null);
   const [ownerSaving, setOwnerSaving] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [intervalSaving, setIntervalSaving] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+
+  /** Phase 21: a draft's months between periodic reviews, saved at once like the owner node. */
+  async function changeInterval(months: number) {
+    setReviewError(null);
+    setIntervalSaving(true);
+    try {
+      await setReviewInterval(content.document.id, months);
+      void doc.reload();
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.message : "تغییر فاصلهٔ بازنگری ممکن نشد.");
+    } finally {
+      setIntervalSaving(false);
+    }
+  }
 
   /** «گرهٔ مالک»: the node the document belongs to; a draft's owner can be changed to another the person may pick. */
   async function changeOwner(id: number | null) {
@@ -105,6 +131,43 @@ export function DesignerShell<S>({
               </div>
             )}
             {ownerError && <p className="mt-1 text-sm text-rose-700">{ownerError}</p>}
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+              <CalendarClock className="size-4 text-slate-400" />
+              <span>بازنگری دوره‌ای:</span>
+              {canEdit ? (
+                <select
+                  aria-label="فاصلهٔ بازنگری دوره‌ای"
+                  value={document.review_interval_months}
+                  disabled={intervalSaving || dirty}
+                  onChange={(event) => void changeInterval(Number(event.target.value))}
+                  className={cx(selectClass, "h-9 w-48 max-w-full")}
+                >
+                  {intervalChoices(document.review_interval_months).map((months) => (
+                    <option key={months} value={months}>
+                      {reviewIntervalLabel(months)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-medium text-slate-800">{reviewIntervalLabel(document.review_interval_months)}</span>
+              )}
+              {document.review_due_on && (
+                <span className="text-slate-500">· موعد بعدی {formatJalali(document.review_due_on)}</span>
+              )}
+              {document.review_state && (
+                <span
+                  className={cx(
+                    "rounded-full px-2 py-0.5 text-xs ring-1 ring-inset",
+                    document.review_state === "overdue"
+                      ? "bg-rose-50 text-rose-800 ring-rose-600/20 dark:bg-rose-950/40 dark:text-rose-200"
+                      : "bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-200",
+                  )}
+                >
+                  {REVIEW_STATE_LABELS[document.review_state]}
+                </span>
+              )}
+            </div>
+            {reviewError && <p className="mt-1 text-sm text-rose-700">{reviewError}</p>}
           </div>
           <div className="flex items-center gap-2">
             <Code>{document.full_code}</Code>
@@ -120,7 +183,25 @@ export function DesignerShell<S>({
               void doc.reload();
             }}
           />
+          {document.can_mark_reviewed && (
+            <Button size="xs" variant="secondary" icon={<ClipboardCheck />} onClick={() => setReviewing(true)}>
+              بازنگری شد — بدون تغییر
+            </Button>
+          )}
         </div>
+        {reviewing && (
+          <ReviewDialog
+            code={document.full_code}
+            intervalMonths={document.review_interval_months}
+            onCancel={() => setReviewing(false)}
+            onSubmit={async (note) => {
+              await markReviewed(document.id, note);
+              setReviewing(false);
+              doc.setNotice(`بازنگری دوره‌ای مستند ${document.full_code} ثبت شد.`);
+              void doc.reload();
+            }}
+          />
+        )}
       </header>
 
       {document.return_note && (

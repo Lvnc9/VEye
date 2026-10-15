@@ -18,6 +18,7 @@ import {
   type DocumentStatus,
   type Paginated,
   type PdfStatus,
+  type ReviewState,
   type SignOffSummary,
 } from "@/lib/types";
 import { useCurrentUser } from "@/lib/current-user";
@@ -31,7 +32,8 @@ import { BulkPrintDialog } from "@/components/BulkPrintDialog";
 import { selectionLabel, type BulkSelection } from "@/lib/bulk-print";
 import { formatJalali } from "@/lib/jalali";
 import { StatusBadge } from "@/components/StatusBadge";
-import { FilePlus2, FileText, Pencil, Plus, Printer, RotateCcw, Search, SearchX, X } from "lucide-react";
+import { CalendarClock, FilePlus2, FileText, Pencil, Plus, Printer, RotateCcw, Search, SearchX, X } from "lucide-react";
+import { REVIEW_FILTER_OPTIONS, REVIEW_STATE_LABELS } from "@/lib/review";
 import { Alert } from "@/components/ui/Alert";
 import { Button, buttonClass } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -72,7 +74,28 @@ const EMPTY_FILTERS: Required<DocumentFilters> = {
   group: "",
   category: "",
   status: "",
+  review: "",
 };
+
+/** Phase 21: the small badge a document in force wears when its periodic review is near or late. */
+function ReviewBadge({ row }: { row: DocumentRow }) {
+  if (!row.review_state) return null;
+  const late = row.review_state === "overdue";
+  return (
+    <span
+      title={row.review_due_on ? `موعد بازنگری: ${formatJalali(row.review_due_on)}` : undefined}
+      className={cx(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 ring-inset",
+        late
+          ? "bg-rose-50 text-rose-800 ring-rose-600/20 dark:bg-rose-950/40 dark:text-rose-200"
+          : "bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-200",
+      )}
+    >
+      <CalendarClock className="size-3.5" />
+      {REVIEW_STATE_LABELS[row.review_state]}
+    </span>
+  );
+}
 
 function SignOffCell({ signoff }: { signoff: SignOffSummary | null }) {
   if (!signoff?.name) return <span className="text-subtle-foreground">—</span>;
@@ -192,6 +215,7 @@ export default function DocumentRegisterPage() {
       group: filters.group,
       category: filters.category,
       status: filters.status,
+      review: filters.review,
     })
       .then((response) => {
         if (cancelled) return;
@@ -318,7 +342,7 @@ export default function DocumentRegisterPage() {
       .finally(() => setPreviewingId(null));
   }
 
-  const filtersActive = Boolean(filters.search || filters.group || filters.category || filters.status);
+  const filtersActive = Boolean(filters.search || filters.group || filters.category || filters.status || filters.review);
 
   function toggleSelected(id: number) {
     setSelection({
@@ -545,6 +569,18 @@ export default function DocumentRegisterPage() {
               </option>
             ))}
           </select>
+          <select
+            value={filters.review}
+            aria-label="بازنگری دوره‌ای"
+            onChange={(e) => updateFilter("review", e.target.value as ReviewState | "")}
+            className={cx(selectClass, "min-w-[8rem] flex-1 sm:flex-none")}
+          >
+            {REVIEW_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.value ? option.label : "بازنگری دوره‌ای: همه"}
+              </option>
+            ))}
+          </select>
           {filtersActive && (
             <Button
               variant="ghost"
@@ -696,6 +732,7 @@ export default function DocumentRegisterPage() {
                       >
                         <div className="flex flex-wrap items-center gap-1.5">
                           <StatusBadge status={row.status} label={row.status_label} />
+                          <ReviewBadge row={row} />
                           {renderActions(row)}
                         </div>
                       </td>
@@ -724,6 +761,7 @@ export default function DocumentRegisterPage() {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Code>{row.full_code}</Code>
                         <StatusBadge status={row.status} label={row.status_label} />
+                        <ReviewBadge row={row} />
                       </div>
                       <Link href={`/documents/${row.id}/edit`} className="mt-1.5 block font-bold leading-7 text-foreground hover:text-primary">
                         {row.title}

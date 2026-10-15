@@ -148,6 +148,12 @@ class DocumentViewSet(
         )
         return self._workflow_response(document, request)
 
+    @action(detail=True, methods=["post"], url_path="review-interval")
+    def review_interval(self, request, pk=None):
+        """Phase 21: a draft's months between periodic reviews (0 = none)."""
+        document = services.set_review_interval(user=request.user, document_id=pk, months=request.data.get("months"))
+        return self._workflow_response(document, request)
+
     @action(detail=True, methods=["post"], url_path="mark-reviewed", permission_classes=[IsAuthenticated])
     def mark_reviewed(self, request, pk=None):
         """«بازنگری شد — بدون تغییر» (Phase 21): an author of a document in force restarts its review clock."""

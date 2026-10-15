@@ -1081,3 +1081,26 @@ class PeriodicReviewTests(WorkflowBase):
         Company.objects.filter(pk=1).update(doc_review_months=24)
         doc = make_doc(self.author, title="پیش‌فرض")
         self.assertEqual(doc.review_interval_months, 24)
+
+
+class ReviewIntervalEndpointTests(WorkflowBase):
+    """Phase 21: a draft's review interval, set from the designer header."""
+
+    def set(self, user, months, doc=None):
+        return self.as_user(user).post(
+            reverse("document-review-interval", args=[(doc or self.doc).pk]), {"months": months}, format="json"
+        )
+
+    def test_an_author_sets_it_on_a_draft(self):
+        response = self.set(self.author, 24)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["review_interval_months"], 24)
+        self.assertEqual(self.set(self.author, 0).data["review_interval_months"], 0)
+
+    def test_bounds_authority_and_status(self):
+        for bad in (-1, 61, "12", None, True):
+            self.assertEqual(self.set(self.author, bad).status_code, 400, bad)
+        outsider = make_user("8000000061", AccessRoll.GUILD)
+        self.assertEqual(self.set(outsider, 6).status_code, 403)
+        self.run_chain()
+        self.assertEqual(self.set(self.author, 6).status_code, 409)
