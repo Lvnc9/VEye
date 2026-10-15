@@ -20,21 +20,21 @@ export function AnnouncementsCard() {
         title="اطلاعیه‌ها"
         icon={<Megaphone />}
         actions={
-          <Link href="/announcements" className="text-xs text-brand-700 hover:underline">
+          <Link href="/announcements" className="text-xs text-primary hover:underline">
             همهٔ اطلاعیه‌ها
           </Link>
         }
       />
       <ul className="space-y-3">
         {rows.map((a) => (
-          <li key={a.id} className="rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-200/70">
+          <li key={a.id} className="rounded-xl bg-muted/50 px-3 py-2.5 ring-1 ring-inset ring-border">
             <Link href="/announcements" className="block">
-              <p className="flex items-center gap-1.5 text-sm font-bold text-slate-900">
-                {a.pinned && <Pin className="size-3.5 shrink-0 text-brand-600" aria-label="سنجاق‌شده" />}
+              <p className="flex items-center gap-1.5 text-sm font-bold text-foreground">
+                {a.pinned && <Pin className="size-3.5 shrink-0 text-primary" aria-label="سنجاق‌شده" />}
                 {a.title}
               </p>
-              <p className="mt-1 text-xs leading-6 text-slate-600">{excerpt(a.body, 140)}</p>
-              <p className="mt-1 text-[11px] text-slate-500">
+              <p className="mt-1 text-xs leading-6 text-soft-foreground">{excerpt(a.body, 140)}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
                 {a.audience_name} · {a.author_name} · {formatJalali(a.created_at)}
               </p>
             </Link>

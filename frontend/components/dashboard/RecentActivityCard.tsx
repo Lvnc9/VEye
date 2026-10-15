@@ -24,7 +24,7 @@ export function RecentActivityCard() {
         actions={
           <Link
             href="/documents/history"
-            className="group inline-flex items-center gap-1 text-sm text-brand-700 transition-colors hover:text-brand-800"
+            className="group inline-flex items-center gap-1 text-sm text-primary transition-colors hover:text-primary-hover"
           >
             همهٔ سوابق
             <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
@@ -38,34 +38,34 @@ export function RecentActivityCard() {
 
       {data && data.results.length > 0 && (
         // A timeline: a thin rail joins the events' dots.
-        <ol className="relative space-y-4 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-slate-200">
+        <ol className="relative space-y-4 before:absolute before:inset-y-2 before:right-[4.5px] before:w-px before:bg-border">
           {data.results.map((event) => (
             <li key={event.id} className="relative flex gap-3 text-sm">
               <span
                 aria-hidden
-                className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-white ${EVENT_KIND_TONE[event.kind]}`}
+                className={`relative mt-2 size-2.5 shrink-0 rounded-full ring-4 ring-card ${EVENT_KIND_TONE[event.kind]}`}
               />
               <div className="min-w-0 flex-1">
-                <p className="text-slate-900">
+                <p className="text-foreground">
                   <span className="font-bold">{event.kind_label}</span>
-                  <span className="text-slate-500"> — {event.actor_name}</span>
+                  <span className="text-muted-foreground"> — {event.actor_name}</span>
                 </p>
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-600">
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-soft-foreground">
                   <Code>{event.document.full_code}</Code>
                   <Link
                     href={`/documents/${event.document.id}/edit`}
-                    className="truncate transition-colors hover:text-brand-700"
+                    className="truncate transition-colors hover:text-primary"
                   >
                     {event.document.title}
                   </Link>
                 </p>
                 {event.reason && (
-                  <p className="mt-1 truncate rounded-lg bg-slate-50 px-2.5 py-1 text-slate-500" title={event.reason}>
+                  <p className="mt-1 truncate rounded-lg bg-muted/50 px-2.5 py-1 text-muted-foreground" title={event.reason}>
                     {event.reason}
                   </p>
                 )}
               </div>
-              <time className="shrink-0 pt-0.5 text-xs text-slate-500" dateTime={event.created_at}>
+              <time className="shrink-0 pt-0.5 text-xs text-muted-foreground" dateTime={event.created_at}>
                 {formatJalaliDateTime(event.created_at)}
               </time>
             </li>

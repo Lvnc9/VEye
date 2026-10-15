@@ -5,7 +5,7 @@ export function Code({ children }: { children: string }) {
   return (
     <bdi
       dir="ltr"
-      className="inline-block whitespace-nowrap rounded-md bg-slate-100 px-1.5 py-px font-mono text-[12.5px] text-slate-700 ring-1 ring-inset ring-slate-200"
+      className="inline-block whitespace-nowrap rounded-md bg-muted px-1.5 py-px font-mono text-[12.5px] text-soft-foreground ring-1 ring-inset ring-border"
     >
       {children}
     </bdi>

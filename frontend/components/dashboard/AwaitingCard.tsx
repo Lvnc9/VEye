@@ -31,9 +31,9 @@ export function AwaitingCard() {
           data &&
           data.count > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {data.by_step.submit > 0 && <Badge tone="neutral">ارسال: {data.by_step.submit}</Badge>}
-              {data.by_step.confirm > 0 && <Badge tone="warning">تایید: {data.by_step.confirm}</Badge>}
-              {data.by_step.approve > 0 && <Badge tone="brand">تصویب: {data.by_step.approve}</Badge>}
+              {data.by_step.submit > 0 && <Badge tone="neutral">ارسال: {data.by_step.submit.toLocaleString("fa-IR")}</Badge>}
+              {data.by_step.confirm > 0 && <Badge tone="warning">تایید: {data.by_step.confirm.toLocaleString("fa-IR")}</Badge>}
+              {data.by_step.approve > 0 && <Badge tone="brand">تصویب: {data.by_step.approve.toLocaleString("fa-IR")}</Badge>}
             </div>
           )
         }
@@ -46,22 +46,22 @@ export function AwaitingCard() {
       )}
 
       {data && data.items.length > 0 && (
-        <ul className="-mx-2 divide-y divide-slate-100">
+        <ul className="-mx-2 divide-y divide-border">
           {data.items.map((item) => (
             <li key={item.id}>
               <Link
                 href={`/documents/${item.id}/edit`}
-                className="group flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl px-2 py-3 text-sm transition-colors hover:bg-slate-50"
+                className="group flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl px-2 py-3 text-sm transition-colors hover:bg-accent/60"
               >
                 <Code>{item.full_code}</Code>
-                <span className="min-w-[10rem] flex-1 truncate text-slate-900">{item.title}</span>
+                <span className="min-w-[10rem] flex-1 truncate text-foreground">{item.title}</span>
                 <StatusBadge status={item.status} label={item.status_label} />
-                <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs text-white">{item.step_label}</span>
+                <span className="rounded-full bg-foreground px-2.5 py-0.5 text-xs text-background">{item.step_label}</span>
                 <span className="ms-auto flex items-center gap-2">
-                  <span className="text-xs text-slate-500" title="از این تاریخ منتظر است">
+                  <span className="text-xs text-muted-foreground" title="از این تاریخ منتظر است">
                     {formatJalali(item.waiting_since)}
                   </span>
-                  <ChevronLeft className="size-4 text-slate-300 transition-transform duration-200 group-hover:-translate-x-0.5 group-hover:text-slate-500" />
+                  <ChevronLeft className="size-4 text-subtle-foreground transition-transform duration-200 group-hover:-translate-x-0.5 group-hover:text-muted-foreground" />
                 </span>
               </Link>
             </li>
@@ -69,9 +69,9 @@ export function AwaitingCard() {
         </ul>
       )}
       {data && data.count > data.items.length && (
-        <p className="mt-3 text-xs text-slate-500">
-          {data.count - data.items.length} مورد دیگر — در{" "}
-          <Link href="/documents" className="text-brand-700 underline-offset-4 hover:underline">
+        <p className="mt-3 text-xs text-muted-foreground">
+          {(data.count - data.items.length).toLocaleString("fa-IR")} مورد دیگر — در{" "}
+          <Link href="/documents" className="text-primary underline-offset-4 hover:underline">
             فهرست مستندات
           </Link>{" "}
           بر اساس وضعیت فیلتر کنید.
