@@ -132,7 +132,7 @@ function Sidebar({ inbox, open, onClose }: { inbox: InboxSummary | null; open: b
       id="app-sidebar"
       aria-label="منوی اصلی"
       className={cx(
-        "fixed inset-y-0 right-0 z-40 flex w-72 max-w-[85vw] flex-col overflow-hidden bg-surface text-slate-100",
+        "fixed inset-y-0 right-0 z-40 flex w-72 max-w-[85vw] flex-col overflow-hidden bg-navy text-slate-100",
         "transition-[translate,visibility,box-shadow] md:static md:z-auto md:w-64 md:max-w-none md:flex-shrink-0",
         "md:visible md:translate-x-0 md:shadow-none md:transition-none",
         open
@@ -143,7 +143,7 @@ function Sidebar({ inbox, open, onClose }: { inbox: InboxSummary | null; open: b
       {/* A faint glow of the brand colour behind the logo, as on the sign-in page. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-24 -right-20 size-72 rounded-full bg-accent/10 blur-3xl"
+        className="pointer-events-none absolute -top-24 -right-20 size-72 rounded-full bg-glow/10 blur-3xl"
       />
 
       <div className="relative flex items-center justify-between gap-3 px-5 pt-5 pb-4">
@@ -164,7 +164,7 @@ function Sidebar({ inbox, open, onClose }: { inbox: InboxSummary | null; open: b
         </button>
       </div>
 
-      <nav className="relative flex flex-1 flex-col overflow-y-auto px-3 pb-4 [scrollbar-color:var(--color-line)_transparent]">
+      <nav className="relative flex flex-1 flex-col overflow-y-auto px-3 pb-4 [scrollbar-color:var(--color-navy-line)_transparent]">
         {visible.map((item, index) => {
           const Icon = item.icon;
           const heading =
@@ -205,13 +205,13 @@ function Sidebar({ inbox, open, onClose }: { inbox: InboxSummary | null; open: b
                 {active && (
                   <span
                     aria-hidden
-                    className="absolute inset-y-2 -right-3 w-1 rounded-l-full bg-accent shadow-[0_0_12px_rgb(56_189_248/0.6)] animate-fade-in"
+                    className="absolute inset-y-2 -right-3 w-1 rounded-l-full bg-glow shadow-[0_0_12px_rgb(56_189_248/0.6)] animate-fade-in"
                   />
                 )}
                 <Icon
                   className={cx(
                     "size-[18px] transition-colors duration-150",
-                    active ? "text-accent" : "text-slate-500 group-hover:text-slate-300",
+                    active ? "text-glow" : "text-slate-500 group-hover:text-slate-300",
                   )}
                 />
                 <span className="flex-1 truncate">{item.label}</span>
@@ -252,7 +252,7 @@ function Sidebar({ inbox, open, onClose }: { inbox: InboxSummary | null; open: b
 function TopBar({ inbox, open, onOpen }: { inbox: InboxSummary | null; open: boolean; onOpen: () => void }) {
   const badge = unreadBadge(inbox?.total ?? 0);
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] bg-surface px-4 text-slate-100 md:hidden">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] bg-navy px-4 text-slate-100 md:hidden">
       <Link href="/dashboard" className="flex items-center gap-2.5 rounded-lg">
         <BrandMark size="sm" className="size-8 text-sm" />
         <span className="text-base font-bold">وی‌آی</span>

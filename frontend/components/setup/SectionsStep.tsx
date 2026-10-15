@@ -26,7 +26,7 @@ export function SectionsStep({
   return (
     <StepCard title="بخش‌ها" intro="بخش‌های هر واحد را همین‌جا بیفزایید. بخش‌ها همان‌جا هستند که افراد و پروژه‌ها جا می‌گیرند.">
       {floors.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-slate-400">
+        <p className="rounded-2xl border border-dashed border-navy-line p-4 text-sm text-slate-400">
           هنوز واحدی ندارید. به مرحلهٔ قبل برگردید و واحد بسازید، یا این مرحله را رد کنید.
         </p>
       ) : (
@@ -38,7 +38,7 @@ export function SectionsStep({
               </h3>
               <div className="space-y-4">
                 {floor.rooms.map((room) => (
-                  <div key={room.node.id} className="space-y-3 rounded-2xl border border-line bg-surface p-4">
+                  <div key={room.node.id} className="space-y-3 rounded-2xl border border-navy-line bg-navy p-4">
                     <h4 className="text-sm font-bold text-slate-100">{room.node.name}</h4>
                     <AddNodeForm
                       kind="SECTION"

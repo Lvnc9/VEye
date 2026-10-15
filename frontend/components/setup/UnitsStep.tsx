@@ -32,7 +32,7 @@ export function UnitsStep({
         {parents.map((parent) => {
           const units = nodes.filter((node) => node.kind === "UNIT" && node.parent === parent.id);
           return (
-            <div key={parent.id} className="space-y-3 rounded-2xl border border-line bg-surface p-4">
+            <div key={parent.id} className="space-y-3 rounded-2xl border border-navy-line bg-navy p-4">
               <h3 className="text-sm font-bold text-slate-100">{parent.name}</h3>
               <AddNodeForm kind="UNIT" parentId={parent.id} placeholder="نام واحد، مثلاً «واحد فروش»" onChanged={onChanged} />
               {units.length === 0 ? (

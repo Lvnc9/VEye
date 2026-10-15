@@ -165,8 +165,8 @@ function Building({ name, logo, archivedShown, children }: { name: string; logo:
       aria-label={`ساختمان ${name}`}
       className="w-max min-w-[36rem] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-overlay"
     >
-      <header className="relative flex items-center justify-center gap-3 overflow-hidden bg-gradient-to-l from-surface to-surface-raised px-8 py-5 text-white">
-        <span aria-hidden className="pointer-events-none absolute -top-16 left-1/2 size-48 -translate-x-1/2 rounded-full bg-accent/15 blur-3xl" />
+      <header className="relative flex items-center justify-center gap-3 overflow-hidden bg-gradient-to-l from-navy to-navy-raised px-8 py-5 text-white">
+        <span aria-hidden className="pointer-events-none absolute -top-16 left-1/2 size-48 -translate-x-1/2 rounded-full bg-glow/15 blur-3xl" />
         {logo && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logo} alt="" className="relative size-10 rounded-lg bg-white object-contain p-0.5 shadow" />

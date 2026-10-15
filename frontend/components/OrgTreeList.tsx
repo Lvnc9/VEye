@@ -40,7 +40,7 @@ function Row({ node, tone, selectedId, onSelect, renderExtra }: { node: OrgTreeN
   const rowClass = `flex items-center gap-2 rounded-lg px-2 py-1 transition-colors ${
     selected
       ? dark
-        ? "bg-accent/15 ring-1 ring-accent/40"
+        ? "bg-glow/15 ring-1 ring-glow/40"
         : "bg-brand-50 ring-1 ring-brand-300"
       : dark
         ? "hover:bg-white/5"
@@ -62,7 +62,7 @@ function Row({ node, tone, selectedId, onSelect, renderExtra }: { node: OrgTreeN
       {node.children.length > 0 && (
         <ul
           role="group"
-          className={`mt-1 ms-3 space-y-1 border-s ps-3 ${dark ? "border-line" : "border-slate-200"}`}
+          className={`mt-1 ms-3 space-y-1 border-s ps-3 ${dark ? "border-navy-line" : "border-slate-200"}`}
         >
           {node.children.map((child) => (
             <Row key={child.id} node={child} tone={tone} selectedId={selectedId} onSelect={onSelect} renderExtra={renderExtra} />

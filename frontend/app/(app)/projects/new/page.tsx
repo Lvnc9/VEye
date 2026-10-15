@@ -437,8 +437,8 @@ export default function NewProjectPage() {
 
         {/* A live summary of the project being built. */}
         <aside aria-label="خلاصهٔ پروژه" className={cx(cardClass, "overflow-hidden lg:sticky lg:top-4")}>
-          <div className="relative h-16 overflow-hidden bg-gradient-to-l from-surface to-surface-raised">
-            <span aria-hidden className="absolute -top-10 left-1/3 size-36 rounded-full bg-accent/20 blur-2xl" />
+          <div className="relative h-16 overflow-hidden bg-gradient-to-l from-navy to-navy-raised">
+            <span aria-hidden className="absolute -top-10 left-1/3 size-36 rounded-full bg-glow/20 blur-2xl" />
           </div>
           <div className="space-y-4 p-5">
             <div>

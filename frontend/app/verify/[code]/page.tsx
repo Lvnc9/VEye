@@ -43,8 +43,8 @@ export default function VerifyPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-canvas">
       {/* A navy band behind the card, as on the sign-in page. */}
-      <div aria-hidden className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-surface to-surface-raised">
-        <div className="absolute -top-24 left-1/2 size-96 -translate-x-1/2 rounded-full bg-accent/15 blur-3xl" />
+      <div aria-hidden className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-navy to-navy-raised">
+        <div className="absolute -top-24 left-1/2 size-96 -translate-x-1/2 rounded-full bg-glow/15 blur-3xl" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen max-w-xl flex-col gap-5 px-4 py-8 sm:py-12">

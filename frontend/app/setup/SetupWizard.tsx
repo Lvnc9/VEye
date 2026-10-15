@@ -32,7 +32,7 @@ export function SetupWizard() {
   const refreshNodes = () => setNodeReload((n) => n + 1);
 
   return (
-    <main className="min-h-screen bg-surface text-slate-100">
+    <main className="min-h-screen bg-navy text-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-8">
         <header className="mb-8 flex items-center gap-3">
           <BrandMark />
@@ -201,7 +201,7 @@ function SignedInWizard({
                   {index > 0 && (
                     <span
                       aria-hidden
-                      className={`mx-1.5 h-px w-4 transition-colors duration-300 sm:w-6 ${done || active ? "bg-accent/60" : "bg-line"}`}
+                      className={`mx-1.5 h-px w-4 transition-colors duration-300 sm:w-6 ${done || active ? "bg-glow/60" : "bg-navy-line"}`}
                     />
                   )}
                   <button
@@ -210,15 +210,15 @@ function SignedInWizard({
                     aria-current={active ? "step" : undefined}
                     className={`flex items-center gap-2 rounded-full border py-1 ps-1 pe-3 transition-colors duration-200 ${
                       active
-                        ? "border-accent bg-accent/15 text-accent"
+                        ? "border-glow bg-glow/15 text-glow"
                         : done
-                          ? "border-accent/30 text-slate-200 hover:bg-white/5"
-                          : "border-line text-slate-400 hover:bg-white/5"
+                          ? "border-glow/30 text-slate-200 hover:bg-white/5"
+                          : "border-navy-line text-slate-400 hover:bg-white/5"
                     }`}
                   >
                     <span
                       className={`flex size-6 items-center justify-center rounded-full text-[11px] font-bold transition-colors duration-200 ${
-                        active ? "bg-accent text-slate-950" : done ? "bg-accent/20 text-accent" : "bg-white/5 text-slate-400"
+                        active ? "bg-glow text-slate-950" : done ? "bg-glow/20 text-glow" : "bg-white/5 text-slate-400"
                       }`}
                     >
                       {done ? <Check className="size-3.5" /> : index + 1}
@@ -252,7 +252,7 @@ function SignedInWizard({
         </div>
       </div>
 
-      <aside aria-label="پیش‌نمایش ساختار" className="h-fit rounded-2xl border border-line bg-surface-raised p-4 lg:sticky lg:top-6">
+      <aside aria-label="پیش‌نمایش ساختار" className="h-fit rounded-2xl border border-navy-line bg-navy-raised p-4 lg:sticky lg:top-6">
         <h2 className="mb-3 text-sm font-semibold text-slate-200">ساختاری که تا اینجا ساخته‌اید</h2>
         <OrgTreeList nodes={nodes} tone="dark" />
         {tree.data?.truncated && <p className="mt-3 text-xs text-slate-500">فقط دو سطح بالا نمایش داده می‌شود.</p>}

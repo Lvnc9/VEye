@@ -56,13 +56,13 @@ export function ReadyStep({
           ["واحد", counts.UNIT],
           ["بخش", counts.SECTION],
         ].map(([label, count]) => (
-          <div key={label} className="rounded-2xl border border-line bg-surface p-4 veye-rise" style={{ "--i": 0 } as React.CSSProperties}>
-            <dd className="text-3xl font-bold text-accent tabular-nums">{count}</dd>
+          <div key={label} className="rounded-2xl border border-navy-line bg-navy p-4 veye-rise" style={{ "--i": 0 } as React.CSSProperties}>
+            <dd className="text-3xl font-bold text-glow tabular-nums">{count}</dd>
             <dt className="text-xs text-slate-400">{label}</dt>
           </div>
         ))}
       </dl>
-      <div className="max-h-72 overflow-y-auto rounded-2xl border border-line bg-surface p-3">
+      <div className="max-h-72 overflow-y-auto rounded-2xl border border-navy-line bg-navy p-3">
         <OrgTreeList nodes={nodes} tone="dark" />
       </div>
       {blocked && (

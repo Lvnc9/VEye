@@ -92,9 +92,9 @@ export function CompanyStep({
       <div className="flex items-center gap-4">
         {company.logo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={company.logo_url} alt="لوگوی شرکت" className="size-16 rounded-xl border border-line bg-white object-contain p-1 shadow-lg" />
+          <img src={company.logo_url} alt="لوگوی شرکت" className="size-16 rounded-xl border border-navy-line bg-white object-contain p-1 shadow-lg" />
         ) : (
-          <span className="flex size-16 items-center justify-center rounded-xl border border-dashed border-line text-xs text-slate-500">
+          <span className="flex size-16 items-center justify-center rounded-xl border border-dashed border-navy-line text-xs text-slate-500">
             بدون لوگو
           </span>
         )}
@@ -128,11 +128,11 @@ export function CompanyStep({
       <fieldset className="space-y-2">
         <legend className="mb-2 text-sm text-slate-300">آیا شرکت چند حوزه دارد؟</legend>
         <div className="grid gap-2 sm:grid-cols-2">
-        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-slate-200 transition-colors hover:bg-white/5 has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-navy-line bg-navy px-3.5 py-3 text-sm text-slate-200 transition-colors hover:bg-white/5 has-[:checked]:border-glow has-[:checked]:bg-glow/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
           <input type="radio" name="multi" checked={multi === true} onChange={() => setMulti(true)} className="accent-sky-400" />
           بله، حوزه‌بندی دارد
         </label>
-        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-slate-200 transition-colors hover:bg-white/5 has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-navy-line bg-navy px-3.5 py-3 text-sm text-slate-200 transition-colors hover:bg-white/5 has-[:checked]:border-glow has-[:checked]:bg-glow/10 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
           <input
             type="radio"
             name="multi"

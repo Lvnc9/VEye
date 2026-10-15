@@ -18,14 +18,14 @@ const THEME = {
     leadText: "text-slate-500",
   },
   dark: {
-    fieldset: "space-y-4 rounded-2xl border border-line bg-surface p-4",
+    fieldset: "space-y-4 rounded-2xl border border-navy-line bg-navy p-4",
     legend: "px-2 text-sm font-bold text-slate-300",
     stepLabel: "text-slate-400",
     field:
-      "h-11 w-full rounded-xl border border-line bg-surface-raised px-3 text-sm text-slate-100 transition-[border-color,box-shadow] duration-150 " +
-      "focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/20",
+      "h-11 w-full rounded-xl border border-navy-line bg-navy-raised px-3 text-sm text-slate-100 transition-[border-color,box-shadow] duration-150 " +
+      "focus:border-glow focus:outline-none focus:ring-4 focus:ring-glow/20",
     chevron: "text-slate-600",
-    lead: "border-line bg-surface-raised text-slate-200 hover:bg-white/5 has-[:checked]:border-amber-400/50 has-[:checked]:bg-amber-400/10",
+    lead: "border-navy-line bg-navy-raised text-slate-200 hover:bg-white/5 has-[:checked]:border-amber-400/50 has-[:checked]:bg-amber-400/10",
     leadText: "text-slate-400",
   },
 } as const;

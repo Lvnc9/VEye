@@ -55,22 +55,22 @@ const THEME = {
     hint: "text-slate-500",
   },
   dark: {
-    wrap: "overflow-hidden rounded-2xl border border-line bg-surface",
-    section: "border-line",
-    stepBadge: "bg-accent/15 text-accent ring-accent/20",
+    wrap: "overflow-hidden rounded-2xl border border-navy-line bg-navy",
+    section: "border-navy-line",
+    stepBadge: "bg-glow/15 text-glow ring-glow/20",
     title: "text-slate-50",
     description: "text-slate-400",
     label: "text-slate-300",
     input:
-      "h-11 w-full rounded-xl border border-line bg-surface-raised ps-10 pe-3 text-sm text-slate-100 placeholder:text-slate-500 " +
-      "transition-[border-color,box-shadow] duration-150 focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/20",
+      "h-11 w-full rounded-xl border border-navy-line bg-navy-raised ps-10 pe-3 text-sm text-slate-100 placeholder:text-slate-500 " +
+      "transition-[border-color,box-shadow] duration-150 focus:border-glow focus:outline-none focus:ring-4 focus:ring-glow/20",
     icon: "text-slate-500",
-    choice: "border-line bg-surface-raised hover:bg-white/5",
-    choiceOn: "border-accent bg-accent/10 ring-4 ring-accent/10",
+    choice: "border-navy-line bg-navy-raised hover:bg-white/5",
+    choiceOn: "border-glow bg-glow/10 ring-4 ring-glow/10",
     choiceTitle: "text-slate-100",
     choiceText: "text-slate-400",
-    footer: "border-line bg-surface-raised/60",
-    submit: "bg-accent text-slate-950 hover:bg-accent-strong",
+    footer: "border-navy-line bg-navy-raised/60",
+    submit: "bg-glow text-slate-950 hover:bg-glow-strong",
     hint: "text-slate-400",
   },
 } as const;

@@ -42,14 +42,14 @@ export default function Home() {
 
   if (status === undefined || status?.completed) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-surface">
+      <main className="flex min-h-screen items-center justify-center bg-navy">
         <p className="text-sm text-slate-500">در حال بارگذاری...</p>
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-surface px-6 py-12 text-slate-100">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-navy px-6 py-12 text-slate-100">
       <div className="veye-rise w-full max-w-md text-center" style={{ "--i": 0 } as React.CSSProperties}>
         <div className="mb-8 flex items-center justify-center gap-3">
           <BrandMark size="lg" />
@@ -59,7 +59,7 @@ export default function Home() {
         <h1 className="text-2xl leading-[1.5] font-bold sm:text-3xl">
           سازمان شما،
           <br />
-          <span className="text-accent">منظم، کنترل‌شده و قابل‌پیگیری.</span>
+          <span className="text-glow">منظم، کنترل‌شده و قابل‌پیگیری.</span>
         </h1>
 
         {status === null ? (
@@ -67,7 +67,7 @@ export default function Home() {
             <p className="mt-4 text-sm leading-7 text-slate-400">دریافت وضعیت سامانه ممکن نشد. اتصال خود را بررسی کنید.</p>
             <Link
               href="/login"
-              className="mt-8 inline-block w-full rounded-xl border border-line px-5 py-3 text-sm font-bold text-slate-200 transition-colors hover:bg-white/5 sm:w-auto"
+              className="mt-8 inline-block w-full rounded-xl border border-navy-line px-5 py-3 text-sm font-bold text-slate-200 transition-colors hover:bg-white/5 sm:w-auto"
             >
               ورود به سامانه
             </Link>
@@ -79,7 +79,7 @@ export default function Home() {
             </p>
             <Link
               href="/setup"
-              className="mt-8 inline-block w-full rounded-xl bg-accent px-5 py-3 shadow-[0_8px_24px_-8px_rgb(56_189_248/0.6)] text-sm font-bold text-slate-950 transition-colors hover:bg-accent-strong sm:w-auto"
+              className="mt-8 inline-block w-full rounded-xl bg-glow px-5 py-3 shadow-[0_8px_24px_-8px_rgb(56_189_248/0.6)] text-sm font-bold text-slate-950 transition-colors hover:bg-glow-strong sm:w-auto"
             >
               شروع راه‌اندازی
             </Link>
@@ -91,7 +91,7 @@ export default function Home() {
             </p>
             <Link
               href="/login?next=%2Fsetup"
-              className="mt-8 inline-block w-full rounded-xl bg-accent px-5 py-3 shadow-[0_8px_24px_-8px_rgb(56_189_248/0.6)] text-sm font-bold text-slate-950 transition-colors hover:bg-accent-strong sm:w-auto"
+              className="mt-8 inline-block w-full rounded-xl bg-glow px-5 py-3 shadow-[0_8px_24px_-8px_rgb(56_189_248/0.6)] text-sm font-bold text-slate-950 transition-colors hover:bg-glow-strong sm:w-auto"
             >
               ادامهٔ راه‌اندازی
             </Link>

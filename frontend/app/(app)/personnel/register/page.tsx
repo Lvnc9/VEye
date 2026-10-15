@@ -19,8 +19,8 @@ function ProfilePreview({ draft }: { draft: { fullName: string; title: string; p
   return (
     <aside aria-label="پیش‌نمایش پروفایل" className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
       {/* A navy header with the brand glow, like the sidebar the person will see. */}
-      <div className="relative h-20 overflow-hidden bg-gradient-to-l from-surface to-surface-raised">
-        <span aria-hidden className="absolute -top-10 left-1/2 size-40 -translate-x-1/2 rounded-full bg-accent/20 blur-2xl" />
+      <div className="relative h-20 overflow-hidden bg-gradient-to-l from-navy to-navy-raised">
+        <span aria-hidden className="absolute -top-10 left-1/2 size-40 -translate-x-1/2 rounded-full bg-glow/20 blur-2xl" />
       </div>
       <div className="-mt-9 px-5 pb-5 text-center">
         <span className="inline-flex rounded-full bg-white p-1 shadow-card">

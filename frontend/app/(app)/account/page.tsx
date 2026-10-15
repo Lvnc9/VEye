@@ -49,8 +49,8 @@ export default function AccountPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       {/* The profile banner: navy with the brand glow, the avatar overlapping its edge. */}
       <section className={cx(cardClass, "overflow-hidden")}>
-        <div className="relative h-28 overflow-hidden bg-gradient-to-l from-surface to-surface-raised">
-          <span aria-hidden className="absolute -top-16 left-1/4 size-56 rounded-full bg-accent/20 blur-3xl" />
+        <div className="relative h-28 overflow-hidden bg-gradient-to-l from-navy to-navy-raised">
+          <span aria-hidden className="absolute -top-16 left-1/4 size-56 rounded-full bg-glow/20 blur-3xl" />
           <span
             aria-hidden
             className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.15)_1px,transparent_0)] bg-[length:20px_20px]"

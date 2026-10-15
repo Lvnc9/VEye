@@ -50,7 +50,7 @@ export function PeopleStep({
         {blocked ?? "مسئول شرکت ثبت شده است؛ می‌توانید راه‌اندازی را به پایان برسانید."}
       </p>
 
-      <div className="rounded-2xl border border-line bg-surface p-4">
+      <div className="rounded-2xl border border-navy-line bg-navy p-4">
         <PersonnelForm
           tone="dark"
           onRegistered={() => {

@@ -17,14 +17,14 @@ const FEATURES = [
 ];
 
 const inputClass =
-  "h-11 w-full rounded-xl border border-line bg-surface px-10 text-sm text-slate-100 placeholder:text-slate-500 " +
+  "h-11 w-full rounded-xl border border-navy-line bg-navy px-10 text-sm text-slate-100 placeholder:text-slate-500 " +
   "transition-[border-color,box-shadow] duration-150 hover:border-slate-500/60 " +
-  "focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/20";
+  "focus:border-glow focus:outline-none focus:ring-4 focus:ring-glow/20";
 
 const primaryClass =
-  "group flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-bold text-slate-950 " +
+  "group flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-glow px-4 text-sm font-bold text-slate-950 " +
   "shadow-[0_8px_24px_-8px_rgb(56_189_248/0.6)] transition-[background-color,transform,box-shadow] duration-150 " +
-  "hover:bg-accent-strong hover:shadow-[0_10px_28px_-8px_rgb(56_189_248/0.75)] active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100";
+  "hover:bg-glow-strong hover:shadow-[0_10px_28px_-8px_rgb(56_189_248/0.75)] active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100";
 
 /**
  * Dark, two-column sign-in: the brand on the right (RTL first), the card on the left.
@@ -79,11 +79,11 @@ export function LoginScreen() {
   }
 
   return (
-    <main className="grid min-h-screen bg-surface text-slate-100 lg:grid-cols-2">
+    <main className="grid min-h-screen bg-navy text-slate-100 lg:grid-cols-2">
       <section className="relative hidden flex-col justify-between overflow-hidden px-8 py-10 sm:px-14 lg:flex lg:py-16">
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-40 -right-40 h-[28rem] w-[28rem] rounded-full bg-accent/10 blur-3xl"
+          className="pointer-events-none absolute -top-40 -right-40 h-[28rem] w-[28rem] rounded-full bg-glow/10 blur-3xl"
         />
         <div
           aria-hidden
@@ -101,7 +101,7 @@ export function LoginScreen() {
           >
             سازمان شما،
             <br />
-            <span className="text-accent">منظم، کنترل‌شده و قابل‌پیگیری.</span>
+            <span className="text-glow">منظم، کنترل‌شده و قابل‌پیگیری.</span>
           </h1>
           <div className="veye-rise veye-rule mt-6 w-40" style={{ "--i": 2 } as React.CSSProperties} aria-hidden />
           <p className="veye-rise mt-6 text-base leading-8 text-slate-400" style={{ "--i": 3 } as React.CSSProperties}>
@@ -114,7 +114,7 @@ export function LoginScreen() {
                 className="veye-rise flex items-start gap-3"
                 style={{ "--i": 4 + index } as React.CSSProperties}
               >
-                <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-glow" />
                 {feature}
               </li>
             ))}
@@ -126,7 +126,7 @@ export function LoginScreen() {
         </p>
       </section>
 
-      <section className="flex min-h-screen items-center justify-center border-line bg-surface-raised px-6 py-12 lg:min-h-0 lg:border-r">
+      <section className="flex min-h-screen items-center justify-center border-navy-line bg-navy-raised px-6 py-12 lg:min-h-0 lg:border-r">
         <div className="veye-rise w-full max-w-sm" style={{ "--i": 2 } as React.CSSProperties}>
           {/* The hero is desktop-only; on a phone the form comes first, under a compact brand mark. */}
           <div className="mb-10 flex items-center gap-3 lg:hidden">
@@ -216,7 +216,7 @@ export function LoginScreen() {
               </button>
 
               {setupAvailable && (
-                <p className="border-t border-line pt-5 text-center text-sm leading-7 text-slate-400">
+                <p className="border-t border-navy-line pt-5 text-center text-sm leading-7 text-slate-400">
                   ساختار سازمان هنوز تعریف نشده است. با حساب توسعه‌دهنده وارد شوید و «شروع راه‌اندازی» را بزنید.
                 </p>
               )}

@@ -5,26 +5,26 @@
   --foreground: #0f172a;
 
   /* The navy surfaces: the public pages (login, setup) and the app's sidebar. */
-  --surface: #0a1020;
-  --surface-raised: #111a30;
-  --line: #22304d;
-  --accent: #38bdf8;
-  --accent-strong: #0ea5e9;
+  --navy: #0a1020;
+  --navy-raised: #111a30;
+  --navy-line: #22304d;
+  --glow: #38bdf8;
+  --glow-strong: #0ea5e9;
 }
 
 /*
  * The VEye design system (docs/05 «Design system»). Neutrals are Tailwind's slate; `brand` is the one
  * accent (an alias of sky, so it can be retuned here). Primary actions use brand-700, which keeps
- * 4.5:1 on white; brand-400 (= --accent) is for accents on the navy surfaces.
+ * 4.5:1 on white; brand-400 (= --glow) is for accents on the navy surfaces.
  */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-surface: var(--surface);
-  --color-surface-raised: var(--surface-raised);
-  --color-line: var(--line);
-  --color-accent: var(--accent);
-  --color-accent-strong: var(--accent-strong);
+  --color-navy: var(--navy);
+  --color-navy-raised: var(--navy-raised);
+  --color-navy-line: var(--navy-line);
+  --color-glow: var(--glow);
+  --color-glow-strong: var(--glow-strong);
   --font-sans: var(--font-vazir), system-ui, sans-serif;
 }
 
@@ -229,7 +229,7 @@
 .veye-rule {
   height: 3px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), #818cf8, #34d399, var(--accent));
+  background: linear-gradient(90deg, var(--glow), #818cf8, #34d399, var(--glow));
   background-size: 200% 100%;
   animation: veye-drift 6s linear infinite;
 }

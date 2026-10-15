@@ -7,7 +7,7 @@ export function BrandMark({ size = "md", className }: { size?: "sm" | "md" | "lg
     <span
       aria-hidden
       className={cx(
-        "flex shrink-0 items-center justify-center border border-line bg-gradient-to-b from-surface-raised to-surface font-bold text-accent",
+        "flex shrink-0 items-center justify-center border border-navy-line bg-gradient-to-b from-navy-raised to-navy font-bold text-glow",
         "shadow-[inset_0_1px_0_rgb(255_255_255/0.06),0_0_0_1px_rgb(56_189_248/0.06),0_8px_24px_-8px_rgb(56_189_248/0.35)]",
         box,
         className,
