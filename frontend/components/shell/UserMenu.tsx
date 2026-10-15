@@ -1,21 +1,24 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ChevronsUpDown, CircleUserRound, LogOut } from "lucide-react";
+import { ChevronsUpDown, CircleUserRound, LogOut, Monitor, Moon, Palette, Sun } from "lucide-react";
 import { apiPost } from "@/lib/api-client";
 import { useCurrentUser } from "@/lib/current-user";
 import { Avatar } from "@/components/ui/Avatar";
-import { DropdownMenu, MenuItem, MenuLabel, MenuSeparator } from "@/components/ui/DropdownMenu";
+import { DropdownMenu, MenuItem, MenuLabel, MenuRadioGroup, MenuSeparator, MenuSub } from "@/components/ui/DropdownMenu";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { THEME_LABELS } from "@/lib/theme";
 import { cx } from "@/components/ui/cx";
 
 /**
- * The signed-in person, as a menu: their account and signing out. `variant="sidebar"` is the row at the
+ * The signed-in person, as a menu: their account, the theme and signing out. `variant="sidebar"` is the row at the
  * foot of the navy sidebar (just the avatar when the rail is collapsed); `variant="compact"` is the
  * avatar alone, for the phone's top bar.
  */
 export function UserMenu({ variant, onNavigate }: { variant: "sidebar" | "compact"; onNavigate?: () => void }) {
   const router = useRouter();
   const { user } = useCurrentUser();
+  const { choice, setChoice } = useTheme();
 
   async function logout() {
     onNavigate?.();
@@ -77,6 +80,17 @@ export function UserMenu({ variant, onNavigate }: { variant: "sidebar" | "compac
       >
         اکانت
       </MenuItem>
+      <MenuSub label="ظاهر" icon={<Palette />}>
+        <MenuRadioGroup
+          value={choice}
+          onChange={setChoice}
+          items={[
+            { value: "light", label: THEME_LABELS.light, icon: <Sun /> },
+            { value: "dark", label: THEME_LABELS.dark, icon: <Moon /> },
+            { value: "system", label: THEME_LABELS.system, icon: <Monitor /> },
+          ]}
+        />
+      </MenuSub>
       <MenuSeparator />
       <MenuItem icon={<LogOut className="rtl-flip" />} tone="danger" onSelect={logout}>
         خروج

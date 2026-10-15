@@ -10,6 +10,7 @@ import {
   KeyRound,
   Layers,
   LockKeyhole,
+  Palette,
   Phone,
   ShieldCheck,
   UserRound,
@@ -26,6 +27,7 @@ import { cx } from "@/components/ui/cx";
 import { useToast } from "@/components/ui/Toast";
 import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
 import { SignInHistoryCard } from "@/components/account/SignInHistoryCard";
+import { ThemeSegmented } from "@/components/theme/ThemeToggle";
 
 export default function AccountPage() {
   const { user, loading, replaceUser } = useCurrentUser();
@@ -106,6 +108,11 @@ export default function AccountPage() {
           </Card>
 
           <SignInHistoryCard />
+
+          <Card aria-label="ظاهر">
+            <CardHeader title="ظاهر" icon={<Palette />} description="روشن، تیره، یا هماهنگ با تنظیم دستگاه شما. کاغذ مستندات همیشه سفید می‌ماند." />
+            <ThemeSegmented />
+          </Card>
         </div>
 
         <div className="space-y-6">

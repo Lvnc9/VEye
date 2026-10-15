@@ -9,6 +9,7 @@ import { activeHref } from "@/lib/nav";
 import { BrandMark } from "@/components/ui/BrandMark";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cx } from "@/components/ui/cx";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { navItemsFor } from "./nav";
 import { UserMenu } from "./UserMenu";
 
@@ -46,7 +47,7 @@ function Bell_({ inbox, onDark }: { inbox: InboxSummary | null; onDark?: boolean
 
 /**
  * The bar above the page. From `md` up: where you are (the menu group › the screen) and the bell, on a
- * frosted strip. On a phone: the navy brand bar with the bell and your avatar menu — and the menu button
+ * frosted strip, with the theme switch. On a phone: the navy brand bar with the bell and your avatar menu — and the menu button
  * when the bottom tab bar has stepped aside (the designer, an open conversation).
  */
 export function TopBar({
@@ -82,6 +83,7 @@ export function TopBar({
           )}
         </nav>
         <div className="flex items-center gap-1">
+          <ThemeToggle />
           <Bell_ inbox={inbox} />
         </div>
       </header>
@@ -92,6 +94,7 @@ export function TopBar({
           <span className="text-base font-extrabold">وی‌آی</span>
         </Link>
         <div className="flex items-center gap-0.5">
+          <ThemeToggle onDark />
           <Bell_ inbox={inbox} onDark />
           <UserMenu variant="compact" />
           {showMenuButton && (
