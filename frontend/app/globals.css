@@ -8,6 +8,10 @@
  */
 @custom-variant dark (&:where(.dark, .dark *):not(:where(.light, .light *)));
 
+/* The desktop sidebar collapsed to an icon rail (<html data-sidebar="collapsed">, components/shell). Always
+   combined with `md:` — below it the sidebar is the phone's menu sheet, which keeps its labels. */
+@custom-variant rail (&:where([data-sidebar="collapsed"] *));
+
 /*
  * The VEye design system, UI 2 (docs/21-ui-2.md). Semantic tokens in shadcn's names, so components
  * ported from 21st.dev read our palette unchanged: `bg-card`, `text-muted-foreground`, `border-border`,
