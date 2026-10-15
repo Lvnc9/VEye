@@ -168,6 +168,7 @@ describe("inbox tab and chart affordance", () => {
   it("defaults to conversations", () => {
     expect(parseInboxTab("awaiting")).toBe("awaiting");
     expect(parseInboxTab("notifications")).toBe("notifications");
+    expect(parseInboxTab("reading")).toBe("reading"); // Phase 21 «برای مطالعه»
     for (const other of [null, "", "x", "conversations"]) expect(parseInboxTab(other)).toBe("conversations");
   });
 

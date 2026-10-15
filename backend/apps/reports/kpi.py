@@ -156,6 +156,34 @@ def document_kpis(since) -> dict:
         ),
         "waiting_now": waiting,
         "submitted_in_window": counts.get(DocumentEventKind.SUBMITTED, 0),
+        "control": control_kpis(),
+    }
+
+
+def control_kpis() -> dict:
+    """Phase 21, about now: of the people asked to read the revisions in force, how many have
+    (`ReadAcknowledgment`); and how many documents in force are late for, or near, their periodic review."""
+    from django.db.models import Q
+
+    from apps.distribution.models import ReadAcknowledgment
+    from apps.documents.review import notice_days
+
+    reading = ReadAcknowledgment.objects.filter(document__status=DocumentStatus.UNDER_CONTROL).aggregate(
+        total=Count("id"),
+        acknowledged=Count("id", filter=Q(acknowledged_at__isnull=False)),
+        documents=Count("document", distinct=True),
+    )
+    today = timezone.localdate()
+    in_force = Document.objects.filter(status=DocumentStatus.UNDER_CONTROL)
+    return {
+        "reading": {
+            **reading,
+            "rate": round(reading["acknowledged"] / reading["total"], 3) if reading["total"] else None,
+        },
+        "review_overdue": in_force.filter(review_due_on__lt=today).count(),
+        "review_due_soon": in_force.filter(
+            review_due_on__gte=today, review_due_on__lte=today + timezone.timedelta(days=notice_days())
+        ).count(),
     }
 
 

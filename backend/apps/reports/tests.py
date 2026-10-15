@@ -381,3 +381,43 @@ class KpiApiTests(TestCase):
         self.assertEqual(self.get(self.hq).data["projects"]["unfinished_count"], 0)  # not a member, leads nothing
         test_support.lead_of(self.hq, self.org.ai)
         self.assertEqual(self.get(self.hq).data["projects"]["unfinished_count"], 1)
+
+
+class ControlKpiTests(TestCase):
+    """Phase 21 figures in /reports/kpi/: reading coverage of the revisions in force, and periodic reviews."""
+
+    def test_reading_and_review_figures(self):
+        from apps.distribution.models import ReadAcknowledgment
+
+        org = test_support.ensure_org()
+        author = User.objects.create_user(
+            national_code="8800000001", password="pw-for-tests-123", full_name="ن", access_roll=AccessRoll.GUILD,
+            access_level=AccessLevel.LEVEL_2,
+        )
+        readers = [
+            User.objects.create_user(
+                national_code=f"88000000{i:02d}", password="pw-for-tests-123", full_name=f"خواننده {i}",
+                access_roll=AccessRoll.GUILD, access_level=AccessLevel.LEVEL_2,
+            )
+            for i in range(10, 14)
+        ]
+        today = timezone.localdate()
+        in_force = Document.objects.create(
+            category=DocumentCategory.INSIDE, title="الف", group=DocumentGroup.PROCEDURE, number=1, created_by=author,
+            status=DocumentStatus.UNDER_CONTROL, owner_node=org.rag, review_due_on=today - timedelta(days=1),
+        )
+        Document.objects.create(
+            category=DocumentCategory.INSIDE, title="ب", group=DocumentGroup.PROCEDURE, number=2, created_by=author,
+            status=DocumentStatus.UNDER_CONTROL, owner_node=org.rag, review_due_on=today + timedelta(days=10),
+        )
+        old = Document.objects.create(
+            category=DocumentCategory.INSIDE, title="ج", group=DocumentGroup.PROCEDURE, number=3, created_by=author,
+            status=DocumentStatus.OBSOLETE, owner_node=org.rag, review_due_on=today - timedelta(days=99),
+        )
+        for i, reader in enumerate(readers[:3]):
+            ReadAcknowledgment.objects.create(document=in_force, user=reader, acknowledged_at=timezone.now() if i == 0 else None)
+        ReadAcknowledgment.objects.create(document=old, user=readers[3])  # a superseded revision does not count
+
+        figures = kpi.control_kpis()
+        self.assertEqual(figures["reading"], {"total": 3, "acknowledged": 1, "documents": 1, "rate": 0.333})
+        self.assertEqual((figures["review_overdue"], figures["review_due_soon"]), (1, 1))

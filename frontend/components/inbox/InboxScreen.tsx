@@ -6,13 +6,14 @@ import { useInboxSummary } from "@/lib/use-inbox-summary";
 import { AwaitingTab } from "./AwaitingTab";
 import { ConversationsTab } from "./ConversationsTab";
 import { NotificationsTab } from "./NotificationsTab";
+import { ReadingTab } from "./ReadingTab";
 import { CountBadge } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Tabs } from "@/components/ui/Tabs";
 
 const TAB_SUMMARY_POLL_MS = 15000;
 
-/** کارتابل (docs/11 §3.6, + Phase 15's اعلان‌ها tab): three tabs. The tab and the open conversation
+/** کارتابل (docs/11 §3.6, + Phase 15's اعلان‌ها tab, + Phase 21's «برای مطالعه»): four tabs. The tab and the open conversation
  *  both live in the URL (`?tab=awaiting`, `?c=<id>`), so a link from the chart, a reload or the
  *  back button all land in the same place. */
 export function InboxScreen() {
@@ -25,6 +26,7 @@ export function InboxScreen() {
   const tabs: { id: InboxTab; label: string; count: number }[] = [
     { id: "conversations", label: "گفتگوها", count: summary?.unread_messages ?? 0 },
     { id: "awaiting", label: "منتظر اقدام", count: (summary?.awaiting_documents ?? 0) + (summary?.due_objectives ?? 0) },
+    { id: "reading", label: "برای مطالعه", count: summary?.to_read ?? 0 },
     { id: "notifications", label: "اعلان‌ها", count: summary?.unread_notifications ?? 0 },
   ];
 
@@ -50,6 +52,8 @@ export function InboxScreen() {
         />
       ) : tab === "awaiting" ? (
         <AwaitingTab summary={summary} />
+      ) : tab === "reading" ? (
+        <ReadingTab onChanged={() => router.refresh()} />
       ) : (
         <NotificationsTab />
       )}

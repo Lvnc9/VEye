@@ -76,6 +76,12 @@ export interface KpiResponse {
     returns: { confirmed: number; approved: number; returned: number; decisions: number; rate: number | null };
     waiting_now: { confirmation: WaitingNow; approval: WaitingNow };
     submitted_in_window: number;
+    /** Phase 21, about now: reading coverage of the revisions in force, and periodic reviews. */
+    control: {
+      reading: { total: number; acknowledged: number; documents: number; rate: number | null };
+      review_overdue: number;
+      review_due_soon: number;
+    };
   };
   projects: {
     scope_note: string;

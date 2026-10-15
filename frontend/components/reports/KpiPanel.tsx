@@ -116,6 +116,18 @@ export function KpiPanel() {
                 </p>
               ))}
             </div>
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Stat
+                label="پوشش مطالعهٔ مستندات معتبر"
+                value={formatPercent(data.documents.control.reading.rate)}
+                note={`${toPersianDigits(data.documents.control.reading.acknowledged)} از ${toPersianDigits(data.documents.control.reading.total)} نفرِ ابلاغ‌شده در ${toPersianDigits(data.documents.control.reading.documents)} مستند، «مطالعه کردم» را زده‌اند`}
+              />
+              <Stat
+                label="بازنگری دوره‌ای عقب‌افتاده"
+                value={toPersianDigits(data.documents.control.review_overdue)}
+                note={`و ${toPersianDigits(data.documents.control.review_due_soon)} مستند دیگر تا یک ماه آینده موعد بازنگری دارند`}
+              />
+            </dl>
             <p className="mt-3 text-[11px] leading-5 text-slate-500">
               مرجوع‌شدن، شمارش زمان را از نو شروع می‌کند: مدتی که مستند پس از مرجوع در حالت پیش‌نویس بوده، جزو هیچ مرحله‌ای حساب نمی‌شود.
             </p>
