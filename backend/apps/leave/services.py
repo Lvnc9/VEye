@@ -13,6 +13,7 @@ from apps.organization.access import OrgAccess
 
 from .access import NOT_A_DECIDER, can_decide, deciders
 from .models import HOLDING_STATUSES, LeaveRequest, LeaveStatus, LeaveType
+from .workdays import working_days
 
 TEXT_MAX = 2000
 
@@ -62,6 +63,10 @@ def request_leave(*, actor, leave_type=LeaveType.ANNUAL, starts_on, ends_on, rea
     if ends_on < starts_on:
         raise ValidationError({"ends_on": ["تاریخ پایان نمی‌تواند پیش از تاریخ شروع باشد."]})
     reason = _clean(reason, "reason", required=False)
+    if working_days(starts_on, ends_on) == 0:
+        raise ValidationError(
+            {"ends_on": ["این بازه هیچ روز کاری ندارد؛ جمعه‌ها و تعطیلات رسمی مرخصی شمرده نمی‌شوند."]}
+        )
     # Lock this person's holding requests, so two submissions at once cannot both pass the overlap check.
     clash = (
         LeaveRequest.objects.select_for_update()

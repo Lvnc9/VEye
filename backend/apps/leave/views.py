@@ -4,14 +4,16 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.models import User
+from apps.accounts.models import Capability, User
 from apps.core.pagination import DefaultPagination
+from apps.core.permissions import HasCapability
 from apps.organization.access import access_for
 
 from . import services
 from .access import is_top, visible_leave
-from .models import LeaveStatus, LeaveType
-from .serializers import LeaveCreateSerializer, LeaveRequestSerializer, NoteSerializer
+from .models import Holiday, LeaveStatus, LeaveType
+from .serializers import HolidaySerializer, LeaveCreateSerializer, LeaveRequestSerializer, NoteSerializer, SpanSerializer
+from .workdays import jalali_year_bounds, working_days
 
 
 class LeaveRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
@@ -72,6 +74,56 @@ class LeaveRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
         serializer.is_valid(raise_exception=True)
         return Response(self._one(services.reject(self.get_object(), actor=request.user, note=serializer.validated_data["note"])))
 
+    @action(detail=False, methods=["get"])
+    def preview(self, request):
+        """What a span would count before it is asked for (Phase 22): working days, calendar days and the
+        holidays inside it — so the form never re-implements the holiday rule."""
+        serializer = SpanSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        start, end = serializer.validated_data["starts_on"], serializer.validated_data["ends_on"]
+        holidays = Holiday.objects.filter(date__range=(start, end))
+        return Response(
+            {
+                "starts_on": start,
+                "ends_on": end,
+                "calendar_days": (end - start).days + 1,
+                "days": working_days(start, end, {h.date for h in holidays}),
+                "holidays": HolidaySerializer(holidays, many=True).data,
+            }
+        )
+
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         return Response(self._one(services.cancel(self.get_object(), actor=request.user)))
+
+
+class HolidayViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet):
+    """`/leave/holidays/` (Phase 22): the official holidays a day of leave does not count on. Anyone signed in
+    reads them (the leave form and the calendar show them); HR (`manage_personnel`) adds and removes them.
+    `?year=1405` narrows to a Jalali year."""
+
+    serializer_class = HolidaySerializer
+    permission_classes = [IsAuthenticated, HasCapability]
+    write_capability = Capability.MANAGE_PERSONNEL
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = Holiday.objects.all()
+        year = self.request.query_params.get("year", "")
+        if year:
+            if not year.isdigit():
+                return queryset.none()
+            first, last = jalali_year_bounds(int(year))
+            queryset = queryset.filter(date__range=(first, last))
+        return queryset
+
+    def perform_create(self, serializer):
+        from django.db import IntegrityError, transaction
+
+        from apps.core.exceptions import ConflictError
+
+        try:
+            with transaction.atomic():
+                serializer.save()
+        except IntegrityError:
+            raise ConflictError("برای این روز تعطیلی ثبت شده است.", code="holiday_exists")

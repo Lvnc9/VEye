@@ -76,7 +76,30 @@ class LeaveRequest(TimeStampedModel):
         return f"{self.requester} {self.starts_on}→{self.ends_on}"
 
     @property
-    def days(self) -> int:
-        """Calendar days, both ends included — derived, never stored. (No weekend or holiday arithmetic:
-        that is a balance rule, and balances are not kept.)"""
+    def calendar_days(self) -> int:
+        """Every day from the first to the last, both included."""
         return (self.ends_on - self.starts_on).days + 1
+
+    @property
+    def days(self) -> int:
+        """Working days (Phase 22, owner's decision 2026-10-15): Fridays and holidays are not counted.
+        Derived, never stored — a holiday added later recounts old requests too. One query; a list page
+        uses `workdays.HolidayCache` instead."""
+        from .workdays import working_days
+
+        return working_days(self.starts_on, self.ends_on)
+
+
+class Holiday(models.Model):
+    """An official holiday (Phase 22), kept by HR in «تنظیمات»: a day of leave that falls on it is not
+    counted. Fridays need no row."""
+
+    date = models.DateField(unique=True)
+    title = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["date"]
+
+    def __str__(self):
+        return f"{self.date} {self.title}"

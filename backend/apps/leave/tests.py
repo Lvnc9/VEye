@@ -92,7 +92,7 @@ class AskTests(LeaveBase):
         self.assertEqual(self.ask(leave_type="HOLIDAY").status_code, 400)
         self.assertEqual(self.ask(starts_on="x").status_code, 400)
         self.assertEqual(self.make(reason="").reason, "")
-        self.assertEqual(self.make(user=self.rag_lead, starts_on=day(-3), ends_on=day(-2), leave_type="SICK").days, 2)  # after the fact
+        self.assertEqual(self.make(user=self.rag_lead, starts_on=day(-3), ends_on=day(-2), leave_type="SICK").calendar_days, 2)  # after the fact
 
     def test_overlapping_requests_are_refused_but_touching_ones_are_fine(self):
         first = self.make(starts_on=day(10), ends_on=day(12))
@@ -133,7 +133,7 @@ class DecideTests(LeaveBase):
 
     def test_who_may_decide(self):
         for decider in (self.rag_lead, self.ai_lead, self.ceo):
-            leave = self.make(starts_on=day(40 + decider.pk), ends_on=day(40 + decider.pk))
+            leave = self.make(starts_on=day(40 + 3 * decider.pk), ends_on=day(41 + 3 * decider.pk))  # two days: never only a Friday
             self.assertEqual(self.act(decider, leave, "approve").status_code, 200, decider.full_name)
         self.assertEqual(self.act(self.hr, self.leave, "approve").status_code, 403)  # HR reads all, decides nothing
         self.assertEqual(self.act(self.dev_lead, self.leave, "approve").status_code, 404)  # cannot even see it
@@ -172,7 +172,7 @@ class DecideTests(LeaveBase):
 
     def test_every_flag_agrees_with_its_endpoint(self):
         for viewer in (self.rag_lead, self.ai_lead, self.ceo, self.hr, self.worker):
-            leave = self.make(starts_on=day(60 + viewer.pk), ends_on=day(60 + viewer.pk))
+            leave = self.make(starts_on=day(60 + 3 * viewer.pk), ends_on=day(61 + 3 * viewer.pk))  # two days: never only a Friday
             offered = self.api(viewer).get(reverse("leave-detail", args=[leave.pk])).data["can_decide"]
             worked = self.act(viewer, leave, "approve").status_code == 200
             self.assertEqual(offered, worked, viewer.full_name)
@@ -222,7 +222,7 @@ class VisibilityTests(LeaveBase):
     def test_the_filters(self):
         mine = self.make()
         own = self.make(self.rag_lead)
-        decided = self.make(starts_on=day(30), ends_on=day(30))
+        decided = self.make(starts_on=day(30), ends_on=day(31))  # two days: never only a Friday
         self.act(self.rag_lead, decided, "approve")
         ids = lambda user, **p: {r["id"] for r in self.api(user).get(reverse("leave-list"), p).data["results"]}
         self.assertEqual(ids(self.rag_lead, to_decide=1), {mine.pk})  # not their own, not the decided one
