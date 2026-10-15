@@ -73,7 +73,7 @@ export function FormCanvas({
     <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.35)_1px,transparent_0)] bg-[length:18px_18px] bg-slate-100 p-2 shadow-card sm:p-5">
       <div style={{ containerType: "inline-size" }} className={settings.orientation === "landscape" ? "" : "mx-auto max-w-[820px]"}>
         <div
-          className="flex flex-col bg-white text-slate-950 shadow-[0_1px_3px_rgb(15_23_42/0.12),0_16px_40px_-16px_rgb(15_23_42/0.35)]"
+          className="paper light flex flex-col bg-white text-slate-950 shadow-[0_1px_3px_rgb(15_23_42/0.12),0_16px_40px_-16px_rgb(15_23_42/0.35)]"
           style={pageStyle}
           onClick={() => onSelect(null)}
         >
