@@ -128,7 +128,7 @@ function DocumentDefaultsCard({ company, onSaved }: { company: Company; onSaved:
           <label
             className={cx(
               "flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-2.5 text-sm transition-colors duration-150",
-              draft.form_show_letter_box ? "border-primary/30 bg-brand-50/60" : "border-border hover:border-input",
+              draft.form_show_letter_box ? "border-primary/30 bg-primary/10" : "border-border hover:border-input",
               (!canEdit || saving) && "cursor-not-allowed opacity-60",
             )}
           >

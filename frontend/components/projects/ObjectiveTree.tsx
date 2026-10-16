@@ -540,7 +540,7 @@ function AddObjectiveForm({
   }
 
   return (
-    <form onSubmit={submit} className="mb-5 space-y-3 rounded-2xl border border-dashed border-primary/30 bg-brand-50/30 p-4 animate-fade-in">
+    <form onSubmit={submit} className="mb-5 space-y-3 rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 animate-fade-in">
       {error && <ErrorBanner message={error} />}
       <div>
         <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="new-objective-title">

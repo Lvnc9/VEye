@@ -344,7 +344,7 @@ function MeetingForm({
   }
 
   return (
-    <div className="mb-5 space-y-4 rounded-2xl border border-dashed border-primary/30 bg-brand-50/30 p-4 animate-fade-in">
+    <div className="mb-5 space-y-4 rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 animate-fade-in">
       {error && <ErrorBanner message={error} />}
       {isEdit && (
         <p className="rounded-xl border border-amber-200 dark:border-amber-400/25 bg-amber-50/80 dark:bg-amber-400/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">

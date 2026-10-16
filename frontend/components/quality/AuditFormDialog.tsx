@@ -130,7 +130,7 @@ export function AuditFormDialog({
           ممیز اصلی <span aria-hidden className="text-rose-600">*</span>
         </p>
         {form.lead_auditor !== null && auditorName ? (
-          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-brand-900">
+          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-foreground">
             <Avatar name={auditorName} size="sm" />
             {auditorName}
             <button type="button" onClick={() => set({ lead_auditor: null })} className="ms-auto text-xs underline">

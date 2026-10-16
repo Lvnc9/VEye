@@ -52,7 +52,7 @@ export function ChangeAuditorDialog({
       busy={sending}
     >
       {picked ? (
-        <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-brand-900">
+        <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-foreground">
           <Avatar name={picked.full_name} size="sm" />
           {picked.full_name}
           <button type="button" onClick={() => setPicked(null)} className="ms-auto text-xs underline">

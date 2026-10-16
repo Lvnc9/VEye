@@ -112,7 +112,7 @@ export function ActionFormDialog({
           مسئول انجام <span aria-hidden className="text-rose-600">*</span>
         </p>
         {form.assignee !== null && assigneeName ? (
-          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-brand-900">
+          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-foreground">
             <Avatar name={assigneeName} size="sm" />
             {assigneeName}
             <button type="button" onClick={() => set({ assignee: null })} className="ms-auto text-xs underline">

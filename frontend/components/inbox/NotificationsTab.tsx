@@ -66,17 +66,30 @@ export function NotificationsTab({ onChanged }: { onChanged?: () => void }) {
           {rows.map((notification) => (
             <li
               key={notification.id}
-              className={`rounded-xl px-2 py-3 text-sm transition-colors hover:bg-accent/60 ${
-                notification.is_read ? "" : "bg-brand-50/50"
+              className={`relative rounded-xl px-2 py-3 text-sm transition-colors hover:bg-accent/60 ${
+                // Unread: a lit bar on the start edge and a soft wash of the brand colour fading across the row
+                // (not a filled light background — that turns into a grey slab in the dark theme).
+                notification.is_read ? "" : "bg-gradient-to-l from-primary/[0.09] via-primary/[0.02] to-transparent"
               }`}
             >
+              {!notification.is_read && (
+                <span
+                  aria-hidden
+                  className="absolute inset-y-2.5 start-0 w-[3px] rounded-full bg-primary shadow-[0_0_10px_var(--primary)]"
+                />
+              )}
               <Link
                 href={notificationHref(notification)}
                 onClick={() => markRead(notification)}
                 className="flex flex-col gap-1"
               >
                 <span className={`flex items-center gap-2 ${notification.is_read ? "text-soft-foreground" : "font-bold text-foreground"}`}>
-                  {!notification.is_read && <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden />}
+                  {!notification.is_read && (
+                    <span className="relative flex size-2.5 shrink-0" aria-hidden>
+                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-60" />
+                      <span className="relative inline-flex size-2.5 rounded-full bg-primary" />
+                    </span>
+                  )}
                   {notification.title}
                 </span>
                 {notification.body && <span className="text-muted-foreground">{notification.body}</span>}

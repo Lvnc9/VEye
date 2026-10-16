@@ -218,14 +218,14 @@ function Floor({
 function Room({ node, selected, onSelect, children }: { node: OrgTreeNode; selected: boolean; onSelect: (node: OrgNode) => void; children: ReactNode }) {
   return (
     <div
-      className={`min-w-44 rounded-2xl border bg-brand-50/50 p-3 shadow-xs transition-[border-color,box-shadow] duration-200 ${selected ? "border-primary ring-4 ring-primary/15" : "border-primary/30 hover:border-primary/30"} ${node.is_active ? "" : "opacity-60"}`}
+      className={`min-w-44 rounded-2xl border bg-primary/5 p-3 shadow-xs transition-[border-color,box-shadow] duration-200 ${selected ? "border-primary ring-4 ring-primary/15" : "border-primary/30 hover:border-primary/30"} ${node.is_active ? "" : "opacity-60"}`}
     >
       <button
         type="button"
         onClick={() => onSelect(node)}
         aria-label={`${ORG_KIND_LABELS.UNIT} ${node.name}`}
         aria-pressed={selected}
-        className="mb-2 block w-full rounded-lg px-2 py-1 text-start text-sm font-bold text-brand-900 transition-colors hover:bg-primary/15"
+        className="mb-2 block w-full rounded-lg px-2 py-1 text-start text-sm font-bold text-foreground transition-colors hover:bg-primary/15"
       >
         {node.name}
         {!node.is_active && <span className="ms-1 text-[10px] font-normal">(بایگانی‌شده)</span>}

@@ -183,7 +183,7 @@ export function RiskFormDialog({
       <div>
         <p className="mb-1.5 text-sm text-soft-foreground">مسئول پیگیری (اختیاری)</p>
         {form.owner !== null && ownerName ? (
-          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-brand-900">
+          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-foreground">
             <Avatar name={ownerName} size="sm" />
             {ownerName}
             <button type="button" onClick={() => set({ owner: null })} className="ms-auto text-xs underline">

@@ -280,7 +280,7 @@ export function ChatThread({
               {files.map((file, index) => (
                 <li
                   key={`${file.name}-${index}`}
-                  className="flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-brand-900 ring-1 ring-inset ring-primary/15 animate-fade-in"
+                  className="flex max-w-full items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-foreground ring-1 ring-inset ring-primary/15 animate-fade-in"
                 >
                   <Paperclip className="size-3.5 text-primary" />
                   <span className="truncate" title={file.name}>

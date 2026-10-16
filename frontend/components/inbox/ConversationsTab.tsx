@@ -186,7 +186,7 @@ function ConversationRow({
       onClick={onSelect}
       aria-current={active ? "true" : undefined}
       className={`relative flex w-full items-start gap-3 border-b border-border px-4 py-3 text-right transition-colors ${
-        active ? "bg-brand-50/70" : "hover:bg-accent/60"
+        active ? "bg-primary/10" : "hover:bg-accent/60"
       }`}
     >
       {active && <span aria-hidden className="absolute inset-y-2 right-0 w-1 rounded-l-full bg-primary animate-fade-in" />}

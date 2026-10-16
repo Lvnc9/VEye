@@ -66,7 +66,7 @@ export function MemberPicker({
                   key={membership.user}
                   className={cx(
                     "flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-[border-color,background-color] duration-150",
-                    checked ? "border-primary/30 bg-brand-50/60" : "border-border bg-card hover:border-input",
+                    checked ? "border-primary/30 bg-primary/10" : "border-border bg-card hover:border-input",
                   )}
                 >
                   <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">

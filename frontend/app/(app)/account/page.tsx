@@ -164,7 +164,7 @@ export default function AccountPage() {
                 {user.capabilities.map((capability, i) => (
                   <li
                     key={capability}
-                    className="veye-stagger flex items-center gap-2 rounded-xl bg-brand-50/70 px-3 py-2 text-sm text-brand-900 ring-1 ring-inset ring-primary/10"
+                    className="veye-stagger flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-foreground ring-1 ring-inset ring-primary/10"
                     style={{ "--i": i } as React.CSSProperties}
                   >
                     <BadgeCheck className="size-4 text-primary" />

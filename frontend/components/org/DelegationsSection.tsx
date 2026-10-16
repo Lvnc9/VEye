@@ -101,7 +101,7 @@ export function DelegationsSection({ node }: { node: OrgNode }) {
 
       <div className="space-y-2">
         {delegate ? (
-          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-brand-900">
+          <p className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm text-foreground">
             <Check className="size-4" />
             {delegate.full_name}
             <button type="button" onClick={() => setDelegate(null)} className="ms-auto text-xs underline">

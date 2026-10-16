@@ -101,7 +101,7 @@ export function DocumentPicker({
                     status_label: row.status_label,
                   })
                 }
-                className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-right transition-colors hover:bg-brand-50/70"
+                className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-right transition-colors hover:bg-primary/10"
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <Code>{row.full_code}</Code>

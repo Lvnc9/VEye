@@ -54,7 +54,7 @@ function Picker<T extends { id: number; name: string }>({
       disabled={disabled}
       triggerClassName={cx(
         pickerButton,
-        chosen ? "border-primary/30 bg-primary/10 text-brand-900" : "border-input bg-card text-soft-foreground hover:bg-accent/60",
+        chosen ? "border-primary/30 bg-primary/10 text-foreground" : "border-input bg-card text-soft-foreground hover:bg-accent/60",
       )}
       panelClassName="max-h-64 w-64 overflow-y-auto"
       trigger={

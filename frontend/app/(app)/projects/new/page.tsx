@@ -365,7 +365,7 @@ export default function NewProjectPage() {
             )}
 
             {form.section !== null && form.members.length > 0 ? (
-              <div className="space-y-4 rounded-2xl border border-dashed border-primary/30 bg-brand-50/30 p-4">
+              <div className="space-y-4 rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4">
                 <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
                   <div>
                     <label className="mb-1.5 block text-xs text-soft-foreground" htmlFor="objective-title">
