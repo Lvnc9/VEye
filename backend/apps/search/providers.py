@@ -90,14 +90,14 @@ def people(request, raw, term):
     from apps.organization.queries import search_people
 
     rows = search_people(User.objects.filter(is_active=True, is_developer=False), raw).order_by("full_name")[:LIMIT]
-    return [{"id": u.pk, "title": u.full_name, "subtitle": u.title, "url": f"/organization?person={u.pk}"} for u in rows]
+    return [{"id": u.pk, "title": u.full_name, "subtitle": u.title, "url": "/organization"} for u in rows]
 
 
 def org_nodes(request, raw, term):
     from apps.organization.models import OrgNode
 
     rows = OrgNode.objects.filter(is_active=True, name_key__icontains=term).order_by("depth", "name")[:LIMIT]
-    return [{"id": n.pk, "title": n.name, "subtitle": n.get_kind_display(), "url": f"/organization?node={n.pk}"} for n in rows]
+    return [{"id": n.pk, "title": n.name, "subtitle": n.get_kind_display(), "url": "/organization"} for n in rows]
 
 
 #: In the order the palette shows them.

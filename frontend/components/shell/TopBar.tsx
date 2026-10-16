@@ -10,6 +10,7 @@ import { BrandMark } from "@/components/ui/BrandMark";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cx } from "@/components/ui/cx";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { SearchButton } from "./SearchButton";
 import { navItemsFor } from "./nav";
 import { UserMenu } from "./UserMenu";
 
@@ -83,6 +84,7 @@ export function TopBar({
           )}
         </nav>
         <div className="flex items-center gap-1">
+          <SearchButton />
           <ThemeToggle />
           <Bell_ inbox={inbox} />
         </div>
@@ -94,6 +96,7 @@ export function TopBar({
           <span className="text-base font-extrabold">وی‌آی</span>
         </Link>
         <div className="flex items-center gap-0.5">
+          <SearchButton onDark />
           <ThemeToggle onDark />
           <Bell_ inbox={inbox} onDark />
           <UserMenu variant="compact" />

@@ -93,7 +93,7 @@ class SearchTests(TestCase):
     def test_org_nodes(self):
         hit = self.search(self.lead, "هوش")["org_nodes"][0]
         self.assertEqual(hit["id"], self.org.ai.pk)
-        self.assertEqual(hit["url"], f"/organization?node={self.org.ai.pk}")
+        self.assertEqual(hit["url"], "/organization")  # the chart page takes no node parameter yet
 
     def test_signed_out_is_refused(self):
         self.assertEqual(APIClient().get(reverse("search"), {"q": "کیفیت"}).status_code, 401)

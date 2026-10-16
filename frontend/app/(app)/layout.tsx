@@ -7,6 +7,7 @@ import { ForcedPasswordScreen } from "@/components/account/ForcedPasswordScreen"
 import { BottomNav } from "@/components/shell/BottomNav";
 import { SidebarContent } from "@/components/shell/Sidebar";
 import { TopBar } from "@/components/shell/TopBar";
+import { CommandPalette } from "@/components/CommandPalette";
 import { Sheet } from "@/components/ui/Sheet";
 import { ToastProvider } from "@/components/ui/Toast";
 import { CurrentUserProvider, useCurrentUser } from "@/lib/current-user";
@@ -69,6 +70,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <Sheet open={menuOpen} onOpenChange={setMenuOpen} label="منوی اصلی" className="md:hidden">
         <SidebarContent inbox={inbox} place="sheet" onNavigate={() => setMenuOpen(false)} />
       </Sheet>
+
+      {/* ⌘K (Phase 22): one search over every kind of record; the top bar's button opens it too. */}
+      <CommandPalette />
     </div>
   );
 }
