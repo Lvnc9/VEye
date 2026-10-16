@@ -16,6 +16,7 @@ import { FormSection } from "@/components/ui/FormSection";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cx } from "@/components/ui/cx";
 import { BackupsCard } from "@/components/settings/BackupsCard";
+import { LeaveSettingsCard } from "@/components/settings/LeaveSettingsCard";
 import { intervalChoices, reviewIntervalLabel } from "@/lib/review";
 
 /**
@@ -39,6 +40,7 @@ export default function SettingsPage() {
       ) : (
         <DocumentDefaultsCard company={company.data} onSaved={() => setReload((n) => n + 1)} />
       )}
+      {can("manage_personnel") && <LeaveSettingsCard />}
       {seesBackups && <BackupsCard />}
     </div>
   );
