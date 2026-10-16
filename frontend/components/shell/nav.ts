@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   Building2,
   CalendarDays,
+  CalendarRange,
   CircleUserRound,
   ClipboardCheck,
   FilePlus2,
@@ -60,6 +61,7 @@ export function navItemsFor(user: User | null): NavItem[] {
     { href: "/quality/audits", label: "ممیزی‌ها", ready: true, icon: ClipboardCheck, group: "کیفیت" },
     { href: "/quality/risks", label: "ریسک‌ها", ready: true, icon: Gauge, group: "کیفیت" },
     { href: "/announcements", label: "اطلاعیه‌ها", ready: true, icon: Megaphone, group: "کارکنان" },
+    { href: "/calendar", label: "تقویم", ready: true, icon: CalendarRange, group: "کارکنان" },
     { href: "/leave", label: "مرخصی", ready: true, icon: CalendarDays, group: "کارکنان" },
     {
       href: "/personnel/register",
