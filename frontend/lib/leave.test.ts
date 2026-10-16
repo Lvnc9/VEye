@@ -9,6 +9,8 @@ import {
   leaveQueryParams,
   leaveTabs,
   balanceWarningText,
+  balanceYears,
+  parseEntitlement,
   signedDays,
   validateLeaveForm,
   workingDaysText,
@@ -44,8 +46,8 @@ describe("leaveTabs — who gets which tab", () => {
 
   it("adds «to decide» for a مسئول or the مدیر عامل, and «all» for HR or the مدیر عامل — HR decides nothing", () => {
     expect(leaveTabs({ leads: true, top: false, hr: false })).toEqual(["mine", "decide"]);
-    expect(leaveTabs({ leads: false, top: false, hr: true })).toEqual(["mine", "all"]);
-    expect(leaveTabs({ leads: false, top: true, hr: true })).toEqual(["mine", "decide", "all"]);
+    expect(leaveTabs({ leads: false, top: false, hr: true })).toEqual(["mine", "all", "balances"]);
+    expect(leaveTabs({ leads: false, top: true, hr: true })).toEqual(["mine", "decide", "all", "balances"]);
   });
 });
 
@@ -95,5 +97,21 @@ describe("working days and balances (Phase 22)", () => {
   it("signs an overdrawn balance", () => {
     expect(signedDays(-2)).toBe("−۲");
     expect(signedDays(4)).toBe("۴");
+  });
+});
+
+describe("balances list helpers (Phase 22)", () => {
+  it("offers the years from now back to the start year", () => {
+    expect(balanceYears(1404, 1406)).toEqual([1406, 1405, 1404]);
+    expect(balanceYears(1406, 1406)).toEqual([1406]);
+    expect(balanceYears(1408, 1406)).toEqual([1406]); // a start year in the future: just this year
+  });
+
+  it("reads an entitlement, an empty box clearing it", () => {
+    expect(parseEntitlement("30")).toBe(30);
+    expect(parseEntitlement("  ")).toBeNull();
+    expect(parseEntitlement("-1")).toBe("invalid");
+    expect(parseEntitlement("121")).toBe("invalid");
+    expect(parseEntitlement("abc")).toBe("invalid");
   });
 });

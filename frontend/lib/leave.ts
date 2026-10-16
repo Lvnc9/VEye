@@ -136,7 +136,7 @@ export function daysText(days: number): string {
   return `${toPersianDigits(days)} روز`;
 }
 
-export type LeaveTab = "mine" | "decide" | "all";
+export type LeaveTab = "mine" | "decide" | "all" | "balances";
 
 /** The tabs a person sees: their own requests always; «منتظر تصمیم من» for a مسئول or the مدیر عامل;
  *  «همه» for HR (`manage_personnel`) and the مدیر عامل. (A temporary cover is not in `/auth/me/`: a
@@ -144,12 +144,13 @@ export type LeaveTab = "mine" | "decide" | "all";
 export function leaveTabs({ leads, top, hr }: { leads: boolean; top: boolean; hr: boolean }): LeaveTab[] {
   const tabs: LeaveTab[] = ["mine"];
   if (leads || top) tabs.push("decide");
-  if (hr || top) tabs.push("all");
+  if (hr || top) tabs.push("all", "balances");
   return tabs;
 }
 
 export function leaveQueryParams(tab: LeaveTab, status: LeaveStatus | "", page: number, pageSize: number): Record<string, string | number> {
   const params: Record<string, string | number> = { page, page_size: pageSize };
+  // "balances" is a different list (`/leave/balances/`); it never asks the requests endpoint.
   if (tab === "mine") params.mine = 1;
   if (tab === "decide") params.to_decide = 1;
   if (status) params.status = status;
@@ -181,4 +182,20 @@ export function validateLeaveForm(form: LeaveForm): Partial<Record<keyof LeaveFo
 
 export function leavePayload(form: LeaveForm): Record<string, unknown> {
   return { leave_type: form.leave_type, starts_on: form.starts_on, ends_on: form.ends_on, reason: form.reason.trim() };
+}
+
+/** Jalali years offered by the balances list: the policy's start year up to this one. */
+export function balanceYears(startYear: number, currentYear: number): number[] {
+  const years: number[] = [];
+  for (let year = currentYear; year >= Math.min(startYear, currentYear); year--) years.push(year);
+  return years;
+}
+
+/** The entitlement HR typed: a whole number 0–120, or null for "clear it". */
+export function parseEntitlement(text: string): number | null | "invalid" {
+  const trimmed = text.trim();
+  if (trimmed === "") return null;
+  if (!/^\d{1,3}$/.test(trimmed)) return "invalid";
+  const value = Number(trimmed);
+  return value <= 120 ? value : "invalid";
 }

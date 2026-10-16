@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { CalendarDays, CheckCheck, Plus, Undo2, XCircle } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { BalancesTab } from "@/components/leave/BalancesTab";
 import { LeaveFormDialog } from "@/components/leave/LeaveFormDialog";
+import { MyBalanceCard } from "@/components/leave/MyBalanceCard";
 import { Pager } from "@/components/Pager";
 import { TextDialog } from "@/components/quality/TextDialog";
 import { ErrorBanner } from "@/components/StatusBanner";
@@ -34,7 +36,12 @@ import {
 import { usePagedQuery } from "@/lib/use-paged-query";
 
 const PAGE_SIZE = 20;
-const TAB_LABELS: Record<LeaveTab, string> = { mine: "مرخصی‌های من", decide: "منتظر تصمیم من", all: "همهٔ درخواست‌ها" };
+const TAB_LABELS: Record<LeaveTab, string> = {
+  mine: "مرخصی‌های من",
+  decide: "منتظر تصمیم من",
+  all: "همهٔ درخواست‌ها",
+  balances: "مانده مرخصی",
+};
 
 type Dialog = { kind: "new" } | { kind: "approve" | "reject" | "cancel"; leave: LeaveRequest } | null;
 
@@ -53,10 +60,11 @@ export default function LeavePage() {
 
   const { rows, count, error, loading } = usePagedQuery<LeaveRequest>(
     "/leave/requests/",
-    leaveQueryParams(tabs.includes(tab) ? tab : "mine", status, page, PAGE_SIZE),
+    leaveQueryParams(tabs.includes(tab) && tab !== "balances" ? tab : "mine", status, page, PAGE_SIZE),
     reload,
   );
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+  const onBalances = tab === "balances" && tabs.includes("balances");
   const done = () => {
     setDialog(null);
     setReload((n) => n + 1);
@@ -86,6 +94,7 @@ export default function LeavePage() {
             }}
           />
         )}
+        {!onBalances && (
         <select
           aria-label="وضعیت"
           value={status}
@@ -102,9 +111,14 @@ export default function LeavePage() {
             </option>
           ))}
         </select>
+        )}
       </Card>
 
-      {loading ? (
+      {!onBalances && <MyBalanceCard reload={reload} />}
+
+      {onBalances ? (
+        <BalancesTab canEdit={can("manage_personnel")} />
+      ) : loading ? (
         <Card flush role="status" aria-label="در حال بارگذاری">
           {[0, 1, 2].map((i) => (
             <div key={i} className="space-y-2.5 border-b border-border px-5 py-4 last:border-0">
@@ -130,7 +144,7 @@ export default function LeavePage() {
         </Card>
       )}
 
-      <Pager page={page} totalPages={totalPages} onChange={setPage} />
+      {!onBalances && <Pager page={page} totalPages={totalPages} onChange={setPage} />}
 
       {dialog?.kind === "new" && <LeaveFormDialog onSaved={done} onClose={() => setDialog(null)} />}
       {dialog?.kind === "approve" && (
