@@ -144,9 +144,9 @@ export function RevisionsTab({
       )}
 
       {rows.length > 0 && (
-        <Card as="div" flush className={cx("overflow-hidden transition-opacity duration-200", loading && "opacity-60")}>
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[980px] text-right text-sm">
+        <Card as="div" flush className={cx("@container overflow-hidden transition-opacity duration-200", loading && "opacity-60")}>
+        <div className="hidden overflow-x-auto @5xl:block">
+          <table className="w-full min-w-[960px] text-right text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">
               <tr className="border-b border-border">
                 {["کد", "بازنگری", "عنوان", "گروه", "وضعیت", "تدوین", "تائید", "تصویب", "PDF"].map((column) => (
@@ -217,9 +217,9 @@ export function RevisionsTab({
           </table>
         </div>
         {/* Below `md`: a card per revision instead of the wide table. */}
-        <ul className="divide-y divide-border md:hidden">
+        <ul className="divide-y divide-border @2xl:grid @2xl:grid-cols-2 @2xl:gap-px @2xl:divide-y-0 @2xl:bg-border @5xl:hidden">
           {rows.map((row) => (
-            <li key={row.id} className="space-y-2.5 p-4">
+            <li key={row.id} className="space-y-2.5 bg-card p-4">
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"

@@ -634,11 +634,13 @@ export default function DocumentRegisterPage() {
         <Card
           flush
           as="div"
-          className={cx("overflow-hidden transition-opacity duration-200", loading && "opacity-60")}
+          className={cx("@container overflow-hidden transition-opacity duration-200", loading && "opacity-60")}
         >
-          {/* From `md` up: the table, scrolling in its own box so its header can stick. */}
-          <div className="hidden max-h-[72dvh] overflow-auto overscroll-contain md:block">
-            <table className="w-full min-w-[1150px] text-right text-sm">
+          {/* The table only when its own box is wide enough for every column (a container query, not the
+              window: with the sidebar open a 1000px window leaves the table ~680px). Nothing is pinned over
+              another column — an earlier pinned «وضعیت» column covered تصویب. */}
+          <div className="hidden max-h-[72dvh] overflow-auto overscroll-contain @6xl:block">
+            <table className="w-full min-w-[1080px] text-right text-sm">
               <thead className="sticky top-0 z-20 bg-muted text-xs text-muted-foreground shadow-[0_1px_0_var(--border)]">
                 <tr className="border-b border-border">
                   <th className="w-10 px-4 py-3">
@@ -656,7 +658,7 @@ export default function DocumentRegisterPage() {
                       className={cx(
                         "whitespace-nowrap px-3 py-3 font-normal",
                         // The last column (status + actions) stays in view at the left edge while the table scrolls.
-                        i === COLUMNS.length - 1 && "bg-muted md:sticky md:left-0 md:z-30 md:shadow-[8px_0_12px_-10px_rgb(15_23_42/0.25)]",
+                        i === COLUMNS.length - 1 && "min-w-[14rem]",
                       )}
                     >
                       {column}
@@ -726,7 +728,7 @@ export default function DocumentRegisterPage() {
                       </td>
                       <td
                         className={cx(
-                          "px-3 py-3.5 transition-colors duration-150 md:sticky md:left-0 md:min-w-[16rem] md:shadow-[8px_0_12px_-10px_rgb(15_23_42/0.25)]",
+                          "px-3 py-3.5 min-w-[14rem]",
                           selected ? "bg-[color-mix(in_oklch,var(--primary)_8%,var(--card))]" : "bg-card group-hover:bg-accent",
                         )}
                       >
@@ -743,12 +745,12 @@ export default function DocumentRegisterPage() {
             </table>
           </div>
 
-          {/* Below `md`: one card per document instead of a 1150px-wide table. */}
-          <ul className="divide-y divide-border md:hidden">
+          {/* Narrower boxes: one card per document, two across when there is room. */}
+          <ul className="divide-y divide-border @2xl:grid @2xl:grid-cols-2 @2xl:gap-px @2xl:divide-y-0 @2xl:bg-border @6xl:hidden">
             {rows.map((row) => {
               const selected = selectedIds.includes(row.id);
               return (
-                <li key={row.id} className={cx("space-y-3 p-4 transition-colors", selected && "bg-[color-mix(in_oklch,var(--primary)_8%,var(--card))]")}>
+                <li key={row.id} className={cx("space-y-3 bg-card p-4 transition-colors", selected && "bg-[color-mix(in_oklch,var(--primary)_8%,var(--card))]")}>
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
